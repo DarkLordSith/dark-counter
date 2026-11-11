@@ -1,0 +1,11 @@
+{
+  "name": "dark-counter-parity",
+  "private": true,
+  "description": "Стенд паритета поведения: эталон vs кандидат в headless Chrome. Только для проверок, в игру не попадает.",
+  "scripts": {
+    "parity": "./run.sh"
+  },
+  "devDependencies": {
+    "puppeteer-core": "23.11.1"
+  }
+}
