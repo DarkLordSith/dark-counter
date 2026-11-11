@@ -1,21 +1,24 @@
 // =====================================================================
-//  ui.js — HTML rendering of the HUD, scene overlay, tabs and panes,
+//  ui.ts — HTML rendering of the HUD, scene overlay, tabs and panes,
 //  plus all click/keyboard handlers (buttons carry data-a="action").
 // =====================================================================
-import { BENCH_COST, BUYOUT_GOAL, CUSTOMERS_PER_DAY, HAGGLE, ITEM_TYPES, MARKET, MAX_HEAT, RECIPES, RENT, SUPPLIER } from './data.js';
-import {
-  actor, actorAtCounter, actorReset, addLog, exportSave, findItem, importSave, newGame, saveGame, setState, state, ui,
-} from './state.js';
+import { audio, toggleMusic } from './audio';
+import { BENCH_COST, BUYOUT_GOAL, CUSTOMERS_PER_DAY, HAGGLE, ITEM_TYPES, MARKET, MAX_HEAT, RECIPES, RENT, SUPPLIER } from './data';
+import { byId, maybeById } from './dom';
 import {
   askBuyer, availableOfType, buyFromSeller, buyOutShop, callNextCustomer, canCraft, canVisitMarket, closeShop,
-  collateralHeatRelief, craft, customerLeaves, feedback, deferredDebt, deferRent, digPile, estimatedValue, evict, goHome,
-  goToJunkyard, inspect, isFullyKnown, isLandlordDue, isOnCounter, itemName, nextRent, offerToSeller, orderParts,
-  payRent, payWithCollateral, perceivedChance, planCollateral, presentItem, scrapValue, sellToBuyer, showsInfection,
-  sleepUntilMorning, useWorkbench, visitMarket,
-} from './economy.js';
-import { onSceneClick, paintIcons, pileAt } from './scene.js';
-import { audio, toggleMusic } from './audio.js';
-import { byId, roundTo10 } from './util.js';
+  collateralHeatRelief, craft, customerLeaves, deferredDebt, deferRent, digPile, estimatedValue, evict, feedback,
+  goHome, goToJunkyard, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer, itemName,
+  nextRent, offerToSeller, orderParts, payRent, payWithCollateral, perceivedChance, planCollateral, presentItem,
+  recipeNeeds, scrapValue, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
+} from './economy';
+import type { CollateralPlan } from './economy';
+import { onSceneClick, paintIcons, pileAt } from './scene';
+import {
+  actor, actorAtCounter, actorReset, addLog, exportSave, findItem, importSave, newGame, saveGame, setState, state, ui,
+} from './state';
+import type { BuyerCustomer, Item, ItemType, Recipe, RentCustomer, SellerCustomer, Tab } from './types';
+import { roundTo10 } from './util';
 
 /* =====================================================================
    Small HTML helpers
@@ -25,15 +28,15 @@ const UNKNOWN = '<span class="q">?</span>';
 const CLOSE_BUTTON = '<button class="btn pri" data-a="close">Закрыть</button>';
 const NEW_GAME_BUTTON = '<button class="btn pri" data-a="newgame-yes">Новая игра</button>';
 const FLOATING_TEXT_LIFETIME_MS = 1300;
-const disabledIf = condition => condition ? 'disabled' : '';
-const conditionText = item => item.k.cond ? item.cond + '%' : '?%';
+const disabledIf = (condition: unknown): string => condition ? 'disabled' : '';
+const conditionText = (item: Item): string => item.k.cond ? item.cond + '%' : '?%';
 
-function iconCanvas(type, cssClass = '', infected = 0) {
+function iconCanvas(type: ItemType, cssClass = '', infected = false): string {
   return `<canvas class="${cssClass}" width="28" height="16" data-ico="${type}" data-inf="${infected ? 1 : 0}"></canvas>`;
 }
 
-function itemTags(item) {
-  const tags = [];
+function itemTags(item: Item): string {
+  const tags: string[] = [];
   tags.push(item.k.cond ? `<span class="tag ${item.cond < 40 ? 'warn' : ''}">${item.cond}%</span>` : '<span class="tag">сост. ?</span>');
   if (item.k.serial) {
     tags.push(item.stolen ? '<span class="tag bad">краденое</span>' : '<span class="tag ok">чистый №</span>');
@@ -57,8 +60,8 @@ function itemTags(item) {
 }
 
 /** Colored corner dots on an inventory tile. */
-function itemDots(item) {
-  const dots = [];
+function itemDots(item: Item): string {
+  const dots: string[] = [];
   if (!isFullyKnown(item)) {
     dots.push('d-q');
   }
@@ -75,7 +78,7 @@ function itemDots(item) {
 }
 
 /** Row of cells, the first `filled` of them lit (heat bar, patience pips). */
-function meterCells(total, filled) {
+function meterCells(total: number, filled: number): string {
   return Array.from({ length: total }, (_, i) => `<i class="${i < filled ? 'on' : ''}"></i>`).join('');
 }
 
@@ -83,16 +86,16 @@ function meterCells(total, filled) {
    HUD, scene overlay, tabs
    ===================================================================== */
 
-const hudStat = (label, valueHtml) => `<span class="st"><small>${label}</small>${valueHtml}</span>`;
+const hudStat = (label: string, valueHtml: string): string => `<span class="st"><small>${label}</small>${valueHtml}</span>`;
 
-function rentStat() {
+function rentStat(): string {
   const daysLeft = state.nextDue - state.day;
   const urgent = state.credits < state.owed && daysLeft <= 1 || state.deferred;
   const value = state.won ? '—' : state.owed + '/' + (daysLeft <= 0 ? 'сег.' : daysLeft + 'д');
   return hudStat(state.deferred ? 'долг' : 'аренда', `<b class="${urgent ? 'bad' : ''}">${value}</b>`);
 }
 
-function renderHud() {
+function renderHud(): void {
   const phaseLabel = state.phase === 'shop' ? 'смена' : state.where === 'junk' ? 'свалка' : 'вечер';
   const buyoutButton = state.credits >= BUYOUT_GOAL && !state.won
     ? '<button class="hb" data-a="buyout" style="border-color:var(--cyan);color:var(--cyan)">Выкупить</button>'
@@ -111,7 +114,7 @@ function renderHud() {
   ].join('\n');
 }
 
-function chipText() {
+function chipText(): string {
   if (state.over) {
     return 'ЗАКРЫТО';
   }
@@ -125,7 +128,7 @@ function chipText() {
 }
 
 /** Speech bubble, queue chip, "call next" button and the log ticker. */
-export function renderSceneOverlay() {
+export function renderSceneOverlay(): void {
   const customer = state.cust;
   const atCounter = actor.phase === 'idle' && customer;
   const bubble = byId('bubble');
@@ -147,9 +150,9 @@ export function renderSceneOverlay() {
   byId('ticker').innerHTML = `<b>›</b> ${state.log[0] || ''}`;
 }
 
-function renderTabs() {
+function renderTabs(): void {
   const firstTab = state.phase === 'shop' ? 'ПРИЛАВОК' : state.where === 'junk' ? 'СВАЛКА' : 'ВЕЧЕР';
-  const tabs = [['deal', firstTab], ['inv', `СКЛАД · ${state.inv.length}`], ['craft', 'СБОРКА']];
+  const tabs: [Tab, string][] = [['deal', firstTab], ['inv', `СКЛАД · ${state.inv.length}`], ['craft', 'СБОРКА']];
   byId('tabs').innerHTML = tabs
     .map(([key, label]) => `<button class="tab ${ui.tab === key ? 'on' : ''}" data-a="tab" data-v="${key}">${label}</button>`)
     .join('');
@@ -159,26 +162,30 @@ function renderTabs() {
    Price input and chance meter
    ===================================================================== */
 
-function priceRow(defaultPrice) {
+function priceRow(defaultPrice: number): string {
   return `<div class="pr"><button class="btn" data-a="adj" data-v="-50">−50</button><button class="btn" data-a="adj" data-v="-10">−10</button>
   <input id="offer" type="number" inputmode="numeric" min="0" step="10" value="${defaultPrice}" aria-label="Цена">
   <button class="btn" data-a="adj" data-v="10">+10</button><button class="btn" data-a="adj" data-v="50">+50</button></div>
   <div class="chance"><span>Чуйка</span><div class="cbar"><i id="cbar"></i></div><b id="cval">—</b></div>`;
 }
 
-const readOffer = input => Math.max(0, parseInt(input.value) || 0);
+const readOffer = (input: HTMLInputElement): number => Math.max(0, parseInt(input.value) || 0);
 
-function chanceColor(chance) {
+function chanceColor(chance: number): string {
   if (chance >= 0.6) {
     return 'var(--green)';
   }
   return chance >= 0.3 ? 'var(--amber)' : 'var(--red)';
 }
 
-function updateChanceMeter() {
+function updateChanceMeter(): void {
   const customer = state.cust;
-  const input = byId('offer');
-  if (!customer || !input || !byId('cval')) {
+  const input = maybeById<HTMLInputElement>('offer');
+  if (!customer || !input || !maybeById('cval')) {
+    return;
+  }
+  // the price box exists only for a seller or a buyer who was shown an item
+  if (customer.kind === 'rent' || (customer.kind === 'buy' && !isPresentedBuyer(customer))) {
     return;
   }
   const chance = perceivedChance(customer, readOffer(input));
@@ -191,12 +198,12 @@ function updateChanceMeter() {
    Deal pane
    ===================================================================== */
 
-function option(action, disabled, title, description, side, sideClass = '') {
+function option(action: string, disabled: boolean, title: string, description: string, side: string | number, sideClass = ''): string {
   return `<button class="opt" data-a="${action}" ${disabledIf(disabled)}><div><b>${title}</b><br><span>${description}</span></div><span${sideClass}>${side}</span></button>`;
 }
 
-function junkyardPane() {
-  const pileButtons = state.junk.piles
+function junkyardPane(): string {
+  const pileButtons = (state.junk?.piles ?? [])
     .map((pile, i) => `<button class="btn" data-a="dig" data-v="${i}" ${disabledIf(pile.dug || state.hours < 1)}>Куча ${i + 1}</button>`)
     .join('');
   return `<div class="hint">Нажмите на кучу хлама на сцене или выберите номер. Осталось часов: <b>${state.hours}</b>.</div>
@@ -204,7 +211,7 @@ function junkyardPane() {
       <button class="btn pri" data-a="home" style="width:100%">Вернуться домой</button>`;
 }
 
-function eveningPane() {
+function eveningPane(): string {
   return `<div class="hint" style="margin-bottom:8px">Лавка закрыта. Осталось часов: <b>${state.hours}</b>. Верстак и сборка работают бесплатно.</div>
     <div class="opts">
       ${option('junk', state.hours < 2, 'Свалка «Кольцо Б»', 'Дорога 1 ч, каждая куча 1 ч. Запчасти, сломанные вещи, редкие находки. Иногда сторожевые дроны.', '→')}
@@ -213,7 +220,7 @@ function eveningPane() {
     </div>`;
 }
 
-function emptyCounterPane() {
+function emptyCounterPane(): string {
   if (actor.phase === 'in') {
     return '<div class="hint">Подходит к прилавку…</div>';
   }
@@ -229,7 +236,7 @@ function emptyCounterPane() {
   return '<div class="hint">Прилавок свободен. Зовите следующего, когда будете готовы. Пока можно разобрать склад.</div>';
 }
 
-function collateralDescription(plan) {
+function collateralDescription(plan: CollateralPlan): string {
   if (!plan.ok) {
     return 'Даже со всем складом не хватает.';
   }
@@ -238,7 +245,7 @@ function collateralDescription(plan) {
   return `Заберёт ${plan.cash} кр.${goods}. Сначала берёт краденое (за 50%), остальное за 60%, сдачи не даёт.${heatNote}`;
 }
 
-function rentPane(customer) {
+function rentPane(customer: RentCustomer): string {
   const plan = planCollateral();
   const canPay = state.credits >= state.owed;
   const deferText = state.deferred ? 'Вторую отсрочку Гробов не даст.' : `Придёт через ${RENT.deferDays} дня, долг +20%: ${deferredDebt()} кр.`;
@@ -257,16 +264,16 @@ function rentPane(customer) {
   return html;
 }
 
-function customerHeader(customer) {
+function customerHeader(customer: SellerCustomer | BuyerCustomer): string {
   return `<div class="thead"><div><span class="cname">${customer.name}</span><span class="kind ${customer.kind}">${customer.kind === 'sell' ? 'продаёт' : 'покупает'}</span></div>
   <div class="pips" title="Терпение">${meterCells(customer.max, customer.pat)}</div></div>`;
 }
 
-function knownFact(known, html) {
+function knownFact(known: boolean, html: string): string {
   return known ? html : UNKNOWN;
 }
 
-function sellerPane(customer) {
+function sellerPane(customer: SellerCustomer): string {
   const item = customer.item;
   const condition = `<span class="${item.cond < 40 ? 'warn' : ''}">${item.cond}%</span>`;
   const serial = item.stolen ? '<span class="bad">спилен</span>' : '<span class="ok">чистый</span>';
@@ -287,7 +294,7 @@ function sellerPane(customer) {
       <button class="btn" data-a="refuse">Отпустить</button></div></div>`;
 }
 
-function buyerPane(customer) {
+function buyerPane(customer: BuyerCustomer): string {
   const matching = state.inv.filter(item => item.t === customer.want);
   let html = `<div class="ask" style="margin-bottom:6px">Нужно: <b>${itemName(customer.want)}</b></div>`;
   if (!matching.length) {
@@ -298,7 +305,7 @@ function buyerPane(customer) {
     return `<button class="tile ${shown ? 'on' : ''}" data-a="show" data-v="${item.uid}">${itemDots(item)}${iconCanvas(item.t, '', showsInfection(item))}<span>${conditionText(item)}</span><span class="tv">~${estimatedValue(item)}</span></button>`;
   }).join('');
   html += `<div class="shelf">${tiles}</div>`;
-  if (!customer.item) {
+  if (!isPresentedBuyer(customer)) {
     return html + '<div class="hint" style="margin:8px 0">Выложите товар на прилавок.</div><button class="btn" data-a="refuse" style="width:100%">Отпустить</button>';
   }
   return html + `<div class="deal"><div class="ask">Предлагает: <b class="price">${customer.offer}</b> кр.</div>${priceRow(roundTo10(customer.offer * HAGGLE.buyerDefaultAskShare))}
@@ -307,7 +314,7 @@ function buyerPane(customer) {
         <button class="btn" data-a="refuse">Отпустить</button></div></div>`;
 }
 
-function dealPane() {
+function dealPane(): string {
   if (state.phase === 'evening') {
     return state.where === 'junk' ? junkyardPane() : eveningPane();
   }
@@ -326,12 +333,12 @@ function dealPane() {
    Inventory pane (shelf + workbench)
    ===================================================================== */
 
-function benchButton(action, label, enabled) {
+function benchButton(action: string, label: string, enabled: boolean): string {
   const cost = BENCH_COST[action];
   return `<button class="btn" data-a="bench" data-v="${action}" ${enabled && state.parts >= cost ? '' : 'disabled'}><span>${label}</span><span class="price">${cost}⚙</span></button>`;
 }
 
-function workbench(item) {
+function workbench(item: Item): string {
   return `<div class="bench"><div class="card">${iconCanvas(item.t, 'bigico', showsInfection(item))}<div style="min-width:0"><div class="rn">${itemName(item.t)}</div><div class="hint">Оценка ~${estimatedValue(item)} кр.</div>${itemTags(item)}</div></div>
     <div class="bgrid">${benchButton('diag', 'Диагностика', !isFullyKnown(item))}${benchButton('repair', 'Ремонт +25%', item.cond < 100)}
     ${benchButton('fix', 'Убрать дефект', item.k.flaw && item.defect)}${benchButton('purge', 'Вычистить ИИ', item.k.flaw && item.infected)}
@@ -340,7 +347,7 @@ function workbench(item) {
     <div class="hint" style="font-size:11px">Перебитый серийник: +1 к розыску.</div></div>`;
 }
 
-function inventoryPane() {
+function inventoryPane(): string {
   if (!state.inv.length) {
     return '<div class="hint">Склад пуст. Покупайте у клиентов или копайте на свалке.</div>';
   }
@@ -357,8 +364,8 @@ function inventoryPane() {
    Craft pane
    ===================================================================== */
 
-function recipeRow(recipe, index) {
-  const parts = Object.entries(recipe.need)
+function recipeRow(recipe: Recipe, index: number): string {
+  const parts = recipeNeeds(recipe)
     .map(([type, count]) => `<span class="${availableOfType(type).length >= count ? 'have' : 'miss'}">${itemName(type)} ×${count}</span>`)
     .join(' + ');
   const partsClass = state.parts >= recipe.parts ? 'have' : 'miss';
@@ -366,7 +373,7 @@ function recipeRow(recipe, index) {
     <button class="btn" data-a="craft" data-v="${index}" ${canCraft(recipe) ? '' : 'disabled'}>Собрать</button></div>`;
 }
 
-function craftPane() {
+function craftPane(): string {
   return `<div class="recipes">${RECIPES.map(recipeRow).join('')}</div>
     <div class="hint" style="font-size:11px;margin:8px 0">Сборка даёт новый серийник: краденые детали становятся чистыми. ИИ-заражение переносится.</div>
     <button class="btn" data-a="parts" ${state.credits >= SUPPLIER.price ? '' : 'disabled'} style="width:100%">Заказать ${SUPPLIER.parts} запчастей · ${SUPPLIER.price} кр.</button>`;
@@ -376,9 +383,9 @@ function craftPane() {
    Render
    ===================================================================== */
 
-const PANES = { deal: dealPane, inv: inventoryPane, craft: craftPane };
+const PANES: Record<Tab, () => string> = { deal: dealPane, inv: inventoryPane, craft: craftPane };
 
-export function renderPane() {
+export function renderPane(): void {
   const pane = byId('pane');
   const scrollTop = pane.scrollTop;
   pane.innerHTML = (PANES[ui.tab] || dealPane)();
@@ -387,7 +394,7 @@ export function renderPane() {
   updateChanceMeter();
 }
 
-export function render() {
+export function render(): void {
   renderHud();
   renderSceneOverlay();
   renderTabs();
@@ -400,7 +407,7 @@ export function render() {
    ===================================================================== */
 
 /** Floating "+120" style number over the scene. */
-function showFloatingText(text, color) {
+function showFloatingText(text: string, color: string): void {
   const element = document.createElement('div');
   element.className = 'fx';
   element.textContent = text;
@@ -410,31 +417,31 @@ function showFloatingText(text, color) {
 }
 
 /** Shows floating numbers queued by the game rules. */
-function flushFeedback() {
+function flushFeedback(): void {
   feedback.floats.splice(0).forEach(({ text, color }) => showFloatingText(text, color));
 }
 
-function openModal(title, body, buttons) {
+function openModal(title: string, body: string, buttons: string): void {
   byId('mbox').innerHTML = `<h2>${title}</h2>${body}<div class="mbtns">${buttons}</div>`;
   byId('modal').hidden = false;
 }
 
-function closeModal() {
+function closeModal(): void {
   byId('modal').hidden = true;
 }
 
-function showEviction() {
+function showEviction(): void {
   openModal('Выселение', `<p>${state.over}</p>`, NEW_GAME_BUTTON);
 }
 
-function showMorningReport(events) {
+function showMorningReport(events: string[]): void {
   const title = state.over ? 'Выселение' : `Утро. День ${state.day}`;
   const body = `<ul>${events.map(event => `<li>${event}</li>`).join('')}</ul>`;
   const buttons = state.over ? NEW_GAME_BUTTON : '<button class="btn pri" data-a="close">Открыть лавку</button>';
   openModal(title, body, buttons);
 }
 
-function showBuyout() {
+function showBuyout(): void {
   openModal(
     'Лавка ваша',
     `<p>Выкуплено на ${state.day}-й день. Можно торговать дальше без аренды или начать заново.</p>`,
@@ -442,7 +449,7 @@ function showBuyout() {
   );
 }
 
-function openSaveMenu() {
+function openSaveMenu(): void {
   openModal('Сохранение', `<p class="hint" style="margin:0">Скопируйте код и сохраните в заметки. На другом устройстве или в другой версии игры вставьте его в поле загрузки.</p>
       <label for="savecode">Код текущей игры · день ${state.day}, ${state.credits} кр.</label><textarea id="savecode" readonly>${exportSave()}</textarea>
       <div class="mbtns"><button class="btn pri" data-a="copysave">Скопировать</button></div>
@@ -450,8 +457,8 @@ function openSaveMenu() {
       <div id="savemsg" class="hint"></div>`, '<button class="btn amb" data-a="loadsave">Загрузить</button><button class="btn" data-a="close">Закрыть</button>');
 }
 
-function copySaveCode() {
-  const textarea = byId('savecode');
+function copySaveCode(): void {
+  const textarea = byId<HTMLTextAreaElement>('savecode');
   const selectForManualCopy = () => {
     textarea.focus();
     textarea.select();
@@ -467,8 +474,8 @@ function copySaveCode() {
 }
 
 /** Returns false if the code was rejected (the modal stays open). */
-function loadSaveCode() {
-  const loaded = importSave(byId('loadcode').value);
+function loadSaveCode(): boolean {
+  const loaded = importSave(byId<HTMLTextAreaElement>('loadcode').value);
   if (!loaded) {
     byId('savemsg').textContent = 'Код не распознан. Проверьте, что скопирован весь код целиком.';
     byId('savemsg').style.color = 'var(--red)';
@@ -487,11 +494,11 @@ function loadSaveCode() {
   return true;
 }
 
-function openLog() {
+function openLog(): void {
   openModal('Лента', `<ul>${state.log.map(line => `<li>${line}</li>`).join('')}</ul>`, CLOSE_BUTTON);
 }
 
-function confirmNewGame() {
+function confirmNewGame(): void {
   openModal('Начать заново?', '<p>Текущая лавка будет потеряна.</p>', '<button class="btn pri" data-a="newgame-yes">Да, заново</button><button class="btn" data-a="close">Отмена</button>');
 }
 
@@ -500,30 +507,38 @@ function confirmNewGame() {
    ===================================================================== */
 
 /** Returned by a handler when the screen must not be re-rendered. */
-const NO_RENDER = Symbol('no-render');
+const NO_RENDER: unique symbol = Symbol('no-render');
 
-const offerValue = () => {
-  const input = byId('offer');
+type ActionHandler = (value: string | undefined) => void | typeof NO_RENDER;
+
+const isTab = (value: string | undefined): value is Tab => value === 'deal' || value === 'inv' || value === 'craft';
+
+const offerValue = (): number => {
+  const input = maybeById<HTMLInputElement>('offer');
   return input ? readOffer(input) : 0;
 };
 
 /** data-a → handler(value). Every handler re-renders unless it returns NO_RENDER. */
-const ACTIONS = {
+const ACTIONS: Record<string, ActionHandler> = {
   // counter
   adj: value => {
-    const input = byId('offer');
-    input.value = Math.max(0, offerValue() + +value);
+    const input = byId<HTMLInputElement>('offer');
+    input.value = String(Math.max(0, offerValue() + Number(value)));
     updateChanceMeter();
     return NO_RENDER;
   },
   call: () => callNextCustomer(),
-  insp: value => inspect(value),
+  insp: value => {
+    if (isInspectCheck(value)) {
+      inspect(value);
+    }
+  },
   offer: () => offerToSeller(offerValue()),
-  accept: () => buyFromSeller(state.cust.ask),
+  accept: () => buyFromSeller(),
   refuse: () => customerLeaves(),
-  show: value => presentItem(+value),
+  show: value => presentItem(Number(value)),
   ask: () => askBuyer(offerValue()),
-  take: () => sellToBuyer(state.cust.offer),
+  take: () => sellToBuyer(),
   closeshop: () => closeShop(),
   // rent
   rentpay: () => payRent(),
@@ -539,20 +554,23 @@ const ACTIONS = {
   },
   // tabs, inventory, crafting
   tab: value => {
-    ui.tab = value;
+    if (isTab(value)) {
+      ui.tab = value;
+    }
   },
   sel: value => {
-    ui.sel = ui.sel === +value ? null : +value;
+    const uid = Number(value);
+    ui.sel = ui.sel === uid ? null : uid;
   },
-  bench: value => useWorkbench(value),
-  craft: value => craft(+value),
+  bench: value => useWorkbench(value ?? ''),
+  craft: value => craft(Number(value)),
   parts: () => orderParts(),
   // evening
   junk: () => {
     goToJunkyard();
     ui.tab = 'deal';
   },
-  dig: value => digPile(+value),
+  dig: value => digPile(Number(value)),
   home: () => goHome(),
   market: () => visitMarket(),
   sleep: () => showMorningReport(sleepUntilMorning()),
@@ -583,12 +601,13 @@ const ACTIONS = {
   },
 };
 
-function onClick(event) {
-  const button = event.target.closest('[data-a]');
-  if (!button || button.disabled) {
+function onClick(event: MouseEvent): void {
+  const button = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-a]') : null;
+  if (!button || (button instanceof HTMLButtonElement && button.disabled)) {
     return;
   }
-  const handler = Object.hasOwn(ACTIONS, button.dataset.a) ? ACTIONS[button.dataset.a] : null;
+  const action = button.dataset.a ?? '';
+  const handler = Object.hasOwn(ACTIONS, action) ? ACTIONS[action] : null;
   const result = handler ? handler(button.dataset.v) : undefined;
   flushFeedback();
   if (result === NO_RENDER) {
@@ -597,7 +616,7 @@ function onClick(event) {
   render();
 }
 
-function onSceneCanvasClick(event) {
+function onSceneCanvasClick(event: MouseEvent): void {
   if (state.where !== 'junk' || !state.junk) {
     return;
   }
@@ -610,19 +629,19 @@ function onSceneCanvasClick(event) {
 }
 
 /** Enter in the price box submits the offer / ask. */
-function onKeyDown(event) {
-  if (event.key === 'Enter' && event.target.id === 'offer') {
-    const submit = document.querySelector('[data-a="offer"],[data-a="ask"]');
+function onKeyDown(event: KeyboardEvent): void {
+  if (event.key === 'Enter' && event.target instanceof HTMLElement && event.target.id === 'offer') {
+    const submit = document.querySelector<HTMLElement>('[data-a="offer"],[data-a="ask"]');
     if (submit) {
       submit.click();
     }
   }
 }
 
-export function bindEvents() {
+export function bindEvents(): void {
   document.addEventListener('click', onClick);
   document.addEventListener('input', event => {
-    if (event.target.id === 'offer') {
+    if (event.target instanceof HTMLElement && event.target.id === 'offer') {
       updateChanceMeter();
     }
   });
