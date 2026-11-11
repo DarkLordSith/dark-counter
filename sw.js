@@ -1,7 +1,7 @@
 // Офлайн-кэш. При каждом обновлении игры меняйте номер версии,
 // чтобы телефон подтянул свежие файлы.
-const CACHE = 'dark-counter-v6';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE = 'dark-counter-v7';
+const SHELL = ['./', './index.html', './css/style.css', './js/main.js', './js/data.js', './js/util.js', './js/state.js', './js/economy.js', './js/scene.js', './js/ui.js', './js/audio.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)));
