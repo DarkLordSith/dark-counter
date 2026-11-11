@@ -1,5 +1,6 @@
 // Smoke test in a real browser (no fakes): iPhone viewport, service worker on.
 // Checks: no page scroll, no console errors, a customer can be called,
+// every save in tests/fixtures/ loads through the save menu,
 // offline reload works from the SW cache. Saves out/mobile.png.
 // Usage: node smoke.mjs <url>
 import fs from 'node:fs';
@@ -43,6 +44,23 @@ const noScroll = layout.scrollHeight <= layout.innerHeight && layout.scrollWidth
 console.log('no page scroll:', noScroll, JSON.stringify(layout));
 await page.screenshot({ path: new URL('mobile.png', OUT).pathname });
 
+// every fixture save code loads through the UI and opens on its day
+const fixturesDir = new URL('../fixtures/', import.meta.url);
+let fixturesOk = true;
+for (const file of fs.existsSync(fixturesDir) ? fs.readdirSync(fixturesDir).filter(f => f.endsWith('.txt')).sort() : []) {
+  const code = fs.readFileSync(new URL(file, fixturesDir), 'utf8');
+  const day = JSON.parse(Buffer.from(code.trim().replace(/\s+/g, '').slice(4), 'base64').toString('utf8')).day;
+  const result = await page.evaluate(code => {
+    document.querySelector('[data-a="savemenu"]').click();
+    document.getElementById('loadcode').value = code;
+    document.querySelector('[data-a="loadsave"]').click();
+    return { modalOpen: !document.getElementById('modal').hidden, hud: document.getElementById('hud').innerText };
+  }, code);
+  const ok = !result.modalOpen && result.hud.includes(`${day}·`);
+  fixturesOk &&= ok;
+  console.log(`fixture ${file}: day ${day} → ${ok ? 'loaded' : 'FAILED'}`);
+}
+
 await page.setOfflineMode(true);
 await page.reload({ waitUntil: 'load' });
 await wait(800);
@@ -51,4 +69,4 @@ console.log('offline reload works:', offlineOk);
 console.log('console errors:', errors.length ? errors : 'none');
 
 await browser.close();
-process.exit(noScroll && offlineOk && !errors.length ? 0 : 1);
+process.exit(noScroll && offlineOk && fixturesOk && !errors.length ? 0 : 1);

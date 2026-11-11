@@ -59,8 +59,11 @@ export const deterministicInit = (seed, presetSave = null) => `(() => {
  * screenshot is taken — that made screenshots flaky.
  */
 export function preloadFonts(page) {
-  return page.evaluate(() => Promise.all([
-    ...['400', '500', '600'].map(w => document.fonts.load(`${w} 13px "IBM Plex Mono"`)),
-    document.fonts.load('12px Silkscreen'),
-  ]).then(() => document.fonts.ready).catch(() => {}));
+  // Google Fonts splits faces into unicode subsets; without a sample text
+  // only the latin subset loads, so pass Cyrillic too.
+  const sample = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя ABCabc0123456789…·−×→⚙★☾⧗⚖♪⟲›';
+  return page.evaluate(text => Promise.all([
+    ...['400', '500', '600'].map(w => document.fonts.load(`${w} 13px "IBM Plex Mono"`, text)),
+    document.fonts.load('12px Silkscreen', text),
+  ]).then(() => document.fonts.ready).catch(() => {}), sample);
 }
