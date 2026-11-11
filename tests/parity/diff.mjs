@@ -2,10 +2,13 @@
 // identical deterministic inputs and compares snapshots after every step:
 // save in localStorage, DOM, canvas pixels, computed styles, screenshots.
 // Usage: node diff.mjs <urlA> <urlB> [runs=12] [steps=250]
+// PARITY_IGNORE=<css selector> hides and skips intentionally new elements
+// in both versions (e.g. PARITY_IGNORE='.version').
 import fs from 'node:fs';
 import { deterministicInit, hash as h, launch, preloadFonts, rng } from './common.mjs';
 
 const [, , URL_A, URL_B, RUNS = '12', STEPS = '250'] = process.argv;
+const IGNORE = process.env.PARITY_IGNORE || '';
 const OUT = new URL('./out/shots/', import.meta.url);
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -65,20 +68,22 @@ async function act(page, c, r) {
 }
 
 async function snapshot(page, deep) {
-  return page.evaluate(deep => {
+  return page.evaluate((deep, ignore) => {
     const canv = [...document.querySelectorAll('canvas')].map(c => c.toDataURL());
     const app = document.getElementById('app').cloneNode(true);
     app.querySelectorAll('.fx').forEach(n => n.remove());
+    const mbox = document.getElementById('mbox').cloneNode(true);
+    if (ignore) [app, mbox].forEach(root => root.querySelectorAll(ignore).forEach(n => n.remove()));
     const s = {
       save: localStorage.getItem('dark-counter-v3'),
       app: app.innerHTML.replace(/\s+/g, ' '),
-      modal: document.getElementById('modal').hidden + '|' + document.getElementById('mbox').innerHTML.replace(/\s+/g, ' '),
+      modal: document.getElementById('modal').hidden + '|' + mbox.innerHTML.replace(/\s+/g, ' '),
       values: [...document.querySelectorAll('input,textarea')].map(i => i.id + '=' + i.value).join('\n'),
       canv: canv.join('|'),
       fx: __fx.splice(0).join(''),
     };
     if (deep) {
-      s.styles = [document.documentElement, document.body, ...document.body.querySelectorAll('*')].filter(el => el.tagName !== 'SCRIPT' && !el.classList.contains('fx')).map(el => {
+      s.styles = [document.documentElement, document.body, ...document.body.querySelectorAll('*')].filter(el => el.tagName !== 'SCRIPT' && !el.classList.contains('fx') && !(ignore && el.matches(ignore))).map(el => {
         const out = [];
         for (const pseudo of [null, '::after']) {
           const cs = getComputedStyle(el, pseudo);
@@ -88,7 +93,7 @@ async function snapshot(page, deep) {
       }).join('\n');
     }
     return s;
-  }, deep);
+  }, deep, IGNORE);
 }
 
 async function runOne(browser, label, url, seed, steps, shots, viewport) {
@@ -103,6 +108,7 @@ async function runOne(browser, label, url, seed, steps, shots, viewport) {
   await page.goto(url, { waitUntil: 'load' });
   await preloadFonts(page);
   if (shots) await page.addStyleTag({ content: '.fx{display:none!important}' });
+  if (IGNORE) await page.addStyleTag({ content: `${IGNORE}{display:none!important}` });
   const r = rng(seed * 7 + 1);
   const snaps = [];
   for (let i = 0; i < steps; i++) {
