@@ -821,3 +821,9 @@ input:focus-visible {
   text-transform: uppercase;
   color: var(--dim);
 }
+
+.mbox .version {
+  font-size: 10px;
+  color: var(--dim);
+  text-align: right;
+}

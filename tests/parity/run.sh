@@ -4,10 +4,14 @@
 #   tests/parity/run.sh [base-ref] [candidate-url]
 #
 #   base-ref       git ref of the reference behaviour, default: main
-#   candidate-url  URL of the build under test; default: the working tree
-#                  served on http://localhost:$PORT_B/
+#   candidate-url  URL of the build under test; default: the working tree,
+#                  built and served on port $PORT_B
 #
-# Env: RUNS (12), STEPS (250), PORT_A (8711), PORT_B (8712), CHROME (path).
+# A version with an npm "build" script (Vite) is built and served with
+# `vite preview`; an older static version is served as plain files.
+#
+# Env: RUNS (12), STEPS (250), PORT_A (8711), PORT_B (8712), CHROME (path),
+#      PARITY_IGNORE (css selector of intentionally new elements).
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -30,19 +34,48 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# serve <dir> <port> <var>: builds a Vite version or serves static files;
+# stores the URL in <var> (not printed: a $(...) subshell would lose PIDS)
+serve() {
+  local dir=$1 port=$2 var=$3
+  if [ -f "$dir/package.json" ] && grep -q '"build"' "$dir/package.json"; then
+    echo "   сборка $dir" >&2
+    if [ ! -d "$dir/node_modules" ]; then
+      (cd "$dir" && npm ci --silent >&2)
+    fi
+    (cd "$dir" && npm run --silent build >/dev/null)
+    # the base path ("/dark-counter/") is whatever precedes assets/ in the built page
+    local base
+    base=$(grep -oE 'src="[^"]*assets/' "$dir/dist/index.html" | head -1 | sed -E 's#src="(.*)assets/#\1#')
+    (cd "$dir" && exec node node_modules/vite/bin/vite.js preview --port "$port" --strictPort >/dev/null 2>&1) &
+    PIDS="$PIDS $!"
+    printf -v "$var" '%s' "http://localhost:$port${base:-/}"
+  else
+    python3 -m http.server "$port" --directory "$dir" >/dev/null 2>&1 &
+    PIDS="$PIDS $!"
+    printf -v "$var" '%s' "http://localhost:$port/"
+  fi
+}
+
+wait_for() {
+  for _ in $(seq 1 60); do
+    curl -s -o /dev/null "$1" && return 0
+    sleep 0.5
+  done
+  echo "сервер $1 не поднялся" >&2
+  return 1
+}
+
 echo "== эталон: $BASE_REF ($(git -C "$REPO" rev-parse --short "$BASE_REF"))"
 git -C "$REPO" archive "$BASE_REF" | tar -x -C "$BASE_DIR"
-python3 -m http.server "$PORT_A" --directory "$BASE_DIR" >/dev/null 2>&1 &
-PIDS="$!"
-BASE_URL="http://localhost:$PORT_A/"
+serve "$BASE_DIR" "$PORT_A" BASE_URL
 
 if [ -z "$CANDIDATE_URL" ]; then
-  python3 -m http.server "$PORT_B" --directory "$REPO" >/dev/null 2>&1 &
-  PIDS="$PIDS $!"
-  CANDIDATE_URL="http://localhost:$PORT_B/"
+  serve "$REPO" "$PORT_B" CANDIDATE_URL
 fi
 echo "== кандидат: $CANDIDATE_URL"
-sleep 1
+wait_for "$BASE_URL"
+wait_for "$CANDIDATE_URL"
 
 [ -d node_modules ] || npm install --silent
 
