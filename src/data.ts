@@ -1,8 +1,9 @@
 // =====================================================================
-//  data.js — static game data and balance numbers. No logic here.
+//  data.ts — static game data and balance numbers. No logic here.
 //  New goods are added with one line in ITEM_TYPES (plus a sprite in
-//  scene.js → ITEM_SPRITES if you want an icon).
+//  scene.ts → ITEM_SPRITES if you want an icon).
 // =====================================================================
+import type { ItemType, ItemTypeInfo, Recipe } from './types';
 
 // ---------- persistence ----------
 export const SAVE_KEY = 'dark-counter-v3';
@@ -12,7 +13,7 @@ export const SAVE_CODE_PREFIX = 'DC1:';
 // name — display name, basePrice — price at 100% condition,
 // spawnWeight — relative chance to appear, electronic — can catch the AI virus
 // from a neighbour on the shelf, aiCapable — can arrive already infected.
-export const ITEM_TYPES = {
+const CATALOG = {
   comm: { name: 'Коммуникатор', basePrice: 120, spawnWeight: 3, electronic: true },
   battery: { name: 'Энергоячейка', basePrice: 90, spawnWeight: 3 },
   servo: { name: 'Сервопривод', basePrice: 160, spawnWeight: 3 },
@@ -21,12 +22,15 @@ export const ITEM_TYPES = {
   drone: { name: 'Курьерский дрон', basePrice: 450, spawnWeight: 1, electronic: true },
   chip: { name: 'Нейрочип', basePrice: 520, spawnWeight: 1.5, aiCapable: true, electronic: true },
   arm: { name: 'Кибер-рука', basePrice: 760, spawnWeight: 0.7, aiCapable: true, electronic: true },
-};
+} satisfies Record<string, ItemTypeInfo>;
+
+/** Goods catalog; its keys define the ItemType union. */
+export const ITEM_TYPES: Record<keyof typeof CATALOG, ItemTypeInfo> = CATALOG;
 
 // Rare junkyard finds (order matters: it is the random pick table).
-export const RARE_FINDS = ['chip', 'arm', 'drone', 'visor'];
+export const RARE_FINDS: ItemType[] = ['chip', 'arm', 'drone', 'visor'];
 
-export const RECIPES = [
+export const RECIPES: Recipe[] = [
   { out: 'visor', need: { comm: 1, battery: 1 }, parts: 2 },
   { out: 'cutter', need: { battery: 2 }, parts: 3 },
   { out: 'drone', need: { servo: 1, battery: 1 }, parts: 3 },
@@ -127,7 +131,7 @@ export const INSPECT = {
 };
 
 // ---------- workbench ----------
-export const BENCH_COST = { diag: 1, repair: 2, fix: 3, purge: 2, wipe: 3 };
+export const BENCH_COST: Record<string, number> = { diag: 1, repair: 2, fix: 3, purge: 2, wipe: 3 };
 export const REPAIR_AMOUNT = 25;
 export const CRAFT_CONDITION_BONUS = 10;
 

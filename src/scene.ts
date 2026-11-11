@@ -1,12 +1,17 @@
 // =====================================================================
-//  scene.js — the 160×100 pixel scene: shop, junkyard, customers,
+//  scene.ts — the 160×100 pixel scene: shop, junkyard, customers,
 //  item icons and the animation loop. Everything is drawn with plain
 //  rectangles; sprites are lists of [x, y, w, h, color] relative to an
 //  anchor point.
 // =====================================================================
-import { COLOR, CUSTOMERS_PER_DAY, JUNK_PILES, LANDLORD_SEED } from './data.js';
-import { actor, COUNTER_X, DOOR_X, state } from './state.js';
-import { byId } from './util.js';
+import { appearanceFor, seededRandom } from './appearance';
+import { COLOR, CUSTOMERS_PER_DAY, JUNK_PILES } from './data';
+import { byId } from './dom';
+import { actor, COUNTER_X, DOOR_X, state } from './state';
+import type { Appearance, CustomerLook, ItemType, LandlordLook } from './types';
+
+/** A filled rectangle relative to a sprite's anchor: [x, y, width, height, color]. */
+type Rect = [number, number, number, number, string];
 
 /* ---------- config ---------- */
 const SCENE_W = 160;
@@ -41,21 +46,29 @@ const PANEL_DOOR = '#2a3152';
 const PANEL_EDGE = '#3a4370';
 
 /* ---------- drawing primitives ---------- */
-const sceneCanvas = byId('scn');
-let ctx = sceneCanvas.getContext('2d');
+const sceneCanvas = byId<HTMLCanvasElement>('scn');
+let ctx = context2d(sceneCanvas);
 
-function fillRect(x, y, w, h, color) {
+function context2d(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Canvas 2D is not supported');
+  }
+  return context;
+}
+
+function fillRect(x: number, y: number, w: number, h: number, color: string): void {
   ctx.fillStyle = color;
   ctx.fillRect(Math.round(x), Math.round(y), w, h);
 }
 
-function fillRects(originX, originY, rects) {
+function fillRects(originX: number, originY: number, rects: Rect[]): void {
   for (const [x, y, w, h, color] of rects) {
     fillRect(originX + x, originY + y, w, h, color);
   }
 }
 
-function fillPolygon(color, points) {
+function fillPolygon(color: string, points: [number, number][]): void {
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(...points[0]);
@@ -64,14 +77,14 @@ function fillPolygon(color, points) {
   ctx.fill();
 }
 
-function fillCircle(color, x, y, radius) {
+function fillCircle(color: string, x: number, y: number, radius: number): void {
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, 7);
   ctx.fill();
 }
 
-function withClip(x, y, w, h, draw) {
+function withClip(x: number, y: number, w: number, h: number, draw: () => void): void {
   ctx.save();
   ctx.beginPath();
   ctx.rect(x, y, w, h);
@@ -81,51 +94,11 @@ function withClip(x, y, w, h, draw) {
 }
 
 /** 0/1 square wave with the given period. */
-const flicker = (now, periodMs) => (now / periodMs | 0) % 2;
-
-/* ---------- appearance ---------- */
-
-/** Deterministic PRNG (Park–Miller) so a seed always gives the same face. */
-function seededRandom(seed) {
-  let value = seed % 2147483647;
-  if (value <= 0) {
-    value += 2147483646;
-  }
-  return () => (value = value * 16807 % 2147483647) / 2147483647;
-}
-
-const pickSeeded = (random, list) => list[Math.floor(random() * list.length)];
-
-const LANDLORD_LOOK = { kind: 'landlord', skin: '#d9a07a', jacket: '#1d1a26', jdark: '#0e0c14', metal: COLOR.dim, metal2: COLOR.steel, eye: COLOR.red };
-
-/** Customer look from a seed: kind 'human' | 'android' | 'box' | 'dome' | 'landlord'. */
-export function appearanceFor(seed) {
-  if (seed === LANDLORD_SEED) {
-    return LANDLORD_LOOK;
-  }
-  const random = seededRandom(seed);
-  const kindRoll = random();
-  const hue = Math.floor(random() * 360);
-  return {
-    kind: kindRoll < 0.6 ? 'human' : kindRoll < 0.74 ? 'android' : kindRoll < 0.88 ? 'box' : 'dome',
-    skin: pickSeeded(random, ['#f1c7a3', '#d9a07a', '#a8714f', '#6e4a35', '#e3b48f']),
-    hair: pickSeeded(random, ['#2a2233', '#d94f8a', '#46d3c9', '#f0a33e', '#e8e8f0', '#5b3b2a', '#7a5cff']),
-    style: Math.floor(random() * 6),
-    jacket: `hsl(${hue} 30% 34%)`,
-    jdark: `hsl(${hue} 30% 22%)`,
-    shirt: `hsl(${(hue + 40) % 360} 15% 70%)`,
-    trim: `hsl(${(hue + 150) % 360} 65% 60%)`,
-    eye: pickSeeded(random, ['#46d3c9', '#ff6372', '#f0a33e', '#7fd98e', '#ffffff']),
-    acc: Math.floor(random() * 5),
-    pads: random() < 0.45,
-    metal: pickSeeded(random, ['#8b92b5', '#a8925a', '#6f7a8c', '#b5beca', '#8a5f55']),
-    metal2: pickSeeded(random, ['#5a6080', '#4a5266', '#6e5a3a']),
-  };
-}
+const flicker = (now: number, periodMs: number): number => (now / periodMs | 0) % 2;
 
 /* ---------- customer sprites (anchor: horizontal center, top of scene + bob) ---------- */
 
-function landlordSprite(look, now, blink) {
+function landlordSprite(look: LandlordLook, now: number, blink: boolean): Rect[] {
   return [
     // coat
     [-13, 40, 26, 31, look.jacket],
@@ -164,7 +137,7 @@ function landlordSprite(look, now, blink) {
   ];
 }
 
-const HAIR_STYLES = [
+const HAIR_STYLES: ((look: CustomerLook) => Rect[])[] = [
   look => [[-5, 21, 10, 3, look.hair], [-6, 22, 1, 5, look.hair], [5, 22, 1, 5, look.hair]],
   look => [[-1, 17, 2, 6, look.hair], [-2, 19, 4, 3, look.hair]],
   look => [[-5, 21, 10, 3, look.hair], [-6, 22, 2, 4, look.hair], [4, 22, 2, 4, look.hair]],
@@ -173,7 +146,7 @@ const HAIR_STYLES = [
   look => [[-6, 20, 12, 4, look.trim], [-6, 23, 9, 1, COLOR.ink]], // cap
 ];
 
-const ACCESSORIES = [
+const ACCESSORIES: ((look: CustomerLook) => Rect[])[] = [
   () => [],
   look => [[-5, 27, 10, 2, look.eye], [-5, 27, 10, 1, 'rgba(255,255,255,.35)']], // visor
   () => [[-5, 30, 10, 5, COLOR.line], [-4, 32, 8, 1, COLOR.sceneBg]], // mask
@@ -181,12 +154,12 @@ const ACCESSORIES = [
   () => [],
 ];
 
-function humanoidSprite(look, blink) {
+function humanoidSprite(look: CustomerLook, blink: boolean): Rect[] {
   const android = look.kind === 'android';
   const human = look.kind === 'human';
   const skin = android ? look.metal : look.skin;
   const collar = android ? look.metal2 : look.shirt;
-  const rects = [];
+  const rects: Rect[] = [];
   // back layer: hood or long hair
   if (human && look.style === 3) {
     rects.push([-8, 20, 16, 18, look.jdark]);
@@ -250,7 +223,7 @@ function humanoidSprite(look, blink) {
   return rects;
 }
 
-function boxBotSprite(look, now, blink) {
+function boxBotSprite(look: CustomerLook, now: number, blink: boolean): Rect[] {
   return [
     // body and shoulders
     [-11, 39, 22, 32, look.metal],
@@ -289,8 +262,8 @@ function boxBotSprite(look, now, blink) {
   ];
 }
 
-function domeBotSprite(look, now) {
-  const rects = [
+function domeBotSprite(look: CustomerLook, now: number): Rect[] {
+  const rects: Rect[] = [
     // arms
     [-13, 42, 3, 26, look.metal2],
     [10, 42, 3, 26, look.metal2],
@@ -320,9 +293,9 @@ function domeBotSprite(look, now) {
   return rects;
 }
 
-function drawCustomer(centerX, bob, look, now) {
+function drawCustomer(centerX: number, bob: number, look: Appearance, now: number): void {
   const blink = (now % 4200) < 140;
-  let rects;
+  let rects: Rect[];
   if (look.kind === 'landlord') {
     rects = landlordSprite(look, now, blink);
   } else if (look.kind === 'human' || look.kind === 'android') {
@@ -336,8 +309,8 @@ function drawCustomer(centerX, bob, look, now) {
 }
 
 /** Hands resting on the counter, drawn over the item. */
-function drawHands(centerX, look) {
-  const rects = [];
+function drawHands(centerX: number, look: Appearance): void {
+  const rects: Rect[] = [];
   const handXs = [-18, 11];
   if (look.kind === 'human' || look.kind === 'landlord') {
     if (look.kind === 'landlord') {
@@ -352,8 +325,9 @@ function drawHands(centerX, look) {
     ));
   } else {
     const metal = look.kind === 'android' ? look.metal : look.metal2;
+    const sleeve = look.kind === 'android' ? look.jacket : metal;
     handXs.forEach(x => rects.push(
-      [x + 1, 63, 5, 4, look.kind === 'android' ? look.jacket : metal],
+      [x + 1, 63, 5, 4, sleeve],
       [x, 67, 7, 3, metal],
       [x, 69, 1, 1, COLOR.ink],
       [x + 3, 69, 1, 1, COLOR.ink],
@@ -365,7 +339,7 @@ function drawHands(centerX, look) {
 }
 
 /* ---------- pixel font for the shop sign ---------- */
-const GLYPHS = {
+const GLYPHS: Record<string, string[]> = {
   'Л': ['011', '101', '101', '101', '101'],
   'А': ['010', '101', '111', '101', '101'],
   'В': ['110', '101', '110', '101', '110'],
@@ -376,7 +350,7 @@ const GLYPHS = {
 };
 const GLYPH_ADVANCE = 4;
 
-function drawPixelText(text, x, y, color) {
+function drawPixelText(text: string, x: number, y: number, color: string): void {
   [...text].forEach((char, index) => {
     const glyph = GLYPHS[char];
     if (!glyph) {
@@ -393,7 +367,8 @@ function drawPixelText(text, x, y, color) {
 /* ---------- item sprites (anchor: horizontal center, bottom) ---------- */
 const ITEM_TONE = { mid: COLOR.steel, light: COLOR.dim, dark: COLOR.line };
 
-const ITEM_SPRITES = {
+/** Item icons by type; a type without an entry is drawn without an icon. */
+const ITEM_SPRITES: Partial<Record<ItemType, (now: number) => Rect[]>> = {
   comm: () => [
     [-3, -10, 6, 10, '#2a2f4a'],
     [-2, -9, 4, 6, COLOR.cyan],
@@ -439,7 +414,7 @@ const ITEM_SPRITES = {
     [-1, -3, 2, 1, COLOR.red],
   ],
   chip: now => {
-    const rects = [
+    const rects: Rect[] = [
       [-4, -6, 8, 6, '#1f6b4f'],
       [-2, -4, 4, 2, '#0d0f18'],
     ];
@@ -460,8 +435,8 @@ const ITEM_SPRITES = {
   ],
 };
 
-function drawItem(type, centerX, bottomY, now, infected) {
-  const sprite = ITEM_SPRITES[type];
+function drawItem(type: string, centerX: number, bottomY: number, now: number, infected: boolean): void {
+  const sprite = ITEM_SPRITES[type as ItemType];
   if (sprite) {
     fillRects(centerX, bottomY, sprite(now));
   }
@@ -471,12 +446,12 @@ function drawItem(type, centerX, bottomY, now, infected) {
 }
 
 /** Draws every <canvas data-ico> icon currently in the DOM. */
-export function paintIcons() {
-  document.querySelectorAll('canvas[data-ico]').forEach(canvas => {
+export function paintIcons(): void {
+  document.querySelectorAll<HTMLCanvasElement>('canvas[data-ico]').forEach(canvas => {
     const sceneCtx = ctx;
-    ctx = canvas.getContext('2d');
+    ctx = context2d(canvas);
     ctx.clearRect(0, 0, ICON_W, ICON_H);
-    drawItem(canvas.dataset.ico, ICON_W / 2, ICON_H - 2, 0, canvas.dataset.inf === '1');
+    drawItem(canvas.dataset.ico ?? '', ICON_W / 2, ICON_H - 2, 0, canvas.dataset.inf === '1');
     ctx = sceneCtx;
   });
 }
@@ -489,7 +464,7 @@ const STARS = Array.from({ length: 26 }, () => ({
   bright: Math.random() < 0.25,
 }));
 
-function drawBackWall() {
+function drawBackWall(): void {
   fillRect(0, 0, SCENE_W, SCENE_H, COLOR.sceneBg);
   for (let x = 0; x < SCENE_W; x += 20) {
     fillRect(x, 0, 1, 68, '#1b2034');
@@ -502,7 +477,7 @@ function drawBackWall() {
 }
 
 /** Porthole with drifting stars, a planet and a passing ship. */
-function drawWindow(seconds) {
+function drawWindow(seconds: number): void {
   fillRect(5, 7, 54, 34, WALL);
   fillRect(7, 9, 50, 30, '#05070f');
   withClip(7, 9, 50, 30, () => {
@@ -524,25 +499,25 @@ function drawWindow(seconds) {
   fillRect(9, 11, 1, 7, 'rgba(255,255,255,.07)');
 }
 
-function drawShelves(seconds) {
+function drawShelves(seconds: number): void {
   fillRect(5, 50, 54, 2, COLOR.line);
-  [[7, '#3c4466', 8, 6], [17, '#5a3f2e', 6, 8], [25, '#2f6a42', 10, 5], [38, '#4a2f55', 7, 7], [47, '#3c4466', 9, 4]]
+  ([[7, '#3c4466', 8, 6], [17, '#5a3f2e', 6, 8], [25, '#2f6a42', 10, 5], [38, '#4a2f55', 7, 7], [47, '#3c4466', 9, 4]] as const)
     .forEach(([x, color, w, h]) => fillRect(x, 50 - h, w, h, color));
   fillRect(27, 46, 2, 1, (seconds * 2 | 0) % 3 ? COLOR.green : '#244a2f');
   fillRect(49, 47, 1, 1, (seconds * 1.3 | 0) % 2 ? COLOR.red : '#4a1f26');
   fillRect(5, 60, 54, 2, COLOR.line);
-  [[9, COLOR.line, 12, 5], [24, '#3c4466', 6, 7], [34, COLOR.steel, 14, 4], [50, '#4a2f55', 6, 6]]
+  ([[9, COLOR.line, 12, 5], [24, '#3c4466', 6, 7], [34, COLOR.steel, 14, 4], [50, '#4a2f55', 6, 6]] as const)
     .forEach(([x, color, w, h]) => fillRect(x, 60 - h, w, h, color));
 }
 
-function drawDoorway() {
+function drawDoorway(): void {
   fillRect(118, 8, 40, 60, WALL);
   fillRect(122, 12, 32, 56, '#090b16');
   fillRect(122, 12, 32, 2, 'rgba(70,211,201,.25)');
 }
 
 /** Neon "ЛАВКА 7Б" sign and the ceiling lamp. Off at night, flickers by day. */
-function drawSignAndLamp(night) {
+function drawSignAndLamp(night: boolean): void {
   const brightness = night ? 0 : (Math.random() < SIGN_FLICKER_CHANCE ? 0.3 : 1);
   fillRect(59, 3, 42, 11, COLOR.ink);
   fillRect(60, 4, 40, 9, 'rgba(70,211,201,' + (0.10 * brightness) + ')');
@@ -553,7 +528,7 @@ function drawSignAndLamp(night) {
   }
 }
 
-function drawWalkingActor(look, now) {
+function drawWalkingActor(look: Appearance, now: number): void {
   const walking = actor.phase === 'in' || actor.phase === 'out';
   const bob = walking ? flicker(now, 140) : flicker(now, 900);
   ctx.save();
@@ -566,14 +541,14 @@ function drawWalkingActor(look, now) {
   ctx.restore();
 }
 
-function doorLightColor() {
+function doorLightColor(): string {
   if (actor.phase === 'in' || actor.phase === 'out') {
     return COLOR.green;
   }
   return state.phase === 'shop' && state.slot < CUSTOMERS_PER_DAY && !state.over ? COLOR.amber : COLOR.red;
 }
 
-function drawSlidingDoor() {
+function drawSlidingDoor(): void {
   const panelWidth = 16 * (1 - actor.doorOpen);
   fillRect(122, 12, panelWidth, 56, PANEL_DOOR);
   fillRect(154 - panelWidth, 12, panelWidth, 56, PANEL_DOOR);
@@ -586,7 +561,7 @@ function drawSlidingDoor() {
   fillRect(132, 9, 12, 2, doorLightColor());
 }
 
-function drawCounter(seconds) {
+function drawCounter(seconds: number): void {
   fillRect(0, 68, SCENE_W, 32, '#1f2440');
   fillRect(0, 68, SCENE_W, 2, PANEL_EDGE);
   fillRect(0, 68, SCENE_W, 1, '#4f5d94');
@@ -611,7 +586,7 @@ function drawCounter(seconds) {
   fillRect(122, 67, 4, 1, COLOR.line);
 }
 
-function drawScanLine(now) {
+function drawScanLine(now: number): void {
   const progress = (now - actor.scanStart) / SCAN_DURATION_MS;
   if (progress >= 0 && progress < 1) {
     const y = 56 + progress * 12;
@@ -621,7 +596,7 @@ function drawScanLine(now) {
   }
 }
 
-function drawShop(now) {
+function drawShop(now: number): void {
   const seconds = now / 1000;
   const night = state.phase === 'evening';
   drawBackWall();
@@ -638,7 +613,7 @@ function drawShop(now) {
   if (look && actor.phase === 'idle') {
     drawHands(Math.round(actor.x), look);
     const customer = state.cust;
-    if (customer && customer.item) {
+    if (customer && customer.kind !== 'rent' && customer.item) {
       drawItem(customer.item.t, COUNTER_X, 68, now, customer.item.k.flaw && customer.item.infected);
       drawScanLine(now);
     }
@@ -650,9 +625,9 @@ function drawShop(now) {
 
 /* ---------- junkyard ---------- */
 
-function drawPile(index, now) {
+function drawPile(index: number, now: number): void {
   const pile = JUNK_PILES[index];
-  const pileState = state.junk.piles[index];
+  const pileState = state.junk!.piles[index];
   const random = seededRandom(pileState.seed);
   const height = pileState.dug ? 5 : pile.h;
   const half = pile.w / 2;
@@ -695,7 +670,7 @@ function drawPile(index, now) {
   }
 }
 
-function drawJunkyard(now) {
+function drawJunkyard(now: number): void {
   const seconds = now / 1000;
   fillRect(0, 0, SCENE_W, SCENE_H, '#0a0c17');
   for (let i = 0; i < 20; i++) {
@@ -728,23 +703,23 @@ function drawJunkyard(now) {
 }
 
 /** Index of the junk pile under a click, or -1. */
-export function pileAt(clientX, clientY) {
+export function pileAt(clientX: number, clientY: number): number {
   const rect = sceneCanvas.getBoundingClientRect();
   const x = (clientX - rect.left) / rect.width * SCENE_W;
   const y = (clientY - rect.top) / rect.height * SCENE_H;
   return JUNK_PILES.findIndex(pile => Math.abs(x - pile.x) < pile.w / 2 && y > pile.y - pile.h - 6 && y < pile.y + 3);
 }
 
-export function onSceneClick(handler) {
+export function onSceneClick(handler: (event: MouseEvent) => void): void {
   sceneCanvas.addEventListener('click', handler);
 }
 
 /* ---------- animation loop ---------- */
 let lastFrameTime = performance.now();
-let onActorSettled = () => {};
+let onActorSettled: () => void = () => {};
 
 /** Moves the actor; returns true when it reached the counter or left. */
-function stepActor(dt) {
+function stepActor(dt: number): boolean {
   if (actor.phase === 'in') {
     actor.x -= WALK_SPEED * dt;
     if (actor.x <= COUNTER_X) {
@@ -762,12 +737,12 @@ function stepActor(dt) {
   return false;
 }
 
-function stepDoor(dt) {
+function stepDoor(dt: number): void {
   const target = (actor.phase === 'in' || actor.phase === 'out') && actor.x > DOOR_OPENS_AT_X ? 1 : 0;
   actor.doorOpen += (target - actor.doorOpen) * Math.min(1, dt * DOOR_SPEED);
 }
 
-function frame(now) {
+function frame(now: number): void {
   const dt = Math.min(MAX_FRAME_DT, (now - lastFrameTime) / 1000);
   lastFrameTime = now;
   if (stepActor(dt)) {
@@ -783,7 +758,7 @@ function frame(now) {
 }
 
 /** Starts the loop; `settled` is called when a customer arrives or leaves. */
-export function startScene(settled) {
+export function startScene(settled: () => void): void {
   onActorSettled = settled;
   requestAnimationFrame(frame);
 }

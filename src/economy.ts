@@ -1,6 +1,8 @@
 // =====================================================================
-//  economy.js — game rules: item value, customers and haggling, rent,
+//  economy.ts — game rules: item value, customers and haggling, rent,
 //  evening (junkyard, flea market), night events, workbench, crafting.
+//  No DOM here: rules change `state` and return results; floating
+//  numbers are queued in `feedback` and shown by ui.ts.
 // =====================================================================
 import {
   ACCEPT, BENCH_COST, BUYER_COUNTER_LINES, BUYER_INSULTED_LINES, BUYER_LINES, BUYOUT_GOAL, COLLATERAL, COLOR,
@@ -8,21 +10,28 @@ import {
   INSPECT, ITEM_TYPES, JUNK, JUNK_PILES, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
   RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SELLER_COUNTER_LINES, SELLER_INSULTED_LINES, SELLER_LINES,
   SELLER_STOLEN_LINE, SUPPLIER, VALUE,
-} from './data.js';
+} from './data';
+import { appearanceFor } from './appearance';
 import {
   actor, actorEnter, addLog, createItem, findItem, fullKnowledge, randomLandlordSlot, state, ui,
-} from './state.js';
-import { appearanceFor } from './scene.js';
-import { clamp, pickRandom, randomBetween, randomInt, randomSeed, roundTo10 } from './util.js';
+} from './state';
+import type {
+  BuyerCustomer, InspectCheck, Item, ItemType, PresentedBuyer, Recipe, SellerCustomer,
+} from './types';
+import { clamp, pickRandom, randomBetween, randomInt, randomSeed, roundTo10 } from './util';
 
 /* =====================================================================
-   Feedback for the UI. Rules never touch the DOM: they queue floating
-   numbers here, ui.js shows them after the action.
+   Feedback for the UI: floating numbers to show after the action.
    ===================================================================== */
 
-export const feedback = { floats: [] };
+export interface FloatingText {
+  text: string;
+  color: string;
+}
 
-function floatText(text, color) {
+export const feedback: { floats: FloatingText[] } = { floats: [] };
+
+function floatText(text: string, color: string): void {
   feedback.floats.push({ text, color });
 }
 
@@ -30,20 +39,21 @@ function floatText(text, color) {
    Item value
    ===================================================================== */
 
-export const itemName = type => ITEM_TYPES[type].name;
+export const itemName = (type: ItemType): string => ITEM_TYPES[type].name;
 
-function conditionValue(type, condition) {
+function conditionValue(type: ItemType, condition: number): number {
   return ITEM_TYPES[type].basePrice * (VALUE.conditionFloor + VALUE.conditionSpan * condition / 100);
 }
 
 /** Price as if the item had no hidden problems. */
-const cleanValue = item => Math.round(conditionValue(item.t, item.cond));
+const cleanValue = (item: Item): number => Math.round(conditionValue(item.t, item.cond));
 
 /** Real worth, counting defect and AI infection. */
-const trueValue = item => Math.round(cleanValue(item) * (item.defect ? VALUE.defectMult : 1) * (item.infected ? VALUE.infectedMult : 1));
+const trueValue = (item: Item): number =>
+  Math.round(cleanValue(item) * (item.defect ? VALUE.defectMult : 1) * (item.infected ? VALUE.infectedMult : 1));
 
 /** What the player can estimate from what they know. */
-export function estimatedValue(item) {
+export function estimatedValue(item: Item): number {
   const condition = item.k.cond ? item.cond : VALUE.unknownConditionGuess;
   let value = conditionValue(item.t, condition);
   if (item.k.flaw && item.defect) {
@@ -55,17 +65,17 @@ export function estimatedValue(item) {
   return Math.round(value);
 }
 
-const buyerBaseValue = item => conditionValue(item.t, item.cond) * (item.defect ? VALUE.buyerDefectMult : 1);
+const buyerBaseValue = (item: Item): number => conditionValue(item.t, item.cond) * (item.defect ? VALUE.buyerDefectMult : 1);
 
-export const isFullyKnown = item => item.k.cond && item.k.serial && item.k.flaw;
-export const showsInfection = item => item.k.flaw && item.infected;
+export const isFullyKnown = (item: Item): boolean => item.k.cond && item.k.serial && item.k.flaw;
+export const showsInfection = (item: Item): boolean => item.k.flaw && item.infected;
 
-function raiseHeat(amount) {
+function raiseHeat(amount: number): void {
   state.heat = Math.min(MAX_HEAT, state.heat + amount);
 }
 
-function pickRandomItemType() {
-  const types = Object.keys(ITEM_TYPES);
+function pickRandomItemType(): ItemType {
+  const types = Object.keys(ITEM_TYPES) as ItemType[];
   const totalWeight = types.reduce((sum, type) => sum + ITEM_TYPES[type].spawnWeight, 0);
   let roll = Math.random() * totalWeight;
   for (const type of types) {
@@ -81,69 +91,67 @@ function pickRandomItemType() {
    Customers & shop flow
    ===================================================================== */
 
-function setupBuyer(customer) {
-  customer.kind = 'buy';
-  customer.want = Math.random() < CUSTOMER.buyerWantsStockedChance ? pickRandom(state.inv).t : pickRandomItemType();
-  customer.mult = randomBetween(CUSTOMER.buyerMarkupMin, CUSTOMER.buyerMarkupMax);
-  customer.item = null;
-  customer.msg = pickRandom(BUYER_LINES).replace('{t}', itemName(customer.want).toLowerCase());
+export function isPresentedBuyer(customer: BuyerCustomer): customer is PresentedBuyer {
+  return customer.item !== null && customer.offer !== undefined && customer.max2 !== undefined;
 }
 
-function setupSeller(customer) {
-  customer.kind = 'sell';
-  const item = createItem(pickRandomItemType());
-  customer.item = item;
-  customer.ask = Math.round(cleanValue(item) * randomBetween(CUSTOMER.sellerAskMin, CUSTOMER.sellerAskMax));
-  customer.min = Math.round(trueValue(item) * (item.stolen ? CUSTOMER.sellerMinStolen : CUSTOMER.sellerMinClean));
-  customer.msg = item.stolen && Math.random() < CUSTOMER.stolenRushLineChance ? SELLER_STOLEN_LINE : pickRandom(SELLER_LINES);
+/** Customer at the counter if it is a seller, else null. */
+function currentSeller(): SellerCustomer | null {
+  return state.cust?.kind === 'sell' ? state.cust : null;
+}
+
+function currentBuyer(): BuyerCustomer | null {
+  return state.cust?.kind === 'buy' ? state.cust : null;
 }
 
 /**
- * Customer fields: name, seed (appearance), pat/max (patience), done (inspections made),
- * noise (gut-feeling error), kind 'sell' | 'buy' | 'rent', msg, item.
- * Seller: ask (current price), min (hidden limit). Buyer: want, mult, offer, max2 (hidden limit).
+ * Note on field order: the object literals below keep the same key order
+ * as the original code, so saves stay byte-identical (parity tests).
  */
-function createCustomer(forceSeller) {
-  const isBuyer = !forceSeller && state.inv.length && Math.random() < CUSTOMER.buyerChance;
+function createCustomer(forceSeller: boolean): void {
+  const isBuyer = !forceSeller && state.inv.length > 0 && Math.random() < CUSTOMER.buyerChance;
   const seed = randomSeed();
   const appearance = appearanceFor(seed);
-  const customer = {
-    name: pickRandom(appearance.kind === 'human' ? HUMAN_NAMES : ROBOT_NAMES),
-    seed,
-    pat: randomInt(CUSTOMER.patienceMin, CUSTOMER.patienceMax),
-    done: {},
-    noise: randomBetween(-CUSTOMER.feelNoise, CUSTOMER.feelNoise),
-  };
-  customer.max = customer.pat;
+  const name = pickRandom(appearance.kind === 'human' ? HUMAN_NAMES : ROBOT_NAMES);
+  const pat = randomInt(CUSTOMER.patienceMin, CUSTOMER.patienceMax);
+  const noise = randomBetween(-CUSTOMER.feelNoise, CUSTOMER.feelNoise);
+  const base = { name, seed, pat, done: {}, noise, max: pat };
   if (isBuyer) {
-    setupBuyer(customer);
+    const want = Math.random() < CUSTOMER.buyerWantsStockedChance ? pickRandom(state.inv).t : pickRandomItemType();
+    const mult = randomBetween(CUSTOMER.buyerMarkupMin, CUSTOMER.buyerMarkupMax);
+    const msg = pickRandom(BUYER_LINES).replace('{t}', itemName(want).toLowerCase());
+    state.cust = { ...base, kind: 'buy', want, mult, item: null, msg };
   } else {
-    setupSeller(customer);
+    const item = createItem(pickRandomItemType());
+    const ask = Math.round(cleanValue(item) * randomBetween(CUSTOMER.sellerAskMin, CUSTOMER.sellerAskMax));
+    const min = Math.round(trueValue(item) * (item.stolen ? CUSTOMER.sellerMinStolen : CUSTOMER.sellerMinClean));
+    const msg = item.stolen && Math.random() < CUSTOMER.stolenRushLineChance ? SELLER_STOLEN_LINE : pickRandom(SELLER_LINES);
+    state.cust = { ...base, kind: 'sell', item, ask, min, msg };
   }
-  state.cust = customer;
 }
 
-export function isLandlordDue() {
+export function isLandlordDue(): boolean {
   return !state.won && !state.over && state.phase === 'shop' && state.day >= state.nextDue && !state.llDone;
 }
 
-export function callNextCustomer() {
+export function callNextCustomer(): void {
   if (state.phase !== 'shop' || state.cust || state.over || actor.phase !== 'empty') {
     return;
   }
   if (isLandlordDue() && state.slot >= Math.min(state.llAt, CUSTOMERS_PER_DAY)) {
-    return spawnLandlord();
+    spawnLandlord();
+    return;
   }
   if (state.slot >= CUSTOMERS_PER_DAY) {
     return;
   }
   // the very first visitor of a new game always sells, to teach the basics
   createCustomer(state.day === 1 && state.slot === 0);
-  actorEnter(state.cust.seed);
+  actorEnter(state.cust!.seed);
   ui.tab = 'deal';
 }
 
-function landlordGreeting() {
+function landlordGreeting(): string {
   if (state.deferred) {
     return `Отсрочка кончилась. С тебя ${state.owed} кр., сегодня.`;
   }
@@ -153,33 +161,42 @@ function landlordGreeting() {
   return `Аренда, ${state.owed} кр. Не хватает? Могу подождать пару дней. Под процент.`;
 }
 
-function spawnLandlord() {
+function spawnLandlord(): void {
   const msg = landlordGreeting();
   state.cust = { kind: 'rent', name: LANDLORD_NAME, seed: LANDLORD_SEED, msg, pat: 0, max: 0, done: {} };
   actorEnter(LANDLORD_SEED);
   ui.tab = 'deal';
 }
 
-export function customerLeaves(reason) {
+export function customerLeaves(reason?: string): void {
+  if (!state.cust) {
+    return;
+  }
   addLog(`${state.cust.name} ушёл(ла). ${reason || ''}`);
   finishCustomer();
 }
 
-function finishCustomer() {
+function finishCustomer(): void {
+  const customer = state.cust;
+  if (!customer) {
+    return;
+  }
   actor.phase = 'out';
-  actor.seed = state.cust.seed;
-  const wasLandlord = state.cust.kind === 'rent';
+  actor.seed = customer.seed;
+  const wasLandlord = customer.kind === 'rent';
   state.cust = null;
   if (!wasLandlord) {
     state.slot++;
   }
 }
 
-function losePatience(amount) {
-  state.cust.pat = Math.max(0, state.cust.pat - amount);
+function losePatience(amount: number): void {
+  if (state.cust) {
+    state.cust.pat = Math.max(0, state.cust.pat - amount);
+  }
 }
 
-export function closeShop() {
+export function closeShop(): void {
   state.phase = 'evening';
   state.hours = EVENING_HOURS;
   state.where = 'home';
@@ -192,13 +209,14 @@ export function closeShop() {
    Rent
    ===================================================================== */
 
-export const nextRent = () => state.rent + RENT.increase;
-export const deferredDebt = () => roundTo10(state.owed * RENT.deferPenalty);
+export const nextRent = (): number => state.rent + RENT.increase;
+export const deferredDebt = (): number => roundTo10(state.owed * RENT.deferPenalty);
 
-const collateralValue = item => Math.max(COLLATERAL.minValue, Math.round(trueValue(item) * (item.stolen ? COLLATERAL.stolenRate : COLLATERAL.cleanRate)));
+const collateralValue = (item: Item): number =>
+  Math.max(COLLATERAL.minValue, Math.round(trueValue(item) * (item.stolen ? COLLATERAL.stolenRate : COLLATERAL.cleanRate)));
 
 /** Landlord prefers stolen goods: the cheapest one that covers the rest, else the most valuable. */
-function pickCollateralItem(candidates, remaining) {
+function pickCollateralItem(candidates: Item[], remaining: number): Item {
   const stolen = candidates.filter(item => item.stolen);
   const pool = stolen.length ? stolen : candidates;
   const covering = pool
@@ -207,11 +225,24 @@ function pickCollateralItem(candidates, remaining) {
   return covering[0] || pool.sort((a, b) => collateralValue(b) - collateralValue(a))[0];
 }
 
+export interface CollateralPlan {
+  /** Cash taken (all credits up to the debt). */
+  cash: number;
+  /** Goods taken. */
+  items: Item[];
+  /** Cash and goods cover the debt. */
+  ok: boolean;
+  /** Overpayment, no change given. */
+  over: number;
+  /** Number of stolen items taken. */
+  hot: number;
+}
+
 /** What the landlord would take: all cash up to the debt, then goods. */
-export function planCollateral() {
+export function planCollateral(): CollateralPlan {
   const cash = Math.min(state.credits, state.owed);
   let remaining = state.owed - cash;
-  const items = [];
+  const items: Item[] = [];
   while (remaining > 0) {
     const candidates = state.inv.filter(item => !items.includes(item));
     if (!candidates.length) {
@@ -225,14 +256,14 @@ export function planCollateral() {
     cash,
     items,
     ok: remaining <= 0,
-    over: Math.max(0, -remaining), // overpayment, no change given
+    over: Math.max(0, -remaining),
     hot: items.filter(item => item.stolen).length,
   };
 }
 
-export const collateralHeatRelief = plan => Math.min(state.heat, plan.hot * COLLATERAL.heatReliefPerStolen);
+export const collateralHeatRelief = (plan: CollateralPlan): number => Math.min(state.heat, plan.hot * COLLATERAL.heatReliefPerStolen);
 
-function settleRent() {
+function settleRent(): void {
   state.deferred = false;
   state.rent += RENT.increase;
   state.nextDue = state.day + RENT.periodDays;
@@ -240,8 +271,8 @@ function settleRent() {
   state.llDone = true;
 }
 
-export function payRent() {
-  if (state.credits < state.owed) {
+export function payRent(): void {
+  if (state.credits < state.owed || !state.cust) {
     return;
   }
   const amount = state.owed;
@@ -253,7 +284,7 @@ export function payRent() {
   finishCustomer();
 }
 
-export function deferRent() {
+export function deferRent(): void {
   if (state.deferred) {
     return;
   }
@@ -265,7 +296,7 @@ export function deferRent() {
   finishCustomer();
 }
 
-export function payWithCollateral() {
+export function payWithCollateral(): void {
   const plan = planCollateral();
   if (!plan.ok) {
     return;
@@ -288,13 +319,13 @@ export function payWithCollateral() {
   finishCustomer();
 }
 
-export function evict() {
+export function evict(): void {
   state.over = `Долг ${state.owed} кр. нечем покрыть. Гробов опечатал лавку.`;
   addLog(state.over);
   finishCustomer();
 }
 
-export function buyOutShop() {
+export function buyOutShop(): void {
   state.credits -= BUYOUT_GOAL;
   state.won = true;
   state.rent = 0;
@@ -305,12 +336,12 @@ export function buyOutShop() {
    Inspection of a seller's item
    ===================================================================== */
 
-function revealCondition(customer, item) {
+function revealCondition(customer: SellerCustomer, item: Item): void {
   item.k.cond = true;
   customer.msg = `Состояние ${item.cond}%. ${item.cond < INSPECT.lowCondition ? 'Ну, работает же.' : 'Видишь, хорошая вещь.'}`;
 }
 
-function revealSerial(customer, item) {
+function revealSerial(customer: SellerCustomer, item: Item): void {
   item.k.serial = true;
   if (item.stolen) {
     customer.ask = Math.max(customer.min, Math.round(customer.ask * INSPECT.stolenAskMult));
@@ -321,7 +352,7 @@ function revealSerial(customer, item) {
   }
 }
 
-function revealFlaw(customer, item) {
+function revealFlaw(customer: SellerCustomer, item: Item): void {
   item.k.flaw = true;
   if (item.infected) {
     customer.ask = Math.max(customer.min, Math.round(customer.ask * INSPECT.infectedAskMult));
@@ -335,13 +366,20 @@ function revealFlaw(customer, item) {
   }
 }
 
-const REVEALS = { cond: revealCondition, serial: revealSerial, flaw: revealFlaw };
+const REVEALS: Record<InspectCheck, (customer: SellerCustomer, item: Item) => void> = {
+  cond: revealCondition,
+  serial: revealSerial,
+  flaw: revealFlaw,
+};
 
-/** check: 'cond' | 'serial' | 'flaw'. Each check costs patience (never the last point). */
-export function inspect(check) {
-  const customer = state.cust;
-  const item = customer.item;
-  if (customer.done[check]) {
+export function isInspectCheck(value: string | undefined): value is InspectCheck {
+  return value === 'cond' || value === 'serial' || value === 'flaw';
+}
+
+/** Each check costs patience (never the last point). */
+export function inspect(check: InspectCheck): void {
+  const customer = currentSeller();
+  if (!customer || customer.done[check]) {
     return;
   }
   customer.done[check] = 1;
@@ -349,7 +387,7 @@ export function inspect(check) {
   if (customer.pat > 1) {
     losePatience(1);
   }
-  REVEALS[check]?.(customer, item);
+  REVEALS[check](customer, customer.item);
 }
 
 /* =====================================================================
@@ -357,7 +395,7 @@ export function inspect(check) {
    ===================================================================== */
 
 /** Chance a seller accepts `price`: 50% at the hidden limit, ~97% near their own price. */
-function sellerAcceptChance(customer, price) {
+export function sellerAcceptChance(customer: SellerCustomer, price: number): number {
   if (price >= customer.ask) {
     return 1;
   }
@@ -371,7 +409,8 @@ function sellerAcceptChance(customer, price) {
   return clamp(ACCEPT.atLimit + ACCEPT.slope * (price - customer.min) / Math.max(1, customer.ask - customer.min), 0, ACCEPT.cap);
 }
 
-function buyerAcceptChance(customer, price) {
+/** Chance a buyer accepts `price`: sure at their offer, 50% at the hidden limit, 0 far above it. */
+export function buyerAcceptChance(customer: PresentedBuyer, price: number): number {
   if (price <= customer.offer) {
     return 1;
   }
@@ -386,7 +425,7 @@ function buyerAcceptChance(customer, price) {
 }
 
 /** The player's "gut feeling": true chance plus per-customer noise, rounded to 5%. */
-export function perceivedChance(customer, price) {
+export function perceivedChance(customer: SellerCustomer | PresentedBuyer, price: number): number {
   const chance = customer.kind === 'sell' ? sellerAcceptChance(customer, price) : buyerAcceptChance(customer, price);
   if (chance >= 1 || chance <= 0) {
     return chance;
@@ -394,17 +433,22 @@ export function perceivedChance(customer, price) {
   return clamp(Math.round((chance + customer.noise) * ACCEPT.feelStep) / ACCEPT.feelStep, ACCEPT.feelMin, ACCEPT.feelMax);
 }
 
-export function offerToSeller(price) {
-  const customer = state.cust;
+export function offerToSeller(price: number): void {
+  const customer = currentSeller();
+  if (!customer) {
+    return;
+  }
   if (price > state.credits) {
     customer.msg = 'У тебя столько нет, не смеши.';
     return;
   }
   if (price >= customer.ask) {
-    return buyFromSeller(customer.ask);
+    buyFromSeller(customer.ask);
+    return;
   }
   if (Math.random() < sellerAcceptChance(customer, price)) {
-    return buyFromSeller(price);
+    buyFromSeller(price);
+    return;
   }
   if (price < customer.min * HAGGLE.sellerInsultShare) {
     losePatience(HAGGLE.insultPatienceLoss);
@@ -419,25 +463,30 @@ export function offerToSeller(price) {
   }
 }
 
-export function buyFromSeller(price) {
-  const customer = state.cust;
+/** Buy the seller's item; price defaults to their asking price. */
+export function buyFromSeller(price?: number): void {
+  const customer = currentSeller();
+  if (!customer) {
+    return;
+  }
+  const paid = price ?? customer.ask;
   const item = customer.item;
-  state.credits -= price;
+  state.credits -= paid;
   state.inv.push(item);
   if (item.stolen) {
     raiseHeat(1);
   }
-  addLog(`Куплено: ${itemName(item.t)} за ${price} кр. у ${customer.name}.`);
-  floatText(`−${price}`, COLOR.amber);
+  addLog(`Куплено: ${itemName(item.t)} за ${paid} кр. у ${customer.name}.`);
+  floatText(`−${paid}`, COLOR.amber);
   ui.sel = item.uid;
   finishCustomer();
 }
 
 /** Put a stocked item on the counter for a buyer; they name an opening price. */
-export function presentItem(uid) {
-  const customer = state.cust;
+export function presentItem(uid: number): void {
+  const customer = currentBuyer();
   const item = findItem(uid);
-  if (!item) {
+  if (!customer || !item) {
     return;
   }
   customer.item = item;
@@ -446,13 +495,18 @@ export function presentItem(uid) {
   customer.msg = `${item.cond < CUSTOMER.worndownCondition ? 'Потрёпан. ' : ''}Дам ${customer.offer} кр.`;
 }
 
-export function askBuyer(price) {
-  const customer = state.cust;
+export function askBuyer(price: number): void {
+  const customer = currentBuyer();
+  if (!customer || !isPresentedBuyer(customer)) {
+    return;
+  }
   if (price <= customer.offer) {
-    return sellToBuyer(customer.offer);
+    sellToBuyer(customer.offer);
+    return;
   }
   if (Math.random() < buyerAcceptChance(customer, price)) {
-    return sellToBuyer(price);
+    sellToBuyer(price);
+    return;
   }
   if (price > customer.max2 * HAGGLE.buyerInsultShare) {
     losePatience(HAGGLE.insultPatienceLoss);
@@ -467,10 +521,15 @@ export function askBuyer(price) {
   }
 }
 
-export function sellToBuyer(price) {
-  const customer = state.cust;
+/** Sell the shown item; price defaults to the buyer's offer. */
+export function sellToBuyer(price?: number): void {
+  const customer = currentBuyer();
+  if (!customer || !isPresentedBuyer(customer)) {
+    return;
+  }
+  const paid = price ?? customer.offer;
   const item = customer.item;
-  state.credits += price;
+  state.credits += paid;
   state.inv = state.inv.filter(i => i.uid !== item.uid);
   if (ui.sel === item.uid) {
     ui.sel = null;
@@ -484,8 +543,8 @@ export function sellToBuyer(price) {
     raiseHeat(2);
     note += ' Вещь была заражена ИИ, служба безопасности насторожилась.';
   }
-  addLog(`Продано: ${itemName(item.t)} за ${price} кр. (${customer.name}).${note}`);
-  floatText(`+${price}`, COLOR.green);
+  addLog(`Продано: ${itemName(item.t)} за ${paid} кр. (${customer.name}).${note}`);
+  floatText(`+${paid}`, COLOR.green);
   finishCustomer();
 }
 
@@ -493,7 +552,7 @@ export function sellToBuyer(price) {
    Evening: junkyard, flea market, supplier
    ===================================================================== */
 
-export function goToJunkyard() {
+export function goToJunkyard(): void {
   if (state.hours < JUNK.minHoursToGo) {
     return;
   }
@@ -503,13 +562,13 @@ export function goToJunkyard() {
   state.jmsg = 'Свалка «Кольцо Б». Выберите кучу и копайте. Каждая куча — час.';
 }
 
-export function goHome() {
+export function goHome(): void {
   state.where = 'home';
   state.jmsg = '';
 }
 
 /** Rolls what a pile gives; applies the loot and returns the message. */
-function rollDigOutcome() {
+function rollDigOutcome(): string {
   const roll = Math.random();
   if (roll < DIG_ODDS.drone) {
     state.hours = Math.max(0, state.hours - 1);
@@ -542,8 +601,8 @@ function rollDigOutcome() {
   return 'Пусто. Только ржавые болты.';
 }
 
-export function digPile(index) {
-  if (state.where !== 'junk' || state.hours < 1) {
+export function digPile(index: number): void {
+  if (state.where !== 'junk' || state.hours < 1 || !state.junk) {
     return;
   }
   const pile = state.junk.piles[index];
@@ -561,9 +620,9 @@ export function digPile(index) {
   }
 }
 
-export const canVisitMarket = () => state.hours >= MARKET.hours && !state.market && state.credits >= MARKET.price;
+export const canVisitMarket = (): boolean => state.hours >= MARKET.hours && !state.market && state.credits >= MARKET.price;
 
-export function visitMarket() {
+export function visitMarket(): void {
   if (!canVisitMarket()) {
     return;
   }
@@ -574,7 +633,7 @@ export function visitMarket() {
   addLog('Барахолка: 5 запчастей за 50 кр.');
 }
 
-export function orderParts() {
+export function orderParts(): void {
   if (state.credits < SUPPLIER.price) {
     return;
   }
@@ -588,7 +647,7 @@ export function orderParts() {
    ===================================================================== */
 
 /** Each infected item may infect one more electronic item on the shelf. */
-function spreadInfection(events) {
+function spreadInfection(events: string[]): void {
   const infectedCount = state.inv.filter(item => item.infected).length;
   for (let i = 0; i < infectedCount; i++) {
     if (Math.random() >= NIGHT.infectionSpreadChance) {
@@ -605,7 +664,7 @@ function spreadInfection(events) {
   }
 }
 
-function startNewDay() {
+function startNewDay(): void {
   state.day++;
   state.slot = 0;
   state.phase = 'shop';
@@ -616,7 +675,7 @@ function startNewDay() {
 }
 
 /** Heat cools by 1 overnight, but yesterday's heat decides the raid chance. */
-function coolDownAndMaybeRaid(events) {
+function coolDownAndMaybeRaid(events: string[]): void {
   const heatBefore = state.heat;
   state.heat = Math.max(0, state.heat - 1);
   if (state.over || Math.random() >= heatBefore * NIGHT.raidChancePerHeat) {
@@ -631,9 +690,9 @@ function coolDownAndMaybeRaid(events) {
 }
 
 /** Ends the day; returns the list of night events for the morning report. */
-export function sleepUntilMorning() {
+export function sleepUntilMorning(): string[] {
   state.where = 'home';
-  const events = [];
+  const events: string[] = [];
   spreadInfection(events);
   startNewDay();
   if (!state.won && state.day >= state.nextDue) {
@@ -651,10 +710,10 @@ export function sleepUntilMorning() {
    Workbench & crafting
    ===================================================================== */
 
-export const scrapValue = item => Math.max(1, Math.round(ITEM_TYPES[item.t].basePrice / 80 + item.cond / 50));
-export const isOnCounter = item => state.cust && state.cust.item && state.cust.item.uid === item.uid;
+export const scrapValue = (item: Item): number => Math.max(1, Math.round(ITEM_TYPES[item.t].basePrice / 80 + item.cond / 50));
+export const isOnCounter = (item: Item): boolean => !!state.cust && 'item' in state.cust && !!state.cust.item && state.cust.item.uid === item.uid;
 
-const BENCH_ACTIONS = {
+const BENCH_ACTIONS: Record<string, (item: Item) => void> = {
   diag(item) {
     item.k = fullKnowledge();
     addLog(`Диагностика: ${itemName(item.t)}.`);
@@ -689,7 +748,7 @@ const BENCH_ACTIONS = {
   },
 };
 
-export function useWorkbench(action) {
+export function useWorkbench(action: string): void {
   const item = findItem(ui.sel);
   if (!item) {
     return;
@@ -699,23 +758,29 @@ export function useWorkbench(action) {
     return;
   }
   state.parts -= cost;
-  BENCH_ACTIONS[action]?.(item);
+  if (Object.hasOwn(BENCH_ACTIONS, action)) {
+    BENCH_ACTIONS[action](item);
+  }
 }
 
 /** Stock of a type that is free to use (not lying on the counter). */
-export const availableOfType = type => state.inv.filter(item => item.t === type && !isOnCounter(item));
+export const availableOfType = (type: ItemType): Item[] => state.inv.filter(item => item.t === type && !isOnCounter(item));
 
-export function canCraft(recipe) {
-  return state.parts >= recipe.parts && Object.entries(recipe.need).every(([type, count]) => availableOfType(type).length >= count);
+/** Ingredients of a recipe as [type, count] pairs. */
+export const recipeNeeds = (recipe: Recipe): [ItemType, number][] =>
+  Object.entries(recipe.need) as [ItemType, number][];
+
+export function canCraft(recipe: Recipe): boolean {
+  return state.parts >= recipe.parts && recipeNeeds(recipe).every(([type, count]) => availableOfType(type).length >= count);
 }
 
-export function craft(index) {
+export function craft(index: number): void {
   const recipe = RECIPES[index];
-  if (!canCraft(recipe)) {
+  if (!recipe || !canCraft(recipe)) {
     return;
   }
-  const used = [];
-  Object.entries(recipe.need).forEach(([type, count]) => used.push(...availableOfType(type).slice(0, count)));
+  const used: Item[] = [];
+  recipeNeeds(recipe).forEach(([type, count]) => used.push(...availableOfType(type).slice(0, count)));
   state.inv = state.inv.filter(item => !used.includes(item));
   state.parts -= recipe.parts;
   const averageCondition = used.reduce((sum, item) => sum + item.cond, 0) / used.length;
