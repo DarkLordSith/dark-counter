@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1220">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Прилавок">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Тёмный прилавок</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Silkscreen&display=swap">
+<style>
+/* Layout: one-screen app — compact HUD → pixel scene (shop / junkyard) → ticker → tabs → scrolling pane. Single deliberate dark look. */
+:root{
+  color-scheme: dark;
+  --bg:#0f1220; --panel:#171b2d; --panel2:#1f2440; --line:#2d3455;
+  --fg:#dde1f3; --dim:#8b92b5;
+  --cyan:#46d3c9; --amber:#f0a33e; --red:#ff6372; --green:#7fd98e;
+  --display:'Silkscreen','Courier New',monospace;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--mono);font-size:13px;line-height:1.4;overflow:hidden;
+  padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+#app{height:100%;max-width:760px;margin:0 auto;display:flex;flex-direction:column;min-height:0}
+
+.hud{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding-block:8px;font-variant-numeric:tabular-nums}
+.logo{font-family:var(--display);font-size:12px;color:var(--cyan);margin-right:auto}
+.st{display:flex;align-items:baseline;gap:4px;font-size:12px}
+.st small{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.st b{font-weight:600}
+.heat{display:flex;gap:1px}
+.heat i{width:4px;height:9px;background:var(--line)} .heat i.on{background:var(--red)}
+.hb{background:var(--panel2);border:1px solid var(--line);padding:3px 7px;font-size:11px}
+
+.scene{flex:none;display:flex;justify-content:center;background:#141829;border:1px solid var(--line)}
+.stage{position:relative;height:min(40vh,58vw);aspect-ratio:160/100;max-width:100%;line-height:0}
+.stage canvas{width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;display:block}
+.bubble{position:absolute;left:3%;top:5%;max-width:44%;line-height:1.3;background:var(--fg);color:#141829;font-size:12px;padding:6px 8px;font-weight:500;box-shadow:3px 3px 0 rgba(0,0,0,.45)}
+.bubble::after{content:"";position:absolute;right:-8px;top:10px;border:5px solid transparent;border-left:8px solid var(--fg);border-right:0}
+.bubble.free::after{display:none}
+.chip{position:absolute;right:2%;top:4%;font-family:var(--display);font-size:10px;line-height:1;background:rgba(10,12,24,.8);color:var(--cyan);padding:4px 6px}
+.call{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--display);font-size:13px;line-height:1;background:var(--cyan);color:#0b1620;border:none;padding:11px 14px;box-shadow:4px 4px 0 rgba(0,0,0,.5);white-space:nowrap}
+.fx{position:absolute;left:50%;top:46%;transform:translateX(-50%);font-family:var(--display);font-size:18px;line-height:1;pointer-events:none;text-shadow:2px 2px 0 #000}
+@media (prefers-reduced-motion:no-preference){.fx{animation:rise 1.2s ease-out forwards}@keyframes rise{from{opacity:1;transform:translate(-50%,0)}to{opacity:0;transform:translate(-50%,-36px)}}}
+@media (prefers-reduced-motion:reduce){.fx{animation:fade 1.2s forwards}@keyframes fade{to{opacity:0}}}
+
+.ticker{flex:none;background:none;border:none;border-bottom:1px solid var(--line);text-align:left;padding:6px 2px;font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ticker b{color:var(--cyan);font-weight:500}
+.tabs{flex:none;display:flex;border-bottom:1px solid var(--line)}
+.tab{flex:1;background:none;border:none;padding:8px 4px;font-family:var(--display);font-size:11px;color:var(--dim);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.on{color:var(--fg);border-bottom-color:var(--cyan)}
+.pane{flex:1;min-height:0;overflow:auto;padding-block:10px 14px}
+
+.hint{color:var(--dim)}
+.thead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.cname{font-weight:600}
+.kind{font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin-left:6px}
+.kind.sell{color:var(--amber)} .kind.buy{color:var(--cyan)}
+.pips{display:flex;gap:3px} .pips i{width:10px;height:5px;background:var(--line)} .pips i.on{background:var(--amber)}
+.card{display:flex;gap:10px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);padding:8px}
+.bigico{width:84px;height:48px;flex:none;image-rendering:pixelated;background:var(--panel2)}
+.rows{display:grid;grid-template-columns:auto 1fr;gap:1px 10px;font-size:12px;min-width:0}
+.rows span:nth-child(odd){color:var(--dim)}
+.q{color:var(--dim)} .bad{color:var(--red)} .ok{color:var(--green)} .warn{color:var(--amber)}
+.tools{display:flex;gap:5px;margin-top:8px}
+.tools .btn{flex:1}
+.btn{background:var(--panel2);border:1px solid var(--line);padding:7px 10px;font-size:12px}
+.btn:hover:not(:disabled){border-color:var(--cyan)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.pri{background:var(--cyan);border-color:var(--cyan);color:#0b1620;font-weight:600}
+.btn.amb{border-color:var(--amber);color:var(--amber)}
+.price{font-variant-numeric:tabular-nums}
+.deal{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.pr{display:flex;gap:4px;align-items:center}
+.pr input{flex:1;min-width:0;width:70px;text-align:center;background:var(--bg);border:1px solid var(--line);color:var(--fg);font:inherit;font-size:15px;padding:6px;font-variant-numeric:tabular-nums}
+.pr .btn{padding:7px 8px}
+.chance{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim)}
+.cbar{flex:1;height:6px;background:var(--line);position:relative}
+.cbar i{position:absolute;inset:0 auto 0 0;background:var(--amber)}
+.acts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+.ask{font-size:12px;color:var(--dim)} .ask b{color:var(--fg);font-size:14px}
+
+.shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:6px}
+.tile{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--panel);border:1px solid var(--line);border-bottom:3px solid #2a3152;padding:6px 4px 4px;font-size:10px;line-height:1.2;text-align:center}
+.tile.on{border-color:var(--cyan)}
+.tile canvas{width:56px;height:32px;image-rendering:pixelated}
+.tile .tv{color:var(--dim);font-variant-numeric:tabular-nums}
+.dots{position:absolute;top:3px;right:3px;display:flex;gap:2px}
+.dots i{width:6px;height:6px} .d-red{background:var(--red)} .d-amb{background:var(--amber)} .d-q{background:var(--line)} .d-ok{background:var(--green)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:10px;color:var(--dim);margin:8px 0}
+.legend i{display:inline-block;width:6px;height:6px;margin-right:3px}
+.bench{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.bgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.bgrid .btn{display:flex;justify-content:space-between;gap:6px;text-align:left}
+.tags{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+.tag{font-size:9px;letter-spacing:.06em;text-transform:uppercase;padding:1px 4px;border:1px solid var(--line);color:var(--dim)}
+.tag.bad{border-color:var(--red);color:var(--red)} .tag.ok{border-color:var(--green);color:var(--green)} .tag.warn{border-color:var(--amber);color:var(--amber)}
+.recipes{display:flex;flex-direction:column;gap:6px}
+.recipe{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);padding:6px}
+.recipe canvas{width:56px;height:32px;image-rendering:pixelated;flex:none}
+.recipe .rb{flex:1;min-width:0}
+.rn{font-family:var(--display);font-size:11px}
+.need{font-size:11px;color:var(--dim)} .need .have{color:var(--green)} .need .miss{color:var(--red)}
+.opts{display:flex;flex-direction:column;gap:6px}
+.opt{display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;background:var(--panel);border:1px solid var(--line);padding:10px}
+.opt:hover:not(:disabled){border-color:var(--cyan)}
+.opt:disabled{opacity:.4}
+.opt b{font-family:var(--display);font-weight:400;font-size:12px}
+.opt span{font-size:11px;color:var(--dim)}
+.piles{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:8px 0}
+
+.modal{position:fixed;inset:0;z-index:20;background:rgba(5,7,14,.8);display:flex;align-items:center;justify-content:center;padding:16px}
+.mbox{background:var(--panel);border:1px solid var(--cyan);max-width:420px;width:100%;max-height:80vh;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.mbox h2{font-family:var(--display);font-size:16px;color:var(--cyan);margin:0;font-weight:400}
+.mbox ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:4px}
+.mbtns{display:flex;gap:8px;flex-wrap:wrap}
+.mbox textarea{width:100%;min-height:72px;background:var(--bg);border:1px solid var(--line);color:var(--fg);font:11px/1.3 var(--mono);padding:6px;resize:vertical;word-break:break-all}
+.mbox label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="hud" id="hud"></header>
+  <div class="scene"><div class="stage" id="stage">
+    <canvas id="scn" width="160" height="100" aria-label="Сцена игры"></canvas>
+    <div class="bubble" id="bubble" hidden></div>
+    <div class="chip" id="chip"></div>
+    <button class="call" id="callBtn" data-a="call" hidden>Позвать следующего</button>
+  </div></div>
+  <button class="ticker" id="ticker" data-a="log"></button>
+  <nav class="tabs" id="tabs"></nav>
+  <section class="pane" id="pane"></section>
+</div>
+<div class="modal" id="modal" hidden><div class="mbox" id="mbox"></div></div>
+
+<script>
+const PER_DAY=6, GOAL=5000, KEY='dark-counter-v3', EVE_HOURS=4;
+const T={
+  comm:{n:'Коммуникатор',b:120,w:3},
+  battery:{n:'Энергоячейка',b:90,w:3},
+  servo:{n:'Сервопривод',b:160,w:3},
+  cutter:{n:'Плазменный резак',b:300,w:2},
+  visor:{n:'AR-визор',b:280,w:2,ai:1},
+  drone:{n:'Курьерский дрон',b:450,w:1},
+  chip:{n:'Нейрочип',b:520,w:1.5,ai:1},
+  arm:{n:'Кибер-рука',b:760,w:.7,ai:1},
+};
+const ELEC=['comm','visor','drone','chip','arm'];
+const RECIPES=[
+  {out:'visor',need:{comm:1,battery:1},parts:2},
+  {out:'cutter',need:{battery:2},parts:3},
+  {out:'drone',need:{servo:1,battery:1},parts:3},
+  {out:'arm',need:{servo:2,battery:1},parts:4},
+];
+const NAMES_H=['Рыжий Вик','Тётя Ома','Борн','Лиса из шлюза','Механик Ду','Стас «Провод»','Мира Кейн','Тихий Йоэль','Нана Рокет','Гарри Шов','Курт Дымов','Пак'];
+const NAMES_R=['Кси-9','Офелия-3','ТР-404','Болт','Юнит-7','Мама-Кран','Р-Скрип','Ось'];
+const SELL_LINES=['Глянь, почти новая штука. Почти.','Нашёл на нижнем ярусе. Честно нашёл.','Срочно нужны кредиты, не торгуйся долго.','Отдаю, потому что съезжаю со станции.','Не спрашивай, откуда. Спроси, сколько.'];
+const BUY_LINES=['Мне нужен {t}. Сегодня.','Говорят, у тебя бывает {t}. Покажешь?','Ищу {t}, без лишних вопросов.','Шеф велел достать {t}. Деньги есть.'];
+
+const rnd=(a,b)=>a+Math.random()*(b-a), ri=(a,b)=>Math.floor(rnd(a,b+1)), pick=a=>a[Math.floor(Math.random()*a.length)];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function pickType(){const ks=Object.keys(T),tot=ks.reduce((s,k)=>s+T[k].w,0);let r=Math.random()*tot;for(const k of ks){r-=T[k].w;if(r<=0)return k}return ks[0]}
+const cleanVal=it=>Math.round(T[it.t].b*(.3+.7*it.cond/100));
+const trueVal=it=>Math.round(cleanVal(it)*(it.defect?.5:1)*(it.infected?.15:1));
+function estVal(it){const c=it.k.cond?it.cond:60;let v=T[it.t].b*(.3+.7*c/100);if(it.k.flaw&&it.defect)v*=.5;if(it.k.flaw&&it.infected)v*=.15;return Math.round(v)}
+const buyerBase=it=>T[it.t].b*(.3+.7*it.cond/100)*(it.defect?.7:1);
+
+let S, ui={tab:'deal',sel:null};
+const A={phase:'empty',x:140,seed:0,scan:0,door:0};
+const DOOR_X=138, SPOT_X=80, SPEED=46;
+
+/* ---------- state ---------- */
+function newGame(){
+  S={day:1,slot:0,credits:400,parts:4,heat:0,rent:300,uid:0,inv:[],log:[],cust:null,over:null,won:false,phase:'shop',hours:0,where:'home',junk:null,jmsg:'',market:false,
+    nextDue:3,owed:300,deferred:false,llAt:ri(1,4),llDone:false};
+  S.inv.push(mkItem('battery',{cond:70,stolen:false,defect:false,infected:false,known:true}));
+  S.inv.push(mkItem('comm',{cond:55,stolen:false,defect:false,infected:false,known:true}));
+  addLog('День 1. Лавка 7-Б, нижний ярус. Аренда каждые 3 дня, и она растёт.');
+  A.phase='empty';A.x=DOOR_X;ui.tab='deal';
+}
+function mkItem(t,o={}){
+  const it={uid:++S.uid,t,cond:o.cond??ri(15,98),stolen:o.stolen??Math.random()<.25,defect:o.defect??Math.random()<.25,
+    infected:o.infected??(!!T[t].ai&&Math.random()<.35),k:{cond:false,serial:false,flaw:false}};
+  if(o.known)it.k={cond:true,serial:true,flaw:true};
+  return it;
+}
+function newCustomer(forceSell){
+  const buy=!forceSell&&S.inv.length&&Math.random()<.45;
+  const seed=Math.floor(Math.random()*1e9)+1,L=look(seed);
+  const c={name:pick(L.kind==='human'?NAMES_H:NAMES_R),seed,pat:ri(4,6),done:{},noise:rnd(-.12,.12)};
+  c.max=c.pat;
+  if(buy){
+    c.kind='buy';c.want=Math.random()<.7?pick(S.inv).t:pickType();c.mult=rnd(1.1,1.5);c.item=null;
+    c.msg=pick(BUY_LINES).replace('{t}',T[c.want].n.toLowerCase());
+  }else{
+    c.kind='sell';const it=mkItem(pickType());c.item=it;
+    c.ask=Math.round(cleanVal(it)*rnd(1.05,1.35));
+    c.min=Math.round(trueVal(it)*(it.stolen?.45:.75));
+    c.msg=it.stolen&&Math.random()<.6?'Быстро. Кредиты вперёд, вопросы потом.':pick(SELL_LINES);
+  }
+  S.cust=c;
+}
+function addLog(s){S.log.unshift(`Д${S.day}: ${s}`);S.log=S.log.slice(0,50)}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.inv&&d.phase)return d}catch(e){}return null}
+function fx(text,color){const el=document.createElement('div');el.className='fx';el.textContent=text;el.style.color=color;$('stage').appendChild(el);setTimeout(()=>el.remove(),1300)}
+
+/* ---------- shop flow ---------- */
+const LL=777;
+function llPending(){return !S.won&&!S.over&&S.phase==='shop'&&S.day>=S.nextDue&&!S.llDone}
+function callNext(){
+  if(S.phase!=='shop'||S.cust||S.over||A.phase!=='empty')return;
+  if(llPending()&&S.slot>=Math.min(S.llAt,PER_DAY))return spawnLandlord();
+  if(S.slot>=PER_DAY)return;
+  newCustomer(S.day===1&&S.slot===0);A.phase='in';A.x=DOOR_X;A.seed=S.cust.seed;ui.tab='deal';
+}
+function spawnLandlord(){
+  const msg=S.deferred?`Отсрочка кончилась. С тебя ${S.owed} кр., сегодня.`:
+    S.credits>=S.owed?`Аренда. ${S.owed} кр., как договаривались.`:`Аренда, ${S.owed} кр. Не хватает? Могу подождать пару дней. Под процент.`;
+  S.cust={kind:'rent',name:'Арендодатель Гробов',seed:LL,msg,pat:0,max:0,done:{}};
+  A.phase='in';A.x=DOOR_X;A.seed=LL;ui.tab='deal';
+}
+function leave(text){addLog(`${S.cust.name} ушёл(ла). ${text||''}`);finishCustomer()}
+function finishCustomer(){A.phase='out';A.seed=S.cust.seed;const ll=S.cust.kind==='rent';S.cust=null;if(!ll)S.slot++}
+
+/* ---------- rent ---------- */
+const appraise=it=>Math.max(5,Math.round(trueVal(it)*(it.stolen?.5:.6)));
+function collateralPlan(){
+  const cash=Math.min(S.credits,S.owed);let rem=S.owed-cash;const items=[];
+  while(rem>0){
+    const all=S.inv.filter(i=>!items.includes(i));if(!all.length)break;
+    const st=all.filter(i=>i.stolen),pool=st.length?st:all;
+    const cover=pool.filter(i=>appraise(i)>=rem).sort((a,b)=>appraise(a)-appraise(b));
+    const it=cover[0]||pool.sort((a,b)=>appraise(b)-appraise(a))[0];items.push(it);rem-=appraise(it);
+  }
+  return{cash,items,ok:rem<=0,over:Math.max(0,-rem),hot:items.filter(i=>i.stolen).length};
+}
+function rentSettled(){S.deferred=false;S.rent+=150;S.nextDue=S.day+3;S.owed=S.rent;S.llDone=true}
+function payRent(){
+  if(S.credits<S.owed)return;const p=S.owed;S.credits-=p;fx(`−${p}`,'#ff6372');
+  addLog(`Аренда оплачена: ${p} кр. Следующая: ${S.rent+150} кр. на день ${S.day+3}.`);
+  S.cust.msg='Приятно иметь дело.';rentSettled();finishCustomer();
+}
+function deferRent(){
+  if(S.deferred)return;
+  S.owed=Math.round(S.owed*1.2/10)*10;S.nextDue=S.day+2;S.deferred=true;S.llDone=true;
+  addLog(`Отсрочка до дня ${S.nextDue}. Долг вырос до ${S.owed} кр.`);finishCustomer();
+}
+function payCollateral(){
+  const pl=collateralPlan();if(!pl.ok)return;
+  S.credits-=pl.cash;S.inv=S.inv.filter(i=>!pl.items.includes(i));
+  if(pl.items.some(i=>i.uid===ui.sel))ui.sel=null;
+  if(pl.cash)fx(`−${pl.cash}`,'#ff6372');
+  const cool=Math.min(S.heat,pl.hot*2);S.heat-=cool;
+  addLog(`Гробов забрал ${pl.cash} кр. и товар: ${pl.items.map(i=>T[i.t].n).join(', ')}.${pl.over?` Сдачи не будет (переплата ~${pl.over} кр.).`:''}${pl.hot?` Краденое (${pl.hot}) ушло по его каналам, розыск −${cool}.`:''}`);
+  rentSettled();finishCustomer();
+}
+function evict(){
+  S.over=`Долг ${S.owed} кр. нечем покрыть. Гробов опечатал лавку.`;addLog(S.over);finishCustomer();
+  openModal('Выселение',`<p>${S.over}</p>`,`<button class="btn pri" data-a="newgame-yes">Новая игра</button>`);
+}
+function losePat(n){S.cust.pat=Math.max(0,S.cust.pat-n)}
+
+function inspect(kind){
+  const c=S.cust,it=c.item;if(c.done[kind])return;c.done[kind]=1;A.scan=performance.now();
+  if(c.pat>1)losePat(1);
+  if(kind==='cond'){it.k.cond=true;c.msg=`Состояние ${it.cond}%. ${it.cond<40?'Ну, работает же.':'Видишь, хорошая вещь.'}`}
+  if(kind==='serial'){it.k.serial=true;
+    if(it.stolen){c.ask=Math.max(c.min,Math.round(c.ask*.7));c.min=Math.round(c.min*.85);c.msg='…Серийник? Его и не было. Ладно, скину цену.'}
+    else c.msg='Серийник чистый, сам видишь.'}
+  if(kind==='flaw'){it.k.flaw=true;
+    if(it.infected){c.ask=Math.max(c.min,Math.round(c.ask*.5));c.min=Math.round(c.min*.6);c.msg='Какой ещё ИИ? Я не знал! Забирай дешевле.'}
+    else if(it.defect){c.ask=Math.max(c.min,Math.round(c.ask*.75));c.msg='Ну да, контакт отходит. Учту в цене.'}
+    else c.msg='Начинка в порядке. Говорил же.'}
+}
+/* acceptance probability: 50% at hidden limit, ~97% at their own price */
+function pSell(c,v){
+  if(v>=c.ask)return 1;
+  const lo=c.min*.7;if(v<=lo)return 0;
+  if(v<c.min)return .5*(v-lo)/(c.min-lo);
+  return clamp(.5+.47*(v-c.min)/Math.max(1,c.ask-c.min),0,.97);
+}
+function pBuy(c,v){
+  if(v<=c.offer)return 1;
+  const hi=c.max2*1.35;if(v>=hi)return 0;
+  if(v<=c.max2)return clamp(1-.5*(v-c.offer)/Math.max(1,c.max2-c.offer),.5,.97);
+  return .5*(hi-v)/(hi-c.max2);
+}
+function feel(c,v){const p=c.kind==='sell'?pSell(c,v):pBuy(c,v);if(p>=1||p<=0)return p;return clamp(Math.round((p+c.noise)*20)/20,.05,.95)}
+function sellerOffer(v){
+  const c=S.cust;
+  if(v>S.credits){c.msg='У тебя столько нет, не смеши.';return}
+  if(v>=c.ask)return buyFrom(c.ask);
+  if(Math.random()<pSell(c,v))return buyFrom(v);
+  if(v<c.min*.7){losePat(2);c.msg=pick(['Это оскорбление.','Ты издеваешься?','За эти деньги сам собери.'])}
+  else{losePat(1);c.ask=Math.round(Math.max(c.min,c.ask-(c.ask-v)*.3));c.msg=pick(['Нет. Давай так:','Не пойдёт. Моя цена:','Хм… нет. Могу за'])+` ${c.ask} кр.`}
+  if(c.pat<=0)leave('Не сторговались.');
+}
+function buyFrom(p){
+  const c=S.cust,it=c.item;
+  S.credits-=p;S.inv.push(it);if(it.stolen)S.heat=Math.min(10,S.heat+1);
+  addLog(`Куплено: ${T[it.t].n} за ${p} кр. у ${c.name}.`);fx(`−${p}`,'#f0a33e');
+  ui.sel=it.uid;finishCustomer();
+}
+function showItem(uid){
+  const c=S.cust,it=S.inv.find(i=>i.uid===uid);if(!it)return;
+  c.item=it;c.max2=Math.round(buyerBase(it)*c.mult);c.offer=Math.round(c.max2*.65);
+  c.msg=`${it.cond<45?'Потрёпан. ':''}Дам ${c.offer} кр.`;
+}
+function buyerAsk(v){
+  const c=S.cust;
+  if(v<=c.offer)return sellTo(c.offer);
+  if(Math.random()<pBuy(c,v))return sellTo(v);
+  if(v>c.max2*1.5){losePat(2);c.msg=pick(['За такие деньги я новый куплю.','Ты бредишь.'])}
+  else{losePat(1);c.offer=Math.round(c.offer+(c.max2-c.offer)*.35);c.msg=pick(['Дорого. Могу','Ладно, подниму:','Последнее слово —'])+` ${c.offer} кр.`}
+  if(c.pat<=0)leave('Не сторговались.');
+}
+function sellTo(p){
+  const c=S.cust,it=c.item;
+  S.credits+=p;S.inv=S.inv.filter(i=>i.uid!==it.uid);if(ui.sel===it.uid)ui.sel=null;
+  let note='';
+  if(it.stolen){S.heat=Math.min(10,S.heat+1);note=' Краденое ушло дальше.'}
+  if(it.infected){S.heat=Math.min(10,S.heat+2);note+=' Вещь была заражена ИИ, служба безопасности насторожилась.'}
+  addLog(`Продано: ${T[it.t].n} за ${p} кр. (${c.name}).${note}`);fx(`+${p}`,'#7fd98e');
+  finishCustomer();
+}
+
+/* ---------- evening + junkyard ---------- */
+const PILES=[{x:30,y:76,w:38,h:14},{x:80,y:74,w:42,h:15},{x:130,y:76,w:38,h:14},{x:28,y:97,w:44,h:16},{x:80,y:97,w:46,h:17},{x:132,y:97,w:44,h:16}];
+function closeShop(){S.phase='evening';S.hours=EVE_HOURS;S.where='home';S.market=false;ui.tab='deal';addLog('Лавка закрыта. Вечер свободен.')}
+function goJunk(){
+  if(S.hours<2)return;S.hours--;S.where='junk';
+  S.junk={piles:PILES.map(()=>({dug:false,seed:Math.floor(Math.random()*1e9)+1}))};
+  S.jmsg='Свалка «Кольцо Б». Выберите кучу и копайте. Каждая куча — час.';
+}
+function dig(i){
+  if(S.where!=='junk'||S.hours<1)return;const p=S.junk.piles[i];if(!p||p.dug)return;
+  p.dug=true;S.hours--;let msg;
+  const r=Math.random();
+  if(r<.1){S.hours=Math.max(0,S.hours-1);msg='Сторожевой дрон! Пришлось прятаться, час потерян.'}
+  else if(r<.48){const n=ri(1,4);S.parts+=n;msg=`Нашлись запчасти: +${n}.`;fx(`+${n} ⚙`,'#46d3c9')}
+  else if(r<.86){const t=pickType();const it=mkItem(t,{cond:ri(5,40),defect:Math.random()<.5,stolen:Math.random()<.1});S.inv.push(it);msg=`Откопал: ${T[t].n}, сломанный. Отнесу на верстак.`;fx('+1','#f0a33e')}
+  else if(r<.94){const t=pick(['chip','arm','drone','visor']);const it=mkItem(t,{cond:ri(40,80),stolen:false});S.inv.push(it);msg=`Редкая находка: ${T[t].n}!`;fx('★','#f0a33e')}
+  else msg='Пусто. Только ржавые болты.';
+  S.jmsg=msg;addLog('Свалка: '+msg);
+  if(S.hours<=0){S.where='home';S.jmsg='';addLog('Стемнело окончательно, пора домой.')}
+}
+function sleep(){S.where='home';endDay()}
+function endDay(){
+  const ev=[];
+  S.inv.filter(i=>i.infected).forEach(()=>{
+    if(Math.random()<.35){const tg=S.inv.filter(i=>!i.infected&&ELEC.includes(i.t));if(tg.length){const v=pick(tg);v.infected=true;v.k.flaw=false;ev.push(`Ночью на складе что-то мигало. ${T[v.t].n} ведёт себя странно.`)}}
+  });
+  S.day++;S.slot=0;S.phase='shop';S.hours=0;S.junk=null;S.llDone=false;S.llAt=ri(1,4);
+  if(!S.won&&S.day>=S.nextDue)ev.push(`Сегодня зайдёт арендодатель: ${S.owed} кр.${S.deferred?' Отсрочки больше не будет.':''}`);
+  const before=S.heat;S.heat=Math.max(0,S.heat-1);
+  if(!S.over&&Math.random()<before*.1){
+    const st=S.inv.filter(i=>i.stolen);const fine=50+st.length*60;
+    S.inv=S.inv.filter(i=>!i.stolen);S.credits=Math.max(0,S.credits-fine);S.heat=0;
+    ev.push(`Утренний рейд патруля. Изъято краденого: ${st.length}. Штраф ${fine} кр.`);
+  }
+  if(!ev.length)ev.push('Тихая ночь на нижнем ярусе.');
+  ev.forEach(e=>addLog(e));
+  openModal(S.over?'Выселение':`Утро. День ${S.day}`,`<ul>${ev.map(e=>`<li>${e}</li>`).join('')}</ul>`,S.over?
+    `<button class="btn pri" data-a="newgame-yes">Новая игра</button>`:`<button class="btn pri" data-a="close">Открыть лавку</button>`);
+}
+
+/* ---------- workbench / craft ---------- */
+const scrapVal=it=>Math.max(1,Math.round(T[it.t].b/80+it.cond/50));
+const onCounter=it=>S.cust&&S.cust.item&&S.cust.item.uid===it.uid;
+function benchAct(a){
+  const it=S.inv.find(i=>i.uid===ui.sel);if(!it)return;
+  const cost={diag:1,repair:2,fix:3,purge:2,wipe:3}[a]||0;
+  if(S.parts<cost)return;S.parts-=cost;
+  if(a==='diag'){it.k={cond:true,serial:true,flaw:true};addLog(`Диагностика: ${T[it.t].n}.`)}
+  if(a==='repair'){it.cond=Math.min(100,it.cond+25);it.k.cond=true;addLog(`Ремонт: ${T[it.t].n} → ${it.cond}%.`)}
+  if(a==='fix'){it.defect=false;addLog(`Дефект устранён: ${T[it.t].n}.`)}
+  if(a==='purge'){it.infected=false;addLog(`ИИ вычищен из: ${T[it.t].n}.`)}
+  if(a==='wipe'){it.stolen=false;S.heat=Math.min(10,S.heat+1);addLog(`Серийник перебит: ${T[it.t].n}.`)}
+  if(a==='scrap'){if(onCounter(it))return;const p=scrapVal(it);S.parts+=p;S.inv=S.inv.filter(i=>i!==it);ui.sel=null;addLog(`Разобрано: ${T[it.t].n}, +${p} запч.`)}
+}
+const avail=t=>S.inv.filter(i=>i.t===t&&!onCounter(i));
+function canCraft(r){return S.parts>=r.parts&&Object.entries(r.need).every(([t,n])=>avail(t).length>=n)}
+function craft(i){
+  const r=RECIPES[i];if(!canCraft(r))return;
+  const used=[];Object.entries(r.need).forEach(([t,n])=>used.push(...avail(t).slice(0,n)));
+  S.inv=S.inv.filter(x=>!used.includes(x));S.parts-=r.parts;
+  const cond=Math.min(100,Math.round(used.reduce((s,x)=>s+x.cond,0)/used.length+10));
+  const it=mkItem(r.out,{cond,stolen:false,defect:false,infected:used.some(x=>x.infected),known:true});
+  S.inv.push(it);ui.sel=it.uid;ui.tab='inv';fx('СОБРАНО','#46d3c9');
+  addLog(`Собрано: ${T[r.out].n} (${cond}%).${it.infected?' Похоже, ИИ перебрался в новую сборку.':''}`);
+}
+
+/* ---------- UI ---------- */
+const $=id=>document.getElementById(id);
+function tagsFor(it){
+  const t=[];
+  t.push(it.k.cond?`<span class="tag ${it.cond<40?'warn':''}">${it.cond}%</span>`:'<span class="tag">сост. ?</span>');
+  t.push(it.k.serial?(it.stolen?'<span class="tag bad">краденое</span>':'<span class="tag ok">чистый №</span>'):'<span class="tag">№ ?</span>');
+  if(it.k.flaw){if(it.defect)t.push('<span class="tag warn">дефект</span>');if(it.infected)t.push('<span class="tag bad">ИИ</span>');if(!it.defect&&!it.infected)t.push('<span class="tag ok">начинка ок</span>')}
+  else t.push('<span class="tag">начинка ?</span>');
+  return `<div class="tags">${t.join('')}</div>`;
+}
+function dotsFor(it){
+  const d=[];
+  if(!(it.k.cond&&it.k.serial&&it.k.flaw))d.push('d-q');
+  if(it.k.serial&&it.stolen)d.push('d-red');
+  if(it.k.flaw&&it.infected)d.push('d-red');
+  if(it.k.flaw&&it.defect)d.push('d-amb');
+  return `<span class="dots">${d.map(c=>`<i class="${c}"></i>`).join('')}</span>`;
+}
+const ico=(t,cls='',inf=0)=>`<canvas class="${cls}" width="28" height="16" data-ico="${t}" data-inf="${inf?1:0}"></canvas>`;
+function renderHud(){
+  const left=S.nextDue-S.day;
+  const ph=S.phase==='shop'?'смена':S.where==='junk'?'свалка':'вечер';
+  $('hud').innerHTML=`<span class="logo">ТЁМНЫЙ ПРИЛАВОК</span>
+  <span class="st"><small>кр</small><b>${S.credits}</b></span>
+  <span class="st"><small>день</small><b>${S.day}·${ph}</b></span>
+  <span class="st"><small>${S.deferred?'долг':'аренда'}</small><b class="${S.credits<S.owed&&left<=1||S.deferred?'bad':''}">${S.won?'—':S.owed+'/'+(left<=0?'сег.':left+'д')}</b></span>
+  <span class="st"><small>зап</small><b>${S.parts}</b></span>
+  <span class="st"><small>розыск</small><span class="heat">${Array.from({length:10},(_,i)=>`<i class="${i<S.heat?'on':''}"></i>`).join('')}</span></span>
+  ${S.credits>=GOAL&&!S.won?'<button class="hb" data-a="buyout" style="border-color:var(--cyan);color:var(--cyan)">Выкупить</button>':''}
+  <button class="hb" data-a="music">${audio.on?'♪ выкл':'♪ лофи'}</button>
+  <button class="hb" data-a="savemenu">сейв</button>
+  <button class="hb" data-a="newgame">⟲</button>`;
+}
+function sceneUI(){
+  const c=S.cust,idle=A.phase==='idle'&&c;
+  const b=$('bubble');
+  if(S.where==='junk'&&S.jmsg){b.hidden=false;b.textContent=S.jmsg;b.classList.add('free')}
+  else{b.classList.remove('free');b.hidden=!idle;if(idle)b.textContent=c.msg}
+  const q=PER_DAY-S.slot-(c?1:0);
+  const llp=llPending();
+  $('chip').textContent=S.over?'ЗАКРЫТО':S.phase==='evening'?`${S.where==='junk'?'СВАЛКА':'ВЕЧЕР'} · ${S.hours} Ч`:(q>0?`ОЧЕРЕДЬ: ${q}`:llp?'ОЧЕРЕДЬ: 0':'СМЕНА ОКОНЧЕНА')+(llp?' +АРЕНДА':'');
+  $('callBtn').hidden=!(S.phase==='shop'&&A.phase==='empty'&&!c&&!S.over&&(S.slot<PER_DAY||llp));
+  $('ticker').innerHTML=`<b>›</b> ${S.log[0]||''}`;
+}
+function renderTabs(){
+  const first=S.phase==='shop'?'ПРИЛАВОК':S.where==='junk'?'СВАЛКА':'ВЕЧЕР';
+  $('tabs').innerHTML=[['deal',first],['inv',`СКЛАД · ${S.inv.length}`],['craft','СБОРКА']].map(([k,l])=>`<button class="tab ${ui.tab===k?'on':''}" data-a="tab" data-v="${k}">${l}</button>`).join('');
+}
+function priceRow(def){
+  return `<div class="pr"><button class="btn" data-a="adj" data-v="-50">−50</button><button class="btn" data-a="adj" data-v="-10">−10</button>
+  <input id="offer" type="number" inputmode="numeric" min="0" step="10" value="${def}" aria-label="Цена">
+  <button class="btn" data-a="adj" data-v="10">+10</button><button class="btn" data-a="adj" data-v="50">+50</button></div>
+  <div class="chance"><span>Чуйка</span><div class="cbar"><i id="cbar"></i></div><b id="cval">—</b></div>`;
+}
+function updChance(){
+  const c=S.cust,inp=$('offer');if(!c||!inp||!$('cval'))return;
+  const v=Math.max(0,parseInt(inp.value)||0),p=feel(c,v);
+  $('cval').textContent=p>=1?'согласится':p<=0?'обидится':`~${Math.round(p*100)}%`;
+  $('cbar').style.width=(p*100)+'%';$('cbar').style.background=p>=.6?'var(--green)':p>=.3?'var(--amber)':'var(--red)';
+}
+function paneDeal(){
+  if(S.phase==='evening'){
+    if(S.where==='junk'){
+      return `<div class="hint">Нажмите на кучу хлама на сцене или выберите номер. Осталось часов: <b>${S.hours}</b>.</div>
+      <div class="piles">${S.junk.piles.map((p,i)=>`<button class="btn" data-a="dig" data-v="${i}" ${p.dug||S.hours<1?'disabled':''}>Куча ${i+1}</button>`).join('')}</div>
+      <button class="btn pri" data-a="home" style="width:100%">Вернуться домой</button>`;
+    }
+    return `<div class="hint" style="margin-bottom:8px">Лавка закрыта. Осталось часов: <b>${S.hours}</b>. Верстак и сборка работают бесплатно.</div>
+    <div class="opts">
+      <button class="opt" data-a="junk" ${S.hours<2?'disabled':''}><div><b>Свалка «Кольцо Б»</b><br><span>Дорога 1 ч, каждая куча 1 ч. Запчасти, сломанные вещи, редкие находки. Иногда сторожевые дроны.</span></div><span>→</span></button>
+      <button class="opt" data-a="market" ${S.hours<1||S.market||S.credits<50?'disabled':''}><div><b>Барахолка у шлюза</b><br><span>1 ч. 5 запчастей за 50 кр. Раз за вечер.</span></div><span>50</span></button>
+      <button class="opt" data-a="sleep"><div><b>Спать</b><br><span>Закончить день. Ночью: аренда, рейды, заражение склада.</span></div><span>☾</span></button>
+    </div>`;
+  }
+  const c=S.cust;
+  if(!c||A.phase!=='idle'){
+    if(A.phase==='in')return `<div class="hint">Подходит к прилавку…</div>`;
+    if(A.phase==='out')return `<div class="hint">Уходит…</div>`;
+    if(S.over)return `<div class="hint">Лавка опечатана.</div>`;
+    if(S.slot>=PER_DAY&&!llPending())return `<div class="hint" style="margin-bottom:8px">Очередь кончилась. Пора закрываться.</div><button class="btn pri" data-a="closeshop" style="width:100%">Закрыть лавку</button>`;
+    return `<div class="hint">Прилавок свободен. Зовите следующего, когда будете готовы. Пока можно разобрать склад.</div>`;
+  }
+  if(c.kind==='rent'){
+    const pl=collateralPlan(),can=S.credits>=S.owed;
+    let h=`<div class="thead"><div><span class="cname">${c.name}</span><span class="kind" style="color:var(--red)">за арендой</span></div></div>
+    <div class="card" style="flex-direction:column;gap:2px"><div class="rows">
+      <span>К оплате</span><span class="price"><b>${S.owed} кр.</b>${S.deferred?' <span class="bad">с пеней</span>':''}</span>
+      <span>У вас</span><span class="price ${can?'ok':'bad'}">${S.credits} кр.</span></div></div>
+    <div class="opts" style="margin-top:8px">
+      <button class="opt" data-a="rentpay" ${can?'':'disabled'}><div><b>Заплатить</b><br><span>Следующая аренда ${S.rent+150} кр. через 3 дня.</span></div><span class="price">${S.owed}</span></button>
+      <button class="opt" data-a="rentdefer" ${S.deferred?'disabled':''}><div><b>Попросить отсрочку</b><br><span>${S.deferred?'Вторую отсрочку Гробов не даст.':`Придёт через 2 дня, долг +20%: ${Math.round(S.owed*1.2/10)*10} кр.`}</span></div><span>⧗</span></button>
+      <button class="opt" data-a="rentitems" ${pl.ok&&pl.items.length?'':'disabled'}><div><b>Отдать деньги и товар</b><br><span>${pl.ok?`Заберёт ${pl.cash} кр.${pl.items.length?' и '+pl.items.map(i=>T[i.t].n).join(', '):''}. Сначала берёт краденое (за 50%), остальное за 60%, сдачи не даёт.${pl.hot?` <span class="ok">Розыск −${Math.min(S.heat,pl.hot*2)}.</span>`:''}`:'Даже со всем складом не хватает.'}</span></div><span>⚖</span></button>
+    </div>`;
+    if(!can&&S.deferred&&!pl.ok)h+=`<button class="btn" data-a="evict" style="width:100%;margin-top:8px;border-color:var(--red);color:var(--red)">Нечем платить</button>`;
+    return h;
+  }
+  let h=`<div class="thead"><div><span class="cname">${c.name}</span><span class="kind ${c.kind}">${c.kind==='sell'?'продаёт':'покупает'}</span></div>
+  <div class="pips" title="Терпение">${Array.from({length:c.max},(_,i)=>`<i class="${i<c.pat?'on':''}"></i>`).join('')}</div></div>`;
+  if(c.kind==='sell'){
+    const it=c.item;
+    h+=`<div class="card">${ico(it.t,'bigico',it.k.flaw&&it.infected)}<div style="min-width:0"><div class="rn">${T[it.t].n}</div><div class="rows">
+      <span>Состояние</span><span>${it.k.cond?`<span class="${it.cond<40?'warn':''}">${it.cond}%</span>`:'<span class="q">?</span>'}</span>
+      <span>Серийник</span><span>${it.k.serial?(it.stolen?'<span class="bad">спилен</span>':'<span class="ok">чистый</span>'):'<span class="q">?</span>'}</span>
+      <span>Начинка</span><span>${it.k.flaw?(it.infected?'<span class="bad">ИИ-вирус</span>':it.defect?'<span class="warn">дефект</span>':'<span class="ok">ок</span>'):'<span class="q">?</span>'}</span>
+      <span>Оценка</span><span class="price">~${estVal(it)} кр.</span></div></div></div>
+      <div class="tools"><button class="btn" data-a="insp" data-v="cond" ${c.done.cond?'disabled':''}>Сканер</button>
+      <button class="btn" data-a="insp" data-v="serial" ${c.done.serial?'disabled':''}>Серийник</button>
+      <button class="btn" data-a="insp" data-v="flaw" ${c.done.flaw?'disabled':''}>Диагностика</button></div>
+    <div class="deal"><div class="ask">Просит: <b class="price">${c.ask}</b> кр. · у вас ${S.credits}</div>
+      ${priceRow(Math.min(S.credits,Math.round(c.ask*.7/10)*10))}
+      <div class="acts"><button class="btn pri" data-a="offer">Предложить</button>
+      <button class="btn amb" data-a="accept" ${c.ask>S.credits?'disabled':''}>За ${c.ask}</button>
+      <button class="btn" data-a="refuse">Отпустить</button></div></div>`;
+  }else{
+    const match=S.inv.filter(i=>i.t===c.want);
+    h+=`<div class="ask" style="margin-bottom:6px">Нужно: <b>${T[c.want].n}</b></div>`;
+    if(!match.length)h+=`<div class="hint" style="margin-bottom:8px">На складе такого нет.</div><button class="btn" data-a="refuse" style="width:100%">Нет такого, до свидания</button>`;
+    else{
+      h+=`<div class="shelf">${match.map(it=>`<button class="tile ${c.item&&c.item.uid===it.uid?'on':''}" data-a="show" data-v="${it.uid}">${dotsFor(it)}${ico(it.t,'',it.k.flaw&&it.infected)}<span>${it.k.cond?it.cond+'%':'?%'}</span><span class="tv">~${estVal(it)}</span></button>`).join('')}</div>`;
+      if(c.item){
+        h+=`<div class="deal"><div class="ask">Предлагает: <b class="price">${c.offer}</b> кр.</div>${priceRow(Math.round(c.offer*1.3/10)*10)}
+        <div class="acts"><button class="btn pri" data-a="ask">Назвать цену</button>
+        <button class="btn amb" data-a="take">За ${c.offer}</button>
+        <button class="btn" data-a="refuse">Отпустить</button></div></div>`;
+      }else h+=`<div class="hint" style="margin:8px 0">Выложите товар на прилавок.</div><button class="btn" data-a="refuse" style="width:100%">Отпустить</button>`;
+    }
+  }
+  return h;
+}
+function paneInv(){
+  if(!S.inv.length)return `<div class="hint">Склад пуст. Покупайте у клиентов или копайте на свалке.</div>`;
+  let h=`<div class="shelf">${S.inv.map(it=>`<button class="tile ${ui.sel===it.uid?'on':''}" data-a="sel" data-v="${it.uid}">${dotsFor(it)}${ico(it.t,'',it.k.flaw&&it.infected)}<span>${T[it.t].n}</span><span class="tv">${it.k.cond?it.cond+'%':'?%'} · ~${estVal(it)}</span></button>`).join('')}</div>
+  <div class="legend"><span><i class="d-q"></i>не проверено</span><span><i class="d-red"></i>краденое / ИИ</span><span><i class="d-amb"></i>дефект</span></div>`;
+  const it=S.inv.find(i=>i.uid===ui.sel);
+  if(it){
+    const allK=it.k.cond&&it.k.serial&&it.k.flaw;
+    const b=(a,label,cost,ok)=>`<button class="btn" data-a="bench" data-v="${a}" ${ok&&S.parts>=cost?'':'disabled'}><span>${label}</span><span class="price">${cost}⚙</span></button>`;
+    h+=`<div class="bench"><div class="card">${ico(it.t,'bigico',it.k.flaw&&it.infected)}<div style="min-width:0"><div class="rn">${T[it.t].n}</div><div class="hint">Оценка ~${estVal(it)} кр.</div>${tagsFor(it)}</div></div>
+    <div class="bgrid">${b('diag','Диагностика',1,!allK)}${b('repair','Ремонт +25%',2,it.cond<100)}
+    ${b('fix','Убрать дефект',3,it.k.flaw&&it.defect)}${b('purge','Вычистить ИИ',2,it.k.flaw&&it.infected)}
+    ${b('wipe','Перебить №',3,it.k.serial&&it.stolen)}
+    <button class="btn" data-a="bench" data-v="scrap" ${onCounter(it)?'disabled':''}><span>Разобрать</span><span class="price">+${scrapVal(it)}⚙</span></button></div>
+    <div class="hint" style="font-size:11px">Перебитый серийник: +1 к розыску.</div></div>`;
+  }else h+=`<div class="hint">Нажмите на предмет, чтобы открыть верстак.</div>`;
+  return h;
+}
+function paneCraft(){
+  return `<div class="recipes">${RECIPES.map((r,i)=>{
+    const need=Object.entries(r.need).map(([t,n])=>`<span class="${avail(t).length>=n?'have':'miss'}">${T[t].n} ×${n}</span>`).join(' + ');
+    return `<div class="recipe">${ico(r.out)}<div class="rb"><div class="rn">${T[r.out].n}</div><div class="need">${need} + <span class="${S.parts>=r.parts?'have':'miss'}">${r.parts}⚙</span> · ~${T[r.out].b} кр.</div></div>
+    <button class="btn" data-a="craft" data-v="${i}" ${canCraft(r)?'':'disabled'}>Собрать</button></div>`}).join('')}</div>
+    <div class="hint" style="font-size:11px;margin:8px 0">Сборка даёт новый серийник: краденые детали становятся чистыми. ИИ-заражение переносится.</div>
+    <button class="btn" data-a="parts" ${S.credits>=70?'':'disabled'} style="width:100%">Заказать 5 запчастей · 70 кр.</button>`;
+}
+function renderPane(){
+  const st=$('pane').scrollTop;
+  $('pane').innerHTML=ui.tab==='inv'?paneInv():ui.tab==='craft'?paneCraft():paneDeal();
+  $('pane').scrollTop=st;paintIcons();updChance();
+}
+function render(){renderHud();sceneUI();renderTabs();renderPane();save()}
+function openModal(title,body,btns){$('mbox').innerHTML=`<h2>${title}</h2>${body}<div class="mbtns">${btns}</div>`;$('modal').hidden=false}
+function closeModal(){$('modal').hidden=true}
+
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-a]');if(!b||b.disabled)return;
+  const a=b.dataset.a,v=b.dataset.v,inp=$('offer'),val=inp?Math.max(0,parseInt(inp.value)||0):0;
+  switch(a){
+    case 'adj':inp.value=Math.max(0,val+ +v);updChance();return;
+    case 'call':callNext();break;
+    case 'insp':inspect(v);break;
+    case 'offer':sellerOffer(val);break;
+    case 'accept':buyFrom(S.cust.ask);break;
+    case 'refuse':leave();break;
+    case 'show':showItem(+v);break;
+    case 'ask':buyerAsk(val);break;
+    case 'take':sellTo(S.cust.offer);break;
+    case 'tab':ui.tab=v;break;
+    case 'sel':ui.sel=ui.sel===+v?null:+v;break;
+    case 'bench':benchAct(v);break;
+    case 'craft':craft(+v);break;
+    case 'parts':if(S.credits>=70){S.credits-=70;S.parts+=5;addLog('Заказано 5 запчастей у снабженца.')}break;
+    case 'closeshop':closeShop();break;
+    case 'rentpay':payRent();break;
+    case 'rentdefer':deferRent();break;
+    case 'rentitems':payCollateral();break;
+    case 'evict':evict();break;
+    case 'junk':goJunk();ui.tab='deal';break;
+    case 'dig':dig(+v);break;
+    case 'home':S.where='home';S.jmsg='';break;
+    case 'market':if(S.hours>=1&&!S.market&&S.credits>=50){S.hours--;S.market=true;S.credits-=50;S.parts+=5;addLog('Барахолка: 5 запчастей за 50 кр.')}break;
+    case 'sleep':sleep();break;
+    case 'music':toggleMusic();break;
+    case 'savemenu':openModal('Сохранение',`<p class="hint" style="margin:0">Скопируйте код и сохраните в заметки. На другом устройстве или в другой версии игры вставьте его в поле загрузки.</p>
+      <label for="savecode">Код текущей игры · день ${S.day}, ${S.credits} кр.</label><textarea id="savecode" readonly>${exportSave()}</textarea>
+      <div class="mbtns"><button class="btn pri" data-a="copysave">Скопировать</button></div>
+      <label for="loadcode">Загрузить сейв</label><textarea id="loadcode" placeholder="Вставьте код"></textarea>
+      <div id="savemsg" class="hint"></div>`,'<button class="btn amb" data-a="loadsave">Загрузить</button><button class="btn" data-a="close">Закрыть</button>');return;
+    case 'copysave':{const ta=$('savecode');const sel=()=>{ta.focus();ta.select();$('savemsg').textContent='Код выделен, скопируйте вручную.'};
+      try{navigator.clipboard.writeText(ta.value).then(()=>{$('savemsg').textContent='Скопировано.'},sel)}catch(err){sel()}return}
+    case 'loadsave':{const d=importSave($('loadcode').value);if(!d){$('savemsg').textContent='Код не распознан. Проверьте, что скопирован весь код целиком.';$('savemsg').style.color='var(--red)';return}
+      S=d;ui.sel=null;ui.tab='deal';if(S.cust){A.phase='idle';A.x=SPOT_X;A.seed=S.cust.seed}else{A.phase='empty';A.x=DOOR_X}
+      addLog(`Сейв загружен: день ${S.day}, ${S.credits} кр.`);closeModal();break}
+    case 'log':openModal('Лента',`<ul>${S.log.map(l=>`<li>${l}</li>`).join('')}</ul>`,'<button class="btn pri" data-a="close">Закрыть</button>');return;
+    case 'close':closeModal();break;
+    case 'newgame':openModal('Начать заново?','<p>Текущая лавка будет потеряна.</p>','<button class="btn pri" data-a="newgame-yes">Да, заново</button><button class="btn" data-a="close">Отмена</button>');return;
+    case 'newgame-yes':closeModal();ui.sel=null;newGame();break;
+    case 'buyout':S.credits-=GOAL;S.won=true;S.rent=0;addLog('Лавка выкуплена. Аренды больше нет.');
+      openModal('Лавка ваша',`<p>Выкуплено на ${S.day}-й день. Можно торговать дальше без аренды или начать заново.</p>`,'<button class="btn pri" data-a="close">Продолжить</button><button class="btn" data-a="newgame-yes">Новая лавка</button>');break;
+  }
+  render();
+});
+document.addEventListener('input',e=>{if(e.target.id==='offer')updChance()});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='offer'){const btn=document.querySelector('[data-a="offer"],[data-a="ask"]');btn&&btn.click()}});
+
+/* ---------- pixel drawing ---------- */
+const cv=$('scn');let g=cv.getContext('2d');
+function R(x,y,w,h,c){g.fillStyle=c;g.fillRect(Math.round(x),Math.round(y),w,h)}
+function prng(seed){let s=seed%2147483647;if(s<=0)s+=2147483646;return()=>(s=s*16807%2147483647)/2147483647}
+const pk=(r,a)=>a[Math.floor(r()*a.length)];
+function look(seed){
+  if(seed===LL)return{kind:'landlord',skin:'#d9a07a',jacket:'#1d1a26',jdark:'#0e0c14',metal:'#8b92b5',metal2:'#5a6080',eye:'#ff6372'};
+  const r=prng(seed),k=r(),h=Math.floor(r()*360);
+  return{kind:k<.6?'human':k<.74?'android':k<.88?'box':'dome',
+    skin:pk(r,['#f1c7a3','#d9a07a','#a8714f','#6e4a35','#e3b48f']),
+    hair:pk(r,['#2a2233','#d94f8a','#46d3c9','#f0a33e','#e8e8f0','#5b3b2a','#7a5cff']),
+    style:Math.floor(r()*6),jacket:`hsl(${h} 30% 34%)`,jdark:`hsl(${h} 30% 22%)`,shirt:`hsl(${(h+40)%360} 15% 70%)`,
+    trim:`hsl(${(h+150)%360} 65% 60%)`,eye:pk(r,['#46d3c9','#ff6372','#f0a33e','#7fd98e','#ffffff']),acc:Math.floor(r()*5),pads:r()<.45,
+    metal:pk(r,['#8b92b5','#a8925a','#6f7a8c','#b5beca','#8a5f55']),metal2:pk(r,['#5a6080','#4a5266','#6e5a3a'])};
+}
+function drawCustomer(cx,dy,L,now){
+  const p=(x,y,w,h,c)=>R(cx+x,y+dy,w,h,c);
+  const blink=(now%4200)<140;
+  if(L.kind==='landlord'){
+    p(-13,40,26,31,L.jacket);p(-15,43,30,28,L.jacket);p(5,40,10,31,'rgba(0,0,0,.22)');
+    p(-3,39,6,9,'#c9ccd8');p(-1,40,2,10,'#8a1f2e');
+    p(-7,40,4,12,'#2a2636');p(3,40,4,12,'#2a2636');
+    p(-9,53,18,1,'#f0c040');p(-7,54,14,1,'#f0c040');p(-1,55,2,2,'#f0c040');
+    p(-9,58,3,1,'#8b92b5');
+    p(-3,35,6,4,L.skin);
+    p(-6,22,12,13,L.skin);p(-5,35,10,1,L.skin);p(-7,31,1,3,L.skin);p(6,31,1,3,L.skin);p(3,22,3,13,'rgba(0,0,0,.13)');
+    if(!blink)p(-4,28,2,1,'#14121c');else p(-4,28,2,1,'rgba(0,0,0,.35)');
+    p(1,27,4,3,'#5a6080');p(2,28,2,1,(now/600|0)%2?L.eye:'#8a1f2e');
+    p(-4,31,8,2,'#3a2a2a');p(-5,32,2,1,'#3a2a2a');p(3,32,2,1,'#3a2a2a');
+    p(-10,20,20,2,'#0e0c14');p(-6,12,12,8,'#0e0c14');p(-6,18,12,1,'#8a1f2e');
+    return;
+  }
+  if(L.kind==='human'||L.kind==='android'){
+    const skin=L.kind==='android'?L.metal:L.skin;
+    if(L.kind==='human'&&L.style===3){p(-8,20,16,18,L.jdark)}
+    if(L.kind==='human'&&L.style===2){p(-7,22,3,15,L.hair);p(4,22,3,15,L.hair)}
+    // body
+    p(-9,39,18,1,L.jacket);p(-11,40,22,1,L.jacket);p(-12,41,24,30,L.jacket);
+    p(4,41,8,30,'rgba(0,0,0,.16)');p(-8,45,1,24,L.jdark);p(7,45,1,24,L.jdark);
+    p(-3,39,6,4,L.kind==='android'?L.metal2:L.shirt);p(-2,43,4,1,L.kind==='android'?L.metal2:L.shirt);p(0,44,1,26,L.jdark);
+    if(L.pads){p(-12,40,5,3,L.trim);p(7,40,5,3,L.trim)}
+    // neck + head
+    p(-2,35,4,4,skin);p(-2,35,4,1,'rgba(0,0,0,.25)');
+    p(-4,22,8,1,skin);p(-5,23,10,11,skin);p(-4,34,8,1,skin);
+    p(-6,27,1,3,skin);p(5,27,1,3,skin);p(3,23,2,11,'rgba(0,0,0,.13)');
+    if(L.kind==='android'){
+      p(-5,30,10,1,'rgba(0,0,0,.3)');p(0,23,1,4,'rgba(0,0,0,.25)');p(-7,26,2,5,L.metal2);p(5,26,2,5,L.metal2);
+      if(!blink){p(-3,28,2,1,L.eye);p(1,28,2,1,L.eye)}else{p(-3,28,2,1,'rgba(0,0,0,.4)');p(1,28,2,1,'rgba(0,0,0,.4)')}
+      p(-2,32,4,1,'#2d3455');p(-5,23,10,1,'rgba(255,255,255,.2)');
+    }else{
+      if(!blink){p(-3,28,2,1,'#e8e8f0');p(-2,28,1,1,'#14121c');p(1,28,2,1,'#e8e8f0');p(1,28,1,1,'#14121c')}else{p(-3,28,2,1,'rgba(0,0,0,.35)');p(1,28,2,1,'rgba(0,0,0,.35)')}
+      p(-3,26,2,1,L.hair);p(1,26,2,1,L.hair);p(0,29,1,2,'rgba(0,0,0,.18)');p(-1,32,3,1,'rgba(110,40,50,.7)');
+      // hair
+      if(L.style===0){p(-5,21,10,3,L.hair);p(-6,22,1,5,L.hair);p(5,22,1,5,L.hair)}
+      if(L.style===1){p(-1,17,2,6,L.hair);p(-2,19,4,3,L.hair)}
+      if(L.style===2){p(-5,21,10,3,L.hair);p(-6,22,2,4,L.hair);p(4,22,2,4,L.hair)}
+      if(L.style===3){p(-7,20,14,3,L.jdark);p(-7,23,2,13,L.jdark);p(5,23,2,13,L.jdark)}
+      if(L.style===4){p(-5,21,10,3,L.hair);p(-2,18,4,3,L.hair)}
+      if(L.style===5){p(-6,20,12,4,L.trim);p(-6,23,9,1,'#0a0c18')}
+      if(L.acc===1){p(-5,27,10,2,L.eye);p(-5,27,10,1,'rgba(255,255,255,.35)')}
+      if(L.acc===2){p(-5,30,10,5,'#2d3455');p(-4,32,8,1,'#141829')}
+      if(L.acc===3){p(0,26,4,4,'#2d3455');p(1,28,2,1,L.eye)}
+    }
+  }else if(L.kind==='box'){
+    p(-11,39,22,32,L.metal);p(4,39,7,32,'rgba(0,0,0,.18)');
+    p(-14,39,5,5,L.metal2);p(9,39,5,5,L.metal2);p(-12,41,1,1,'#0a0c18');p(11,41,1,1,'#0a0c18');
+    p(-6,44,12,9,'#0a0c18');p(-4,46,2,2,(now/500|0)%2?'#46d3c9':'#1d4a47');p(0,46,2,2,'#f0a33e');p(-4,50,8,1,'#7fd98e');
+    p(-9,56,1,1,L.metal2);p(8,56,1,1,L.metal2);
+    p(-3,34,2,5,L.metal2);p(1,34,2,5,L.metal2);
+    p(-7,21,14,13,L.metal);p(-7,21,14,1,'rgba(255,255,255,.25)');p(3,22,4,12,'rgba(0,0,0,.15)');
+    p(-5,24,10,6,'#06201f');
+    if(!blink){p(-4,26,3,2,L.eye);p(1,26,3,2,L.eye)}else{p(-4,27,3,1,L.eye);p(1,27,3,1,L.eye)}
+    p(-4,31,8,1,'#0a0c18');p(-3,32,1,1,'#0a0c18');p(0,32,1,1,'#0a0c18');p(3,32,1,1,'#0a0c18');
+    p(-8,25,1,5,L.metal2);p(7,25,1,5,L.metal2);
+    p(0,16,1,5,L.metal2);p(-1,15,3,2,(now/700|0)%2?L.eye:'#2d3455');
+  }else{
+    p(-13,42,3,26,L.metal2);p(10,42,3,26,L.metal2);
+    p(-9,40,18,31,L.metal);p(-10,44,20,24,L.metal);p(3,40,7,31,'rgba(0,0,0,.18)');
+    for(let i=-9;i<9;i+=4)p(i,53,2,2,'#f0a33e');
+    p(-4,37,8,3,L.metal2);
+    p(-3,19,6,1,L.metal);p(-5,20,10,1,L.metal);p(-6,21,12,2,L.metal);p(-7,23,14,14,L.metal);
+    p(-4,21,3,1,'rgba(255,255,255,.4)');p(3,23,4,14,'rgba(0,0,0,.15)');
+    p(-6,27,12,4,'#0a0c18');const ex=Math.round(Math.sin(now/700)*3);p(-1+ex,28,3,2,L.eye);
+    p(-5,33,10,1,L.metal2);
+  }
+}
+function drawHands(cx,L){
+  const p=(x,y,w,h,c)=>R(cx+x,y,w,h,c);
+  if(L.kind==='human'||L.kind==='landlord'){
+    if(L.kind==='landlord'){p(-17,69,4,1,'#f0c040')}
+    [[-18],[11]].forEach(([x])=>{p(x,64,7,3,L.jacket);p(x,67,7,3,L.skin);p(x+1,66,6,1,L.skin);p(x+2,68,1,2,'rgba(0,0,0,.2)');p(x+4,68,1,2,'rgba(0,0,0,.2)')});
+  }else{
+    const m=L.kind==='android'?L.metal:L.metal2;
+    [[-18],[11]].forEach(([x])=>{p(x+1,63,5,4,L.kind==='android'?L.jacket:m);p(x,67,7,3,m);p(x,69,1,1,'#0a0c18');p(x+3,69,1,1,'#0a0c18');p(x+6,69,1,1,'#0a0c18');p(x+1,67,5,1,'rgba(255,255,255,.2)')});
+  }
+}
+const GLYPH={'Л':['011','101','101','101','101'],'А':['010','101','111','101','101'],'В':['110','101','110','101','110'],
+  'К':['101','110','100','110','101'],'7':['111','001','010','010','010'],'Б':['111','100','110','101','110'],' ':['000','000','000','000','000']};
+function pixText(s,x,y,c){[...s].forEach((ch,i)=>{const gl=GLYPH[ch];if(!gl)return;gl.forEach((row,ry)=>[...row].forEach((b,rx)=>{if(b==='1')R(x+i*4+rx,y+ry,1,1,c)}))})}
+function drawItem(t,cx,by,now,inf){
+  const C={m:'#5a6080',l:'#8b92b5',d:'#2d3455'};
+  switch(t){
+    case 'comm':R(cx-3,by-10,6,10,'#2a2f4a');R(cx-2,by-9,4,6,'#46d3c9');R(cx-2,by-9,4,1,'#a5f0ea');R(cx-1,by-2,2,1,C.l);R(cx+2,by-12,1,2,C.l);break;
+    case 'battery':R(cx-6,by-6,12,6,'#2f6a42');R(cx+6,by-4,1,2,'#c9ccd8');R(cx-5,by-5,Math.max(1,Math.floor((now/400)%5)+1)*2,4,'#7fd98e');R(cx-6,by-6,12,1,'rgba(255,255,255,.2)');break;
+    case 'servo':R(cx-5,by-7,10,7,C.m);R(cx-2,by-9,4,2,C.l);R(cx-1,by-5,2,2,'#f0a33e');R(cx+3,by-7,2,7,'rgba(0,0,0,.2)');R(cx-7,by-3,2,2,C.d);R(cx+5,by-3,2,2,C.d);break;
+    case 'cutter':R(cx-9,by-4,13,4,C.m);R(cx-8,by-1,3,1,C.d);R(cx-7,by,2,0,C.d);R(cx+4,by-3,4,2,C.d);R(cx+8,by-3,1,2,(now/200|0)%2?'#ff6372':'#ff9aa3');R(cx-9,by-4,13,1,'rgba(255,255,255,.2)');break;
+    case 'visor':R(cx-8,by-3,1,2,C.d);R(cx+7,by-3,1,2,C.d);R(cx-7,by-4,14,3,C.d);R(cx-6,by-4,12,2,'#46d3c9');R(cx-6,by-4,5,1,'#a5f0ea');break;
+    case 'drone':R(cx-3,by-4,6,4,C.m);R(cx-9,by-6,6,1,C.l);R(cx+3,by-6,6,1,C.l);R(cx-7,by-5,1,3,C.d);R(cx+6,by-5,1,3,C.d);R(cx-1,by-3,2,1,'#ff6372');break;
+    case 'chip':R(cx-4,by-6,8,6,'#1f6b4f');R(cx-2,by-4,4,2,'#0d0f18');for(let i=0;i<4;i++){R(cx-4+i*2+1,by-7,1,1,'#f0c040');R(cx-4+i*2+1,by,1,0,'#f0c040')}R(cx+2,by-2,1,1,(now/300|0)%2?'#7fd98e':'#1f6b4f');break;
+    case 'arm':R(cx-11,by-4,8,4,C.l);R(cx-3,by-4,6,3,C.m);R(cx-3,by-3,1,1,'#46d3c9');R(cx+3,by-5,3,5,C.l);R(cx+6,by-5,2,1,C.l);R(cx+6,by-2,2,1,C.l);R(cx-11,by-1,8,1,'rgba(0,0,0,.25)');break;
+  }
+  if(inf&&(now/250|0)%2)R(cx-1,by-12,2,2,'#ff6372');
+}
+function paintIcons(){
+  document.querySelectorAll('canvas[data-ico]').forEach(c=>{
+    const old=g;g=c.getContext('2d');g.clearRect(0,0,28,16);drawItem(c.dataset.ico,14,14,0,c.dataset.inf==='1');g=old;
+  });
+}
+const STARS=Array.from({length:26},()=>({x:Math.random()*48,y:Math.random()*28,v:.6+Math.random()*2.2,b:Math.random()<.25}));
+function drawShop(now){
+  const s=now/1000,night=S.phase==='evening';
+  R(0,0,160,100,'#141829');
+  for(let x=0;x<160;x+=20)R(x,0,1,68,'#1b2034');
+  R(0,46,160,1,'#1b2034');for(let x=10;x<160;x+=20){R(x,3,1,1,'#262c46');R(x,43,1,1,'#262c46')}
+  R(5,7,54,34,'#232a45');R(7,9,50,30,'#05070f');
+  g.save();g.beginPath();g.rect(7,9,50,30);g.clip();
+  STARS.forEach(st=>{const x=((st.x-s*st.v)%50+50)%50;R(7+x,9+st.y,1,1,st.b?'#dde1f3':'#5b6288')});
+  g.fillStyle='#3a2a52';g.beginPath();g.arc(52,44,15,0,7);g.fill();g.fillStyle='#4e3a6e';g.beginPath();g.arc(50,46,13,0,7);g.fill();
+  R(34,34,26,1,'rgba(240,163,62,.55)');
+  const sp=(s%15)/15;if(sp<.6){const x=sp/.6*66-8;R(7+x,17,6,1,'#8b92b5');R(7+x+2,16,2,1,'#8b92b5');R(7+x-1,17,1,1,'#f0a33e')}
+  g.restore();R(9,11,1,7,'rgba(255,255,255,.07)');
+  R(5,50,54,2,'#2d3455');[[7,'#3c4466',8,6],[17,'#5a3f2e',6,8],[25,'#2f6a42',10,5],[38,'#4a2f55',7,7],[47,'#3c4466',9,4]].forEach(([x,c,w,h])=>R(x,50-h,w,h,c));
+  R(27,46,2,1,(s*2|0)%3?'#7fd98e':'#244a2f');R(49,47,1,1,(s*1.3|0)%2?'#ff6372':'#4a1f26');
+  R(5,60,54,2,'#2d3455');[[9,'#2d3455',12,5],[24,'#3c4466',6,7],[34,'#5a6080',14,4],[50,'#4a2f55',6,6]].forEach(([x,c,w,h])=>R(x,60-h,w,h,c));
+  R(118,8,40,60,'#232a45');R(122,12,32,56,'#090b16');R(122,12,32,2,'rgba(70,211,201,.25)');
+  const fl=night?0:(Math.random()<.015?.3:1);
+  R(59,3,42,11,'#0a0c18');R(60,4,40,9,'rgba(70,211,201,'+(.10*fl)+')');pixText('ЛАВКА 7Б',65,6,night?'#1f3b3c':fl<1?'#2a7f79':'#46d3c9');
+  R(77,0,6,2,'#2d3455');
+  if(!night){g.fillStyle='rgba(240,163,62,.06)';g.beginPath();g.moveTo(78,2);g.lineTo(82,2);g.lineTo(112,68);g.lineTo(48,68);g.closePath();g.fill()}
+  const L=A.phase!=='empty'?look(A.seed):null;
+  if(L){
+    const walking=A.phase==='in'||A.phase==='out',bob=walking?((now/140|0)%2):((now/900|0)%2);
+    g.save();if(A.x>118){g.beginPath();g.rect(122,0,38,100);g.clip()}
+    drawCustomer(Math.round(A.x),bob,L,now);g.restore();
+  }
+  const pw=16*(1-A.door);
+  R(122,12,pw,56,'#2a3152');R(154-pw,12,pw,56,'#2a3152');
+  if(pw>1){R(122+pw-1,12,1,56,'#3a4370');R(154-pw,12,1,56,'#3a4370')}
+  R(118,8,4,60,'#232a45');R(154,8,4,60,'#232a45');
+  R(132,9,12,2,(A.phase==='in'||A.phase==='out')?'#7fd98e':(S.phase==='shop'&&S.slot<PER_DAY&&!S.over?'#f0a33e':'#ff6372'));
+  R(0,68,160,32,'#1f2440');R(0,68,160,2,'#3a4370');R(0,68,160,1,'#4f5d94');
+  for(let x=4;x<160;x+=26){R(x,75,22,20,'#1a1e36');R(x,75,22,1,'#262c4a')}
+  R(0,97,160,3,'#171b2d');for(let x=0;x<160;x+=8)R(x,97,4,1,'rgba(240,163,62,.35)');
+  R(18,64,12,4,'#2d3455');R(19,65,3,2,'#46d3c9');R(26,63,2,1,'#5a6080');
+  R(112,52,24,15,'#2d3455');R(114,54,20,11,'#06201f');for(let i=0;i<3;i++)R(116,56+i*3,6+((s*3+i*5)|0)%10,1,'#46d3c9');R(122,67,4,1,'#2d3455');
+  if(L&&A.phase==='idle'){
+    drawHands(Math.round(A.x),L);
+    const c=S.cust;
+    if(c&&c.item){drawItem(c.item.t,80,68,now,c.item.k.flaw&&c.item.infected);
+      const p=(now-A.scan)/700;if(p>=0&&p<1){const y=56+p*12;R(66,y,28,1,'#46d3c9');R(66,y-1,28,1,'rgba(70,211,201,.35)');R(66,y+1,28,1,'rgba(70,211,201,.35)')}}
+  }
+  if(night)R(0,0,160,100,'rgba(4,5,16,.5)');
+}
+function drawPile(i,now){
+  const P=PILES[i],pd=S.junk.piles[i],r=prng(pd.seed),h=pd.dug?5:P.h,half=P.w/2;
+  for(let dx=-half;dx<half;dx+=2){
+    const k=dx/half,hh=Math.max(1,Math.round(h*(1-k*k)+r()*3));
+    R(P.x+dx,P.y-hh,2,hh,pd.dug?'#1c2035':((dx/2)%2?'#2a2f4a':'#252a42'));
+  }
+  if(!pd.dug){
+    for(let j=0;j<5;j++){
+      const px=P.x-half*.6+r()*P.w*.6,py=P.y-h*.7+r()*h*.5,kind=Math.floor(r()*4);
+      if(kind===0){R(px,py,4,3,'#3a4370');R(px+1,py+1,2,1,'rgba(70,211,201,.5)')}
+      if(kind===1)R(px,py,7,1,'#5a6080');
+      if(kind===2){R(px,py,3,3,'#141829');R(px+1,py+1,1,1,'#5a6080')}
+      if(kind===3){R(px,py,2,4,'#4a2f2a');R(px,py,2,1,'#8a5f55')}
+    }
+    if(((now/1000+i*.7)%3.2)<.15)R(P.x-4+(pd.seed%9),P.y-h+2,1,1,'#ffffff');
+  }else{R(P.x-3,P.y-6,1,1,'#5b6288');R(P.x+2,P.y-5,1,1,'#5b6288')}
+}
+function drawJunk(now){
+  const s=now/1000;
+  R(0,0,160,100,'#0a0c17');
+  for(let i=0;i<20;i++)R((i*37)%160,(i*13)%30,1,1,i%3?'#3a3f62':'#8b92b5');
+  R(0,0,160,6,'#141829');for(let x=0;x<160;x+=16){R(x,6,2,10,'#141829');R(x+2,14,12,1,'#141829')}
+  for(let x=0;x<160;x+=4){const h=10+Math.round(Math.sin(x*.13)*6+Math.sin(x*.37)*4);R(x,52-h,4,h+12,'#121527')}
+  const fl=Math.random()<.04?.3:1;
+  R(12,20,2,44,'#2d3455');R(10,19,8,2,'#2d3455');R(15,21,2,1,fl<1?'#7a5320':'#f0a33e');
+  g.fillStyle=`rgba(240,163,62,${.07*fl})`;g.beginPath();g.moveTo(14,22);g.lineTo(18,22);g.lineTo(50,70);g.lineTo(0,70);g.closePath();g.fill();
+  R(0,60,160,40,'#15182a');R(0,60,160,1,'#1f2440');
+  R(146,40,10,20,'#1c2035');R(147,42,8,3,'#0a0c18');R(148,43,2,1,(s|0)%2?'#ff6372':'#4a1f26');
+  PILES.forEach((_,i)=>drawPile(i,now));
+}
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;
+  if(A.phase==='in'){A.x-=SPEED*dt;if(A.x<=SPOT_X){A.x=SPOT_X;A.phase='idle';sceneUI();renderPane()}}
+  else if(A.phase==='out'){A.x+=SPEED*dt;if(A.x>=DOOR_X+4){A.phase='empty';sceneUI();renderPane()}}
+  const want=(A.phase==='in'||A.phase==='out')&&A.x>104?1:0;A.door+=(want-A.door)*Math.min(1,dt*8);
+  if(S.where==='junk'&&S.junk)drawJunk(now);else drawShop(now);
+  requestAnimationFrame(frame);
+}
+cv.addEventListener('click',e=>{
+  if(S.where!=='junk'||!S.junk)return;
+  const r=cv.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*160,y=(e.clientY-r.top)/r.height*100;
+  const i=PILES.findIndex(P=>Math.abs(x-P.x)<P.w/2&&y>P.y-P.h-6&&y<P.y+3);
+  if(i>=0){dig(i);render()}
+});
+
+/* ---------- space lofi (WebAudio) ---------- */
+const audio={on:false,ac:null};
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+const CH=[[53,57,60,64],[52,55,59,62],[50,53,57,60],[48,52,55,59]];
+const PENTA=[72,74,76,79,81,84];
+function initAudio(){
+  const ac=new (window.AudioContext||window.webkitAudioContext)();audio.ac=ac;
+  const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1600;
+  const master=ac.createGain();master.gain.value=.55;master.connect(lp);lp.connect(ac.destination);audio.master=master;
+  const len=ac.sampleRate*2,nb=ac.createBuffer(1,len,ac.sampleRate),d=nb.getChannelData(0);
+  for(let i=0;i<len;i++)d[i]=Math.random()*2-1;audio.noise=nb;
+  const cb=ac.createBuffer(1,len,ac.sampleRate),cd=cb.getChannelData(0);
+  for(let i=0;i<len;i++)cd[i]=(Math.random()<.0006?(Math.random()*2-1)*.6:0)+(Math.random()*2-1)*.012;
+  const cr=ac.createBufferSource();cr.buffer=cb;cr.loop=true;const cg=ac.createGain();cg.gain.value=.5;cr.connect(cg);cg.connect(master);cr.start();
+  audio.step=0;audio.next=ac.currentTime+.1;audio.spb=60/72/4;setInterval(sched,25);
+}
+function env(gn,t,a,peak,rel){gn.gain.setValueAtTime(0,t);gn.gain.linearRampToValueAtTime(peak,t+a);gn.gain.exponentialRampToValueAtTime(.0001,t+a+rel)}
+function noiseHit(t,type,freq,peak,dur){const ac=audio.ac,s=ac.createBufferSource();s.buffer=audio.noise;const f=ac.createBiquadFilter();f.type=type;f.frequency.value=freq;const gn=ac.createGain();env(gn,t,.002,peak,dur);s.connect(f);f.connect(gn);gn.connect(audio.master);s.start(t,Math.random());s.stop(t+dur+.05)}
+function tone(t,freq,type,peak,a,rel){const ac=audio.ac,o=ac.createOscillator(),gn=ac.createGain();o.type=type;o.frequency.value=freq;env(gn,t,a,peak,rel);o.connect(gn);gn.connect(audio.master);o.start(t);o.stop(t+a+rel+.05)}
+function sched(){
+  if(!audio.on)return;const ac=audio.ac;
+  while(audio.next<ac.currentTime+.12){
+    const t=audio.next,st=audio.step%16,bar=Math.floor(audio.step/16)%4,ch=CH[bar];
+    if(st===0||st===10&&Math.random()<.5||st===8&&Math.random()<.3){const o=ac.createOscillator(),gn=ac.createGain();o.frequency.setValueAtTime(110,t);o.frequency.exponentialRampToValueAtTime(42,t+.15);env(gn,t,.003,.7,.22);o.connect(gn);gn.connect(audio.master);o.start(t);o.stop(t+.3)}
+    if(st===4||st===12)noiseHit(t,'bandpass',1700,.18,.16);
+    if(st%2===0)noiseHit(t+(st%4===2?audio.spb*.18:0),'highpass',7000,st%4===2?.05:.03,.04);
+    if(st===0){ch.forEach(n=>{tone(t,mtof(n),'triangle',.05,.6,audio.spb*15);tone(t,mtof(n)*1.004,'sine',.04,.8,audio.spb*15)});tone(t,mtof(ch[0]-24),'sine',.22,.02,audio.spb*7);tone(t+audio.spb*8,mtof(ch[0]-24),'sine',.18,.02,audio.spb*6)}
+    if((st===6||st===14)&&Math.random()<.35)tone(t,mtof(pick(PENTA)),'sine',.045,.01,.9);
+    audio.next+=audio.spb;audio.step++;
+  }
+}
+function toggleMusic(){try{if(!audio.ac)initAudio();audio.on=!audio.on;if(audio.on){audio.ac.resume();audio.next=audio.ac.currentTime+.1}else audio.ac.suspend()}catch(e){audio.on=false}}
+
+function migrate(d){if(d&&d.nextDue==null){d.nextDue=d.day+((3-d.day%3)%3);d.owed=d.rent;d.deferred=false;d.llAt=ri(1,4);d.llDone=false}return d}
+function exportSave(){return 'DC1:'+btoa(unescape(encodeURIComponent(JSON.stringify(S))))}
+function importSave(code){try{code=(code||'').trim().replace(/\s+/g,'');if(code.startsWith('DC1:'))code=code.slice(4);const d=JSON.parse(decodeURIComponent(escape(atob(code))));if(!d||!Array.isArray(d.inv)||!d.phase||typeof d.credits!=='number')return null;return migrate(d)}catch(e){return null}}
+S=migrate(load());
+if(!S)newGame();
+else if(S.cust){A.phase='idle';A.x=SPOT_X;A.seed=S.cust.seed}
+render();requestAnimationFrame(frame);
+</script>
+<script>
+if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
+</script>
+</body>
+</html>
