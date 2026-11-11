@@ -19,6 +19,7 @@ import {
 } from './state';
 import type { BuyerCustomer, Item, ItemType, Recipe, RentCustomer, SellerCustomer, Tab } from './types';
 import { roundTo10 } from './util';
+import { VERSION_LABEL } from './version';
 
 /* =====================================================================
    Small HTML helpers
@@ -421,8 +422,8 @@ function flushFeedback(): void {
   feedback.floats.splice(0).forEach(({ text, color }) => showFloatingText(text, color));
 }
 
-function openModal(title: string, body: string, buttons: string): void {
-  byId('mbox').innerHTML = `<h2>${title}</h2>${body}<div class="mbtns">${buttons}</div>`;
+function openModal(title: string, body: string, buttons: string, footer = ''): void {
+  byId('mbox').innerHTML = `<h2>${title}</h2>${body}<div class="mbtns">${buttons}</div>${footer}`;
   byId('modal').hidden = false;
 }
 
@@ -454,7 +455,10 @@ function openSaveMenu(): void {
       <label for="savecode">Код текущей игры · день ${state.day}, ${state.credits} кр.</label><textarea id="savecode" readonly>${exportSave()}</textarea>
       <div class="mbtns"><button class="btn pri" data-a="copysave">Скопировать</button></div>
       <label for="loadcode">Загрузить сейв</label><textarea id="loadcode" placeholder="Вставьте код"></textarea>
-      <div id="savemsg" class="hint"></div>`, '<button class="btn amb" data-a="loadsave">Загрузить</button><button class="btn" data-a="close">Закрыть</button>');
+      <div id="savemsg" class="hint"></div>`,
+    '<button class="btn amb" data-a="loadsave">Загрузить</button><button class="btn" data-a="close">Закрыть</button>',
+    `<div class="version">${VERSION_LABEL}</div>`,
+  );
 }
 
 function copySaveCode(): void {

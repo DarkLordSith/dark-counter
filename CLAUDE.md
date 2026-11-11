@@ -41,6 +41,7 @@
 - `src/audio.ts` — лофи.
 - `src/util.ts` — random и math-хелперы без игровой логики и без DOM.
 - `src/dom.ts` — `byId` и другие DOM-хелперы для `ui` и `scene`.
+- `src/version.ts` — подпись версии в окне «сейв»: `__APP_VERSION__` (из `package.json`) и `__COMMIT_HASH__` (из git) подставляет Vite через `define` в `vite.config.ts`.
 - `src/style.css` — стили, токены цветов в `:root`. Формат: один селектор и одно свойство на строку.
 - `public/icons/` — иконки PWA.
 - `tests/unit/` — Vitest: логика и сейв.
