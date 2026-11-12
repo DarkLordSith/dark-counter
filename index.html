@@ -19,7 +19,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Silkscreen&display=swap">
 </head>
 <body>
+<!-- .ceiling = "station ceiling": decorative strip under the iOS 26+ blurred status bar zone, only in the iOS PWA (html.ios-pwa). -->
 <div id="app">
+  <div class="ceiling" aria-hidden="true"></div>
   <header class="hud" id="hud"></header>
   <div class="scene"><div class="stage" id="stage">
     <canvas id="scn" width="160" height="100" aria-label="Сцена игры"></canvas>

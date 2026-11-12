@@ -4,7 +4,7 @@
 //  an overlay with viewport / safe-area measurements and a copy button.
 //  Debug tool only: reads the DOM, never touches the save or gameplay.
 // =====================================================================
-import { byId, maybeById } from './dom';
+import { byId, IOS_PWA_CLASS, maybeById } from './dom';
 import { VERSION_LABEL } from './version';
 
 /* =====================================================================
@@ -53,8 +53,14 @@ export interface ViewportMetrics {
   insetRight: number;
   /** Computed padding-top of <html> (it carries env(safe-area-inset-top)). */
   rootPaddingTop: number;
-  /** Where the HUD actually starts on screen. */
+  /** html.ios-pwa is set, so the "station ceiling" strip is shown. */
+  ceilingApplied: boolean;
+  /** Value of the --pwa-ceiling token (the strip height). */
+  ceilingVar: string;
+  /** Final position of the HUD on screen, after the inset and the ceiling. */
   hudTop: number | null;
+  /** Bottom edge of the game; equal to innerHeight − inset-bottom when nothing is cut off. */
+  appBottom: number | null;
   innerHeight: number;
   innerWidth: number;
   screenHeight: number;
@@ -92,6 +98,7 @@ function measureViewport(): ViewportMetrics {
   const navigatorWithStandalone: Navigator & { standalone?: boolean } = navigator;
   const statusBarMeta = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-status-bar-style"]');
   const hud = maybeById('hud');
+  const app = maybeById('app');
   const viewport = window.visualViewport;
   return {
     version: VERSION_LABEL,
@@ -103,7 +110,10 @@ function measureViewport(): ViewportMetrics {
     insetLeft: insets.left,
     insetRight: insets.right,
     rootPaddingTop: parseFloat(getComputedStyle(document.documentElement).paddingTop),
+    ceilingApplied: document.documentElement.classList.contains(IOS_PWA_CLASS),
+    ceilingVar: getComputedStyle(document.documentElement).getPropertyValue('--pwa-ceiling').trim(),
     hudTop: hud ? hud.getBoundingClientRect().top : null,
+    appBottom: app ? app.getBoundingClientRect().bottom : null,
     innerHeight: window.innerHeight,
     innerWidth: window.innerWidth,
     screenHeight: screen.height,
@@ -133,7 +143,10 @@ export function formatReport(metrics: ViewportMetrics): string {
     `safe-area-inset-bottom: ${px(metrics.insetBottom)}`,
     `safe-area-inset-left/right: ${px(metrics.insetLeft)} / ${px(metrics.insetRight)}`,
     `html padding-top: ${px(metrics.rootPaddingTop)}`,
+    `ceiling (html.ios-pwa): ${metrics.ceilingApplied ? 'yes' : 'no'}`,
+    `--pwa-ceiling: ${metrics.ceilingVar || 'n/a'}`,
     `hud top: ${px(metrics.hudTop)}`,
+    `app bottom: ${px(metrics.appBottom)}`,
     `innerWidth × innerHeight: ${metrics.innerWidth} × ${metrics.innerHeight}`,
     `screen.width × height: ${metrics.screenWidth} × ${metrics.screenHeight}`,
     `screen.height − innerHeight: ${metrics.screenHeight - metrics.innerHeight}`,

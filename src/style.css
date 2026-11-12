@@ -41,6 +41,10 @@ img {
   --shadow: rgba(0, 0, 0, .5);
   --shadow-soft: rgba(0, 0, 0, .45);
   --black: #000;
+  --ceiling-bg: var(--panel);
+  --neon-glow: rgba(70, 211, 201, .45);
+  /* Height of the "station ceiling" strip in the iOS PWA; tune by diagnostics. */
+  --pwa-ceiling: 32px;
   --display: 'Silkscreen', 'Courier New', monospace;
   --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
 }
@@ -86,6 +90,27 @@ input:focus-visible {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+/* ==================== Station ceiling (iOS PWA only) ==================== */
+
+/* iOS 26+ blurs a ~32pt zone below the safe area in home-screen apps; it cannot be
+   turned off, so this decorative strip fills it instead of the HUD. */
+.ceiling {
+  display: none;
+}
+
+.ios-pwa .ceiling {
+  display: block;
+  flex: none;
+  height: var(--pwa-ceiling);
+  /* Full bleed past the body side padding. */
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  background: var(--ceiling-bg);
+  border-bottom: 2px solid var(--cyan);
+  box-shadow: 0 2px 10px var(--neon-glow);
+  pointer-events: none;
 }
 
 /* ==================== HUD (top bar) ==================== */
@@ -160,6 +185,7 @@ input:focus-visible {
 .stage {
   position: relative;
   height: min(40vh, 58vw);
+  height: min(40svh, 58vw);
   aspect-ratio: 160/100;
   max-width: 100%;
   line-height: 0;
@@ -774,6 +800,7 @@ input:focus-visible {
   max-width: 420px;
   width: 100%;
   max-height: 80vh;
+  max-height: 80dvh;
   overflow: auto;
   padding: 16px;
   display: flex;
@@ -841,6 +868,7 @@ input:focus-visible {
   right: 8px;
   z-index: 30;
   max-height: 75vh;
+  max-height: 75dvh;
   overflow: auto;
   background: var(--panel);
   border: 1px solid var(--amber);
