@@ -55,6 +55,8 @@ export interface ViewportMetrics {
   rootPaddingTop: number;
   /** html.ios-pwa is set, so the "station ceiling" strip is shown. */
   ceilingApplied: boolean;
+  /** Value of the --pwa-ceiling token (the strip height). */
+  ceilingVar: string;
   /** Final position of the HUD on screen, after the inset and the ceiling. */
   hudTop: number | null;
   /** Bottom edge of the game; equal to innerHeight − inset-bottom when nothing is cut off. */
@@ -109,6 +111,7 @@ function measureViewport(): ViewportMetrics {
     insetRight: insets.right,
     rootPaddingTop: parseFloat(getComputedStyle(document.documentElement).paddingTop),
     ceilingApplied: document.documentElement.classList.contains(IOS_PWA_CLASS),
+    ceilingVar: getComputedStyle(document.documentElement).getPropertyValue('--pwa-ceiling').trim(),
     hudTop: hud ? hud.getBoundingClientRect().top : null,
     appBottom: app ? app.getBoundingClientRect().bottom : null,
     innerHeight: window.innerHeight,
@@ -141,6 +144,7 @@ export function formatReport(metrics: ViewportMetrics): string {
     `safe-area-inset-left/right: ${px(metrics.insetLeft)} / ${px(metrics.insetRight)}`,
     `html padding-top: ${px(metrics.rootPaddingTop)}`,
     `ceiling (html.ios-pwa): ${metrics.ceilingApplied ? 'yes' : 'no'}`,
+    `--pwa-ceiling: ${metrics.ceilingVar || 'n/a'}`,
     `hud top: ${px(metrics.hudTop)}`,
     `app bottom: ${px(metrics.appBottom)}`,
     `innerWidth × innerHeight: ${metrics.innerWidth} × ${metrics.innerHeight}`,

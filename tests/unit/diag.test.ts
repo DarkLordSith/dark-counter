@@ -14,6 +14,7 @@ const METRICS: ViewportMetrics = {
   insetRight: 0,
   rootPaddingTop: 0,
   ceilingApplied: true,
+  ceilingVar: '32px',
   hudTop: 80,
   appBottom: 810,
   innerHeight: 844,
@@ -49,6 +50,7 @@ describe('formatReport', () => {
     expect(report).toContain('visualViewport.offsetTop: 0px');
     expect(report).toContain('UA: Mozilla/5.0 (iPhone)');
     expect(report).toContain('ceiling (html.ios-pwa): yes');
+    expect(report).toContain('--pwa-ceiling: 32px');
     expect(report).toContain('hud top: 80px');
     expect(report).toContain('app bottom: 810px');
   });
