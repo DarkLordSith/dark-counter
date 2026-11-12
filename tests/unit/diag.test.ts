@@ -13,7 +13,9 @@ const METRICS: ViewportMetrics = {
   insetLeft: 0,
   insetRight: 0,
   rootPaddingTop: 0,
-  hudTop: 0,
+  ceilingApplied: true,
+  hudTop: 80,
+  appBottom: 810,
   innerHeight: 844,
   innerWidth: 390,
   screenHeight: 844,
@@ -46,12 +48,16 @@ describe('formatReport', () => {
     expect(report).toContain('screen.height − innerHeight: 0');
     expect(report).toContain('visualViewport.offsetTop: 0px');
     expect(report).toContain('UA: Mozilla/5.0 (iPhone)');
+    expect(report).toContain('ceiling (html.ios-pwa): yes');
+    expect(report).toContain('hud top: 80px');
+    expect(report).toContain('app bottom: 810px');
   });
 
   it('marks values the browser does not have', () => {
-    const report = formatReport({ ...METRICS, standalone: undefined, visualViewportHeight: null, hudTop: null });
+    const report = formatReport({ ...METRICS, standalone: undefined, visualViewportHeight: null, hudTop: null, appBottom: null, ceilingApplied: false });
     expect(report).toContain('navigator.standalone: n/a');
     expect(report).toContain('visualViewport.height: n/a');
     expect(report).toContain('hud top: n/a');
+    expect(report).toContain('ceiling (html.ios-pwa): no');
   });
 });

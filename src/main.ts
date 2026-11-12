@@ -6,11 +6,13 @@
 //  The service worker is registered by vite-plugin-pwa (see vite.config.ts).
 // =====================================================================
 import './style.css';
+import { markIosPwa } from './dom';
 import { actorAtCounter, loadGame, migrate, newGame, setState, state } from './state';
 import { startScene } from './scene';
 import { bindEvents, render, renderPane, renderSceneOverlay } from './ui';
 import { bindDiagnostics } from './diag';
 
+markIosPwa();
 bindEvents();
 bindDiagnostics();
 
