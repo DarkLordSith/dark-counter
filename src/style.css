@@ -826,4 +826,46 @@ input:focus-visible {
   font-size: 10px;
   color: var(--dim);
   text-align: right;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* ==================== Diagnostics overlay (long press on .version) ==================== */
+
+.diag {
+  position: fixed;
+  /* Clear of the status bar even when the inset under test reads 0. */
+  top: calc(env(safe-area-inset-top, 0px) + 60px);
+  left: 8px;
+  right: 8px;
+  z-index: 30;
+  max-height: 75vh;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--amber);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 4px 16px var(--shadow);
+}
+
+.diag h2 {
+  font-family: var(--display);
+  font-size: 14px;
+  color: var(--amber);
+  margin: 0;
+  font-weight: 400;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.diag pre {
+  margin: 0;
+  font: 11px/1.35 var(--mono);
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-all;
 }
