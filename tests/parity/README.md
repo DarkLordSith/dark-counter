@@ -37,12 +37,15 @@ tests/parity/run.sh main http://localhost:4173/dark-counter/
 RUNS=4 STEPS=150 tests/parity/run.sh
 ```
 
-Если в новой версии намеренно появился элемент (например, подпись версии в окне «сейв»),
-исключите его из сравнения CSS-селектором. Он будет скрыт и пропущен в обеих версиях:
+Если в новой версии намеренно появился элемент, исключите его из сравнения CSS-селектором.
+Он будет скрыт и пропущен в обеих версиях:
 
 ```bash
-PARITY_IGNORE='.version' tests/parity/run.sh main http://localhost:4173/dark-counter/
+PARITY_IGNORE='.new-thing' tests/parity/run.sh main http://localhost:4173/dark-counter/
 ```
+
+Подпись версии в окне «сейв» (`.version`) исключается всегда. В ней хэш коммита, а он
+у любых двух сборок разный. У эталона из `git archive` нет `.git`, поэтому там `dev`.
 
 При первом запуске `run.sh` сам выполнит `npm install` в этой папке. Ставится только
 `puppeteer-core`, он управляет установленным Chrome и не скачивает свой браузер.

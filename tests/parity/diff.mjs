@@ -3,12 +3,14 @@
 // save in localStorage, DOM, canvas pixels, computed styles, screenshots.
 // Usage: node diff.mjs <urlA> <urlB> [runs=12] [steps=250]
 // PARITY_IGNORE=<css selector> hides and skips intentionally new elements
-// in both versions (e.g. PARITY_IGNORE='.version').
+// in both versions (the version label .version is always skipped).
 import fs from 'node:fs';
 import { deterministicInit, hash as h, launch, preloadFonts, rng } from './common.mjs';
 
 const [, , URL_A, URL_B, RUNS = '12', STEPS = '250'] = process.argv;
-const IGNORE = process.env.PARITY_IGNORE || '';
+// The version label ("v0.7 · <commit>") differs between any two builds by
+// design, so it is always ignored; PARITY_IGNORE adds more selectors.
+const IGNORE = ['.version', process.env.PARITY_IGNORE].filter(Boolean).join(', ');
 const OUT = new URL('./out/shots/', import.meta.url);
 fs.mkdirSync(OUT, { recursive: true });
 
