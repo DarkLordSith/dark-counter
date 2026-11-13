@@ -165,17 +165,3 @@ export const JUNK_PILES = [
   { x: 132, y: 97, w: 44, h: 16 },
 ];
 
-// ---------- palette (mirrors the CSS tokens in style.css) ----------
-export const COLOR = {
-  red: '#ff6372',
-  amber: '#f0a33e',
-  green: '#7fd98e',
-  cyan: '#46d3c9',
-  dim: '#8b92b5',
-  fg: '#dde1f3',
-  line: '#2d3455',
-  steel: '#5a6080',
-  sceneBg: '#141829',
-  ink: '#0a0c18',
-  gold: '#f0c040',
-};

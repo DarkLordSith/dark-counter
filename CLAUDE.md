@@ -40,17 +40,18 @@
 - `src/ui.ts` — HUD, вкладки, панели, модалки, таблица обработчиков `ACTIONS` (кнопки несут `data-a`).
 - `src/audio.ts` — лофи.
 - `src/util.ts` — random и math-хелперы без игровой логики и без DOM.
+- `src/palette.ts` — **все цвета игры**, единственное место с цветовыми литералами: общие `COLOR`, группы по месту использования (`SHOP`, `JUNKYARD`, `CHARACTER`, `CUSTOMER_TONES`, `ITEM_COLORS`), полупрозрачные `SHADE`/`GLOW` через `withAlpha()`, `CSS_TOKENS` для CSS. Имена — по месту в сцене или интерфейсе, смыслов (риск, польза) здесь нет. Чистые данные: импортируют и canvas, и Vitest, и `vite.config.ts`.
 - `src/dom.ts` — `byId` и другие DOM-хелперы для `ui` и `scene`; `markIosPwa()` ставит класс `ios-pwa` на `<html>` в установленной iOS-PWA (полоса «потолок станции»).
 - `src/diag.ts` — отладочный оверлей для бага с отступом в iOS-PWA: долгий тап по подписи версии в окне «сейв». Читает DOM сам, подключается в `main.ts`, сейв и игру не трогает.
 - `src/version.ts` — подпись версии в окне «сейв»: `__APP_VERSION__` (из `package.json`) и `__COMMIT_HASH__` (из git) подставляет Vite через `define` в `vite.config.ts`.
-- `src/style.css` — стили, токены цветов в `:root`. Формат: один селектор и одно свойство на строку.
+- `src/style.css` — стили; нецветовые токены (шрифты, `--pwa-ceiling`) в `:root`. Цветовые `--bg`, `--cyan`… вставляет в `<head>` `index.html` плагин `paletteCss` из `vite.config.ts` (и в dev, и в сборке). Формат: один селектор и одно свойство на строку.
 - `public/icons/` — иконки PWA.
 - `tests/unit/` — Vitest: логика и сейв.
 - `tests/fixtures/` — реальные коды сейвов прошлых версий.
 - `tests/parity/` — стенд паритета: эталонная версия против кандидата в headless Chrome (см. его README). Гонять при рефакторинге и миграциях.
 
 Правило: логика меняет `GameState` и возвращает результат. Например, `sleepUntilMorning()` возвращает события ночи, а всплывающие числа кладутся в очередь `feedback`. DOM трогают только `ui.ts` и `scene.ts` (через `dom.ts`). Без `any`; если тип неочевиден, описываем его в `types.ts`.
-Импорты без циклов: `types`/`data`/`util` → `appearance` → `state` → `economy` → `scene` → `ui` → `main`.
+Импорты без циклов: `types`/`data`/`util`/`palette` → `appearance` → `state` → `economy` → `scene` → `ui` → `main`.
 
 ### Новый товар
 1. Одна строка в `ITEM_TYPES` в `src/data.ts`. Тип `ItemType` выводится из ключей каталога, правка в `types.ts` не нужна.
@@ -67,7 +68,7 @@
 ## UI
 - Mobile-first: iPhone в портрете. Вся игра помещается в один экран, прокручивается только нижняя панель (`.pane`).
 - Учитывать safe-area (`env(safe-area-inset-*)`). Кнопки не меньше ~36px по высоте.
-- Тёмная палитра из токенов: `--bg`, `--panel`, `--cyan`, `--amber`, `--red`, `--green`. Без литеральных цветов в компонентах.
+- Все цвета только из палитры `src/palette.ts`: в CSS через токены (`--bg`, `--panel`, `--cyan`, `--amber`, `--red`, `--green`…), в canvas через её объекты. Новый цвет — сначала в палитру. Тест `tests/unit/palette.test.ts` падает на `#rgb`/`#rrggbb`/`rgb(`/`hsl(` вне палитры.
 - Шрифты: `--display` (Silkscreen) для заголовков и меток, `--mono` для текста.
 - Без `alert`, `confirm`, `prompt`: только свои модалки.
 
