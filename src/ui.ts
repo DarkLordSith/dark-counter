@@ -18,7 +18,7 @@ import {
   actor, actorAtCounter, actorReset, addLog, exportSave, findItem, importSave, newGame, saveGame, setState, state, ui,
 } from './state';
 import type { BuyerCustomer, Item, ItemType, Recipe, RentCustomer, SellerCustomer, Tab } from './types';
-import { roundTo10 } from './util';
+import { daysRu, roundTo10 } from './util';
 import { VERSION_LABEL } from './version';
 
 /* =====================================================================
@@ -249,13 +249,13 @@ function collateralDescription(plan: CollateralPlan): string {
 function rentPane(customer: RentCustomer): string {
   const plan = planCollateral();
   const canPay = state.credits >= state.owed;
-  const deferText = state.deferred ? 'Вторую отсрочку Гробов не даст.' : `Придёт через ${RENT.deferDays} дня, долг +20%: ${deferredDebt()} кр.`;
+  const deferText = state.deferred ? 'Вторую отсрочку Гробов не даст.' : `Придёт через ${daysRu(RENT.deferDays)}, долг +20%: ${deferredDebt()} кр.`;
   let html = `<div class="thead"><div><span class="cname">${customer.name}</span><span class="kind" style="color:var(--red)">за арендой</span></div></div>
     <div class="card" style="flex-direction:column;gap:2px"><div class="rows">
       <span>К оплате</span><span class="price"><b>${state.owed} кр.</b>${state.deferred ? ' <span class="bad">с пеней</span>' : ''}</span>
       <span>У вас</span><span class="price ${canPay ? 'ok' : 'bad'}">${state.credits} кр.</span></div></div>
     <div class="opts" style="margin-top:8px">
-      ${option('rentpay', !canPay, 'Заплатить', `Следующая аренда ${nextRent()} кр. через ${RENT.periodDays} дня.`, state.owed, ' class="price"')}
+      ${option('rentpay', !canPay, 'Заплатить', `Следующая аренда ${nextRent()} кр. через ${daysRu(RENT.periodDays)}.`, state.owed, ' class="price"')}
       ${option('rentdefer', state.deferred, 'Попросить отсрочку', deferText, '⧗')}
       ${option('rentitems', !(plan.ok && plan.items.length), 'Отдать деньги и товар', collateralDescription(plan), '⚖')}
     </div>`;

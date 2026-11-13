@@ -58,15 +58,19 @@ export const MAX_HEAT = 10;
 export const LOG_LIMIT = 50;
 export const START = { credits: 400, parts: 4 };
 
+// Hotfix 13.11.2026 after the day-34 playtest: weekly rent instead of every 3 days
+// (was start 300, every 3 days, +150). Numbers are a proposal, tune after playtests.
 export const RENT = {
-  start: 300,
-  periodDays: 3,
-  increase: 150,
+  start: 750,
+  periodDays: 7,
+  increase: 250,
   deferDays: 2,
   deferPenalty: 1.2,
   landlordSlotMin: 1, // landlord shows up after this many…
   landlordSlotMax: 4, // …to this many customers
 };
+/** Rent period of v1/v2 saves (no nextDue field); migrate() places their first visit by it. */
+export const LEGACY_RENT_PERIOD = 3;
 export const LANDLORD_SEED = 777;
 
 // Landlord takes goods at a share of their true value, stolen goods first.

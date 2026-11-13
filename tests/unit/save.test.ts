@@ -1,7 +1,7 @@
 // Save compatibility: migrate(), DC1 export/import and real saves of past versions.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SAVE_CODE_PREFIX } from '../../src/data';
-import { callNextCustomer, closeShop, customerLeaves, sleepUntilMorning } from '../../src/economy';
+import { LANDLORD_SEED, LEGACY_RENT_PERIOD, RENT, SAVE_CODE_PREFIX } from '../../src/data';
+import { callNextCustomer, closeShop, customerLeaves, payRent, sleepUntilMorning } from '../../src/economy';
 import { actor, actorReset, exportSave, importSave, migrate, newGame, setState, state } from '../../src/state';
 import type { SavedGame } from '../../src/types';
 import { makeState } from './helpers';
@@ -40,7 +40,9 @@ describe('migrate', () => {
     expect(migrated?.llAt).toBeLessThanOrEqual(4);
   });
 
+  // v1/v2 saves had rent every 3 days: migrate() keeps that schedule (LEGACY_RENT_PERIOD), not the weekly one.
   it('puts the first landlord visit on the next 3rd day', () => {
+    expect(LEGACY_RENT_PERIOD).toBe(3);
     expect(migrate(legacySave(1))?.nextDue).toBe(3);
     expect(migrate(legacySave(3))?.nextDue).toBe(3);
     expect(migrate(legacySave(5))?.nextDue).toBe(6);
@@ -112,6 +114,20 @@ describe('saves of past versions (tests/fixtures)', () => {
     it('exports back to the very same code', () => {
       setState(importSave(code)!);
       expect(exportSave()).toBe(code);
+    });
+
+    it('keeps its rent, debt and due day: the weekly period starts from the next payment', () => {
+      const original: SavedGame = JSON.parse(decodeURIComponent(escape(atob(code.replace(SAVE_CODE_PREFIX, '')))));
+      const loaded = importSave(code)!;
+      expect({ rent: loaded.rent, owed: loaded.owed, nextDue: loaded.nextDue })
+        .toEqual({ rent: original.rent, owed: original.owed, nextDue: original.nextDue });
+      setState(loaded);
+      state.day = state.nextDue;
+      state.credits = state.owed;
+      state.cust = { kind: 'rent', name: 'Гробов', seed: LANDLORD_SEED, msg: '', pat: 0, max: 0, done: {} };
+      payRent();
+      expect(state.nextDue).toBe(state.day + RENT.periodDays);
+      expect(state.rent).toBe((original.rent ?? 0) + RENT.increase);
     });
 
     it('can be played on: the next day starts and customers come', () => {
