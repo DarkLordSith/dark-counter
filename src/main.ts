@@ -11,8 +11,10 @@ import { actorAtCounter, loadGame, migrate, newGame, setState, state } from './s
 import { startScene } from './scene';
 import { bindEvents, render, renderPane, renderSceneOverlay } from './ui';
 import { bindDiagnostics } from './diag';
+import { applyStoredFontLab } from './fontlab';
 
 markIosPwa();
+applyStoredFontLab();
 bindEvents();
 bindDiagnostics();
 

@@ -5,6 +5,7 @@
 //  Debug tool only: reads the DOM, never touches the save or gameplay.
 // =====================================================================
 import { byId, IOS_PWA_CLASS, maybeById } from './dom';
+import { openFontLab } from './fontlab';
 import { VERSION_LABEL } from './version';
 
 /* =====================================================================
@@ -17,6 +18,7 @@ export const DIAG_TEXT = {
   ru: {
     title: 'Диагностика',
     copy: 'Скопировать',
+    fonts: 'Шрифты',
     close: 'Закрыть',
     copied: 'Скопировано.',
     selectManually: 'Текст выделен, скопируйте вручную.',
@@ -25,6 +27,7 @@ export const DIAG_TEXT = {
   en: {
     title: 'Diagnostics',
     copy: 'Copy',
+    fonts: 'Fonts',
     close: 'Close',
     copied: 'Copied.',
     selectManually: 'Text selected, copy it manually.',
@@ -190,6 +193,7 @@ function openOverlay(): void {
     <pre id="${OVERLAY_ID}-report"></pre>
     <div class="mbtns">
       <button class="btn pri" data-diag="copy">${text.copy}</button>
+      <button class="btn" data-diag="fonts">${text.fonts}</button>
       <button class="btn" data-diag="close">${text.close}</button>
     </div>
     <div class="hint" id="${OVERLAY_ID}-msg">${text.hint}</div>`;
@@ -237,6 +241,10 @@ function onOverlayClick(event: MouseEvent): void {
   }
   if (button?.dataset.diag === 'close') {
     closeOverlay();
+  }
+  if (button?.dataset.diag === 'fonts') {
+    closeOverlay();
+    openFontLab();
   }
 }
 

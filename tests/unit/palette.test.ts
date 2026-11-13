@@ -42,9 +42,10 @@ describe('CSS tokens', () => {
   const definedInCss = [...styleCss.matchAll(/(--[\w-]+)\s*:/g)].map(match => match[1]);
   const defined = new Set([...Object.keys(CSS_TOKENS), ...definedInCss]);
 
+  // var(--x, fallback) may be set at runtime (font lab: --fl-*-weight); var(--x) without one must exist.
   it('every var(--x) used by the game is defined (palette or style.css)', () => {
     const used = sourceFiles()
-      .flatMap(file => [...read(file).matchAll(/var\((--[\w-]+)/g)].map(match => `${file}: ${match[1]}`))
+      .flatMap(file => [...read(file).matchAll(/var\((--[\w-]+)\s*\)/g)].map(match => `${file}: ${match[1]}`))
       .filter(entry => !defined.has(entry.split(': ')[1]));
     expect(used).toEqual([]);
   });
