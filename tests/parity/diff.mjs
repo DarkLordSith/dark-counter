@@ -11,6 +11,11 @@ const [, , URL_A, URL_B, RUNS = '12', STEPS = '250'] = process.argv;
 // The version label ("v0.7 · <commit>") differs between any two builds by
 // design, so it is always ignored; PARITY_IGNORE adds more selectors.
 const IGNORE = ['.version', process.env.PARITY_IGNORE].filter(Boolean).join(', ');
+// PARITY_LOGIC_ONLY=1: for PRs that change the look on purpose (e.g. new UI colors).
+// Compares only the game logic: save, input values and canvas pixels (scene, icons);
+// skips markup, computed styles, screenshots and floating-number colors.
+const LOGIC_ONLY = process.env.PARITY_LOGIC_ONLY === '1';
+const LOGIC_KEYS = new Set(['save', 'values', 'canv']);
 const OUT = new URL('./out/shots/', import.meta.url);
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -120,7 +125,7 @@ async function runOne(browser, label, url, seed, steps, shots, viewport) {
     for (const c of cs) { x -= WEIGHTS[c.a] ?? 1; if (x <= 0) { pick = c; break; } }
     await act(page, pick, r);
     await page.evaluate(() => __step(90));
-    const s = await snapshot(page, i % 25 === 0);
+    const s = await snapshot(page, i % 25 === 0 && !LOGIC_ONLY);
     s.action = JSON.stringify(pick) + ' of ' + h(JSON.stringify(cs));
     if (shots) {
       const buf = Buffer.from(await page.screenshot());
@@ -139,12 +144,12 @@ let fail = 0;
 const actionsSeen = {};
 for (let run = 0; run < +RUNS; run++) {
   const seed = 1234 + run * 101;
-  const shots = run < 3;
+  const shots = run < 3 && !LOGIC_ONLY;
   const viewport = run % 2 ? { width: 390, height: 844, deviceScaleFactor: 1 } : { width: 1024, height: 768, deviceScaleFactor: 1 };
   const [A, B] = await Promise.all([runOne(browser, 'A', URL_A, seed, +STEPS, shots, viewport), runOne(browser, 'B', URL_B, seed, +STEPS, shots, viewport)]);
   let diverged = null;
   for (let i = 0; i < A.snaps.length && !diverged; i++) {
-    for (const k of Object.keys(A.snaps[i])) { if (k === 'shotPath') continue;
+    for (const k of Object.keys(A.snaps[i])) { if (k === 'shotPath' || (LOGIC_ONLY && !LOGIC_KEYS.has(k))) continue;
       if (A.snaps[i][k] !== B.snaps[i][k]) { const la = String(A.snaps[i][k]).split(/(?<=[;>}])/), lb = String(B.snaps[i][k]).split(/(?<=[;>}])/);
         let j = 0; while (j < la.length && la[j] === lb[j]) j++;
         diverged = { step: i, key: k, at: j, a: la.slice(Math.max(0, j - 2), j + 3).join(''), b: lb.slice(Math.max(0, j - 2), j + 3).join(''), action: A.snaps[i].action }; break; }
