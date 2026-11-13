@@ -4,8 +4,8 @@
 //  Used by the canvas (scene, appearance), by the rules (floating
 //  numbers) and by CSS: vite.config.ts injects CSS_TOKENS into
 //  index.html as `:root { --bg: …; }`.
-//  Names describe where a color is used, not what it means: meanings
-//  (risk, action, unknown…) are a separate layer (V1.2).
+//  Base names describe where a color is used. What a color MEANS in the
+//  interface (action, risk, wear…) is the MEANING layer on top (V1.2).
 //  Equal or near-equal values in different roles are kept apart on
 //  purpose: merging them changes the look and is decided in V1.7.
 //  Pure data: no DOM, safe to import from Vitest and vite.config.ts.
@@ -42,8 +42,33 @@ export const COLOR = {
   /** Near-black: screens, chest panels, sign box. */
   ink: '#0a0c18',
   gold: '#f0c040',
+  /** Light violet in the hue of the planet in the shop window (263°); 5.8:1 on --panel. */
+  violet: '#a885e0',
   black: '#000',
   white: '#ffffff',
+};
+
+/* =====================================================================
+   Meaning: one color = one meaning in the interface (V1.2)
+   ===================================================================== */
+
+/**
+ * What a color says to the player. UI code picks a meaning, never a base
+ * color: `--m-risk` / `MEANING.risk`, not `--red`.
+ */
+export const MEANING = {
+  /** Action, benefit: primary buttons, "clean", "have it", income. */
+  action: COLOR.cyan,
+  /** Risk: stolen goods, AI virus, wanted level, eviction. */
+  risk: COLOR.red,
+  /** Time and wear: defect, low condition, patience, broken find. */
+  wear: COLOR.amber,
+  /** Not checked yet; always paired with a "?" mark, not color alone. */
+  unknown: COLOR.dim,
+  /** Not available / inactive: the unknown grey, faded. Never red. */
+  inactive: withAlpha(COLOR.dim, 0.4),
+  /** The gut feeling (Чуйка). */
+  hunch: COLOR.violet,
 };
 
 /* =====================================================================
@@ -160,13 +185,15 @@ export const CHARACTER = {
 /**
  * Seeded customer looks. The order of every list is part of the look:
  * a seed picks by index, so reordering changes existing customers.
+ * Colors shared with the rest of the game point at those tokens, so a new
+ * palette (V1.7) recolors customers too.
  */
 export const CUSTOMER_TONES = {
-  skins: ['#f1c7a3', '#d9a07a', '#a8714f', '#6e4a35', '#e3b48f'],
-  hairs: ['#2a2233', '#d94f8a', '#46d3c9', '#f0a33e', '#e8e8f0', '#5b3b2a', '#7a5cff'],
-  eyes: ['#46d3c9', '#ff6372', '#f0a33e', '#7fd98e', '#ffffff'],
-  metals: ['#8b92b5', '#a8925a', '#6f7a8c', '#b5beca', '#8a5f55'],
-  darkMetals: ['#5a6080', '#4a5266', '#6e5a3a'],
+  skins: ['#f1c7a3', CHARACTER.landlordSkin, '#a8714f', '#6e4a35', '#e3b48f'],
+  hairs: ['#2a2233', '#d94f8a', COLOR.cyan, COLOR.amber, CHARACTER.eyeWhite, '#5b3b2a', '#7a5cff'],
+  eyes: [COLOR.cyan, COLOR.red, COLOR.amber, COLOR.green, COLOR.white],
+  metals: [COLOR.dim, '#a8925a', '#6f7a8c', '#b5beca', JUNKYARD.rustLight],
+  darkMetals: [COLOR.steel, '#4a5266', '#6e5a3a'],
   jacket: (hue: number): string => `hsl(${hue} 30% 34%)`,
   jacketDark: (hue: number): string => `hsl(${hue} 30% 22%)`,
   shirt: (hue: number): string => `hsl(${(hue + 40) % 360} 15% 70%)`,
@@ -216,6 +243,12 @@ export const CSS_TOKENS: Readonly<Record<string, string>> = {
   '--shadow-soft': withAlpha(COLOR.black, 0.45),
   '--black': COLOR.black,
   '--neon-glow': withAlpha(COLOR.cyan, 0.45),
+  '--m-action': MEANING.action,
+  '--m-risk': MEANING.risk,
+  '--m-wear': MEANING.wear,
+  '--m-unknown': MEANING.unknown,
+  '--m-inactive': MEANING.inactive,
+  '--m-hunch': MEANING.hunch,
 };
 
 /** `:root { --bg: #0f1220; … }` for the <style> tag in index.html. */

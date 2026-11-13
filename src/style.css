@@ -145,7 +145,7 @@ input:focus-visible {
 }
 
 .heat i.on {
-  background: var(--red);
+  background: var(--m-risk);
 }
 
 .hb {
@@ -222,6 +222,7 @@ input:focus-visible {
   padding: 4px 6px;
 }
 
+/* Main call to action in the scene. */
 .call {
   position: absolute;
   left: 50%;
@@ -230,7 +231,7 @@ input:focus-visible {
   font-family: var(--display);
   font-size: 13px;
   line-height: 1;
-  background: var(--cyan);
+  background: var(--m-action);
   color: var(--on-accent);
   border: none;
   padding: 11px 14px;
@@ -376,7 +377,7 @@ input:focus-visible {
 }
 
 .pips i.on {
-  background: var(--amber);
+  background: var(--m-wear);
 }
 
 .card {
@@ -408,20 +409,32 @@ input:focus-visible {
   color: var(--dim);
 }
 
-.q {
-  color: var(--dim);
+/* ==================== Meaning (V1.2): one color = one meaning ====================
+   Colors that say something to the player come only from these classes / --m-* tokens
+   (MEANING in src/palette.ts). Base colors (--cyan, --red…) are for decoration. */
+
+.m-action {
+  color: var(--m-action);
 }
 
-.bad {
-  color: var(--red);
+.m-risk {
+  color: var(--m-risk);
 }
 
-.ok {
-  color: var(--green);
+.m-wear {
+  color: var(--m-wear);
 }
 
-.warn {
-  color: var(--amber);
+.m-unknown {
+  color: var(--m-unknown);
+}
+
+.m-inactive {
+  color: var(--m-inactive);
+}
+
+.m-hunch {
+  color: var(--m-hunch);
 }
 
 .tools {
@@ -442,7 +455,7 @@ input:focus-visible {
 }
 
 .btn:hover:not(:disabled) {
-  border-color: var(--cyan);
+  border-color: var(--m-action);
 }
 
 .btn:disabled {
@@ -451,15 +464,24 @@ input:focus-visible {
 }
 
 .btn.pri {
-  background: var(--cyan);
-  border-color: var(--cyan);
+  background: var(--m-action);
+  border-color: var(--m-action);
   color: var(--on-accent);
   font-weight: 600;
 }
 
-.btn.amb {
-  border-color: var(--amber);
-  color: var(--amber);
+/* Secondary action: accept the customer's price, load a save. */
+.btn.alt {
+  border-color: var(--m-action);
+  color: var(--m-action);
+}
+
+.btn.m-risk {
+  border-color: var(--m-risk);
+}
+
+.hb.m-action {
+  border-color: var(--m-action);
 }
 
 /* ==================== Deal: price input, chance meter, actions ==================== */
@@ -507,6 +529,11 @@ input:focus-visible {
   color: var(--dim);
 }
 
+/* "Чуйка" label: the gut feeling has its own color. */
+.chance span {
+  color: var(--m-hunch);
+}
+
 .cbar {
   flex: 1;
   height: 6px;
@@ -517,7 +544,7 @@ input:focus-visible {
 .cbar i {
   position: absolute;
   inset: 0 auto 0 0;
-  background: var(--amber);
+  background: var(--m-hunch);
 }
 
 .acts {
@@ -560,7 +587,7 @@ input:focus-visible {
 }
 
 .tile.on {
-  border-color: var(--cyan);
+  border-color: var(--m-action);
 }
 
 .tile canvas {
@@ -587,20 +614,24 @@ input:focus-visible {
   height: 6px;
 }
 
-.d-red {
-  background: var(--red);
+.d-risk {
+  background: var(--m-risk);
 }
 
-.d-amb {
-  background: var(--amber);
+.d-wear {
+  background: var(--m-wear);
 }
 
-.d-q {
-  background: var(--line);
-}
-
-.d-ok {
-  background: var(--green);
+/* Unknown is a "?" mark, not just a grey square: it must not rely on color alone. */
+.dots i.d-unknown,
+.legend i.d-unknown {
+  width: auto;
+  color: var(--m-unknown);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 6px;
 }
 
 .legend {
@@ -655,19 +686,23 @@ input:focus-visible {
   color: var(--dim);
 }
 
-.tag.bad {
-  border-color: var(--red);
-  color: var(--red);
+.tag.m-risk {
+  border-color: var(--m-risk);
+  color: var(--m-risk);
 }
 
-.tag.ok {
-  border-color: var(--green);
-  color: var(--green);
+.tag.m-action {
+  border-color: var(--m-action);
+  color: var(--m-action);
 }
 
-.tag.warn {
-  border-color: var(--amber);
-  color: var(--amber);
+.tag.m-wear {
+  border-color: var(--m-wear);
+  color: var(--m-wear);
+}
+
+.tag.m-unknown {
+  color: var(--m-unknown);
 }
 
 /* ==================== Crafting recipes ==================== */
@@ -709,12 +744,13 @@ input:focus-visible {
   color: var(--dim);
 }
 
-.need .have {
-  color: var(--green);
+/* Recipe parts: have them → action, not in stock → inactive (never red). */
+.need .m-action {
+  color: var(--m-action);
 }
 
-.need .miss {
-  color: var(--red);
+.need .m-inactive {
+  color: var(--m-inactive);
 }
 
 /* ==================== Option lists (evening, rent) ==================== */
@@ -737,7 +773,7 @@ input:focus-visible {
 }
 
 .opt:hover:not(:disabled) {
-  border-color: var(--cyan);
+  border-color: var(--m-action);
 }
 
 .opt:disabled {

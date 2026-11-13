@@ -11,7 +11,7 @@ import {
   RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SELLER_COUNTER_LINES, SELLER_INSULTED_LINES, SELLER_LINES,
   SELLER_STOLEN_LINE, SUPPLIER, VALUE,
 } from './data';
-import { COLOR } from './palette';
+import { COLOR, MEANING } from './palette';
 import { appearanceFor } from './appearance';
 import {
   actor, actorEnter, addLog, createItem, findItem, fullKnowledge, randomLandlordSlot, state, ui,
@@ -278,7 +278,7 @@ export function payRent(): void {
   }
   const amount = state.owed;
   state.credits -= amount;
-  floatText(`−${amount}`, COLOR.red);
+  floatText(`−${amount}`, MEANING.risk); // rent to the landlord
   addLog(`Аренда оплачена: ${amount} кр. Следующая: ${nextRent()} кр. на день ${state.day + RENT.periodDays}.`);
   state.cust.msg = 'Приятно иметь дело.';
   settleRent();
@@ -308,7 +308,7 @@ export function payWithCollateral(): void {
     ui.sel = null;
   }
   if (plan.cash) {
-    floatText(`−${plan.cash}`, COLOR.red);
+    floatText(`−${plan.cash}`, MEANING.risk);
   }
   const relief = collateralHeatRelief(plan);
   state.heat -= relief;
@@ -478,7 +478,7 @@ export function buyFromSeller(price?: number): void {
     raiseHeat(1);
   }
   addLog(`Куплено: ${itemName(item.t)} за ${paid} кр. у ${customer.name}.`);
-  floatText(`−${paid}`, COLOR.amber);
+  floatText(`−${paid}`, COLOR.fg); // a purchase: plain spending, no meaning color
   ui.sel = item.uid;
   finishCustomer();
 }
@@ -545,7 +545,7 @@ export function sellToBuyer(price?: number): void {
     note += ' Вещь была заражена ИИ, служба безопасности насторожилась.';
   }
   addLog(`Продано: ${itemName(item.t)} за ${paid} кр. (${customer.name}).${note}`);
-  floatText(`+${paid}`, COLOR.green);
+  floatText(`+${paid}`, MEANING.action);
   finishCustomer();
 }
 
@@ -578,7 +578,7 @@ function rollDigOutcome(): string {
   if (roll < DIG_ODDS.parts) {
     const found = randomInt(DIG_LOOT.partsMin, DIG_LOOT.partsMax);
     state.parts += found;
-    floatText(`+${found} ⚙`, COLOR.cyan);
+    floatText(`+${found} ⚙`, MEANING.action);
     return `Нашлись запчасти: +${found}.`;
   }
   if (roll < DIG_ODDS.broken) {
@@ -589,14 +589,14 @@ function rollDigOutcome(): string {
       stolen: Math.random() < DIG_LOOT.brokenStolen,
     });
     state.inv.push(item);
-    floatText('+1', COLOR.amber);
+    floatText('+1', MEANING.wear); // a broken find
     return `Откопал: ${itemName(type)}, сломанный. Отнесу на верстак.`;
   }
   if (roll < DIG_ODDS.rare) {
     const type = pickRandom(RARE_FINDS);
     const item = createItem(type, { cond: randomInt(DIG_LOOT.rareCondMin, DIG_LOOT.rareCondMax), stolen: false });
     state.inv.push(item);
-    floatText('★', COLOR.amber);
+    floatText('★', MEANING.action); // a rare find
     return `Редкая находка: ${itemName(type)}!`;
   }
   return 'Пусто. Только ржавые болты.';
@@ -791,6 +791,6 @@ export function craft(index: number): void {
   state.inv.push(item);
   ui.sel = item.uid;
   ui.tab = 'inv';
-  floatText('СОБРАНО', COLOR.cyan);
+  floatText('СОБРАНО', MEANING.action);
   addLog(`Собрано: ${itemName(recipe.out)} (${cond}%).${item.infected ? ' Похоже, ИИ перебрался в новую сборку.' : ''}`);
 }

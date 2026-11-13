@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vitest/config';
 import type { Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
-import { cssRootRule, THEME_COLOR } from './src/palette';
+import { cssRootRule, THEME_COLOR } from './src/palette.ts';
 
 // GitHub Pages serves the game from https://<user>.github.io/dark-counter/
 const BASE = '/dark-counter/';
@@ -29,6 +29,7 @@ function commitHash(): string {
  * (dev server and build alike) as an inline `<style>:root{--bg:…}</style>` in
  * <head>: it is there before anything renders (no flash of default colors)
  * and the precached index.html carries it offline. Also <meta name="theme-color">.
+ * In dev an edit of palette.ts reloads the page.
  */
 function paletteCss(): Plugin {
   return {
@@ -38,6 +39,14 @@ function paletteCss(): Plugin {
         { tag: 'style', attrs: { id: 'palette' }, children: cssRootRule(), injectTo: 'head' },
         { tag: 'meta', attrs: { name: 'theme-color', content: THEME_COLOR }, injectTo: 'head' },
       ];
+    },
+    // The <style> is baked into the HTML, so HMR cannot swap it: after an edit
+    // of palette.ts reload the whole page (dev only).
+    hotUpdate({ file }) {
+      if (this.environment.name === 'client' && file.endsWith('/src/palette.ts')) {
+        this.environment.hot.send({ type: 'full-reload' });
+        return [];
+      }
     },
   };
 }
@@ -96,5 +105,8 @@ export default defineConfig({
   test: {
     include: ['tests/unit/**/*.test.ts'],
     environment: 'node',
+    // Vitest stubs CSS imports by default, so `style.css?raw` came back empty.
+    // Process style.css so the palette / meaning tests read the real file.
+    css: { include: [/style\.css/] },
   },
 });
