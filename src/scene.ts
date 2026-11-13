@@ -5,7 +5,8 @@
 //  anchor point.
 // =====================================================================
 import { appearanceFor, seededRandom } from './appearance';
-import { COLOR, CUSTOMERS_PER_DAY, JUNK_PILES } from './data';
+import { CUSTOMERS_PER_DAY, JUNK_PILES } from './data';
+import { CHARACTER, COLOR, GLOW, ITEM_COLORS, JUNKYARD, SHADE, SHOP } from './palette';
 import { byId } from './dom';
 import { actor, COUNTER_X, DOOR_X, state } from './state';
 import type { Appearance, CustomerLook, ItemType, LandlordLook } from './types';
@@ -27,23 +28,6 @@ const EXIT_MARGIN = 4;
 const SCAN_DURATION_MS = 700;
 const SIGN_FLICKER_CHANCE = 0.015;
 const LAMP_FLICKER_CHANCE = 0.04;
-
-const SHADE = {
-  shadow13: 'rgba(0,0,0,.13)',
-  shadow15: 'rgba(0,0,0,.15)',
-  shadow18: 'rgba(0,0,0,.18)',
-  shadow20: 'rgba(0,0,0,.2)',
-  shadow25: 'rgba(0,0,0,.25)',
-  closedEye: 'rgba(0,0,0,.35)',
-  shine20: 'rgba(255,255,255,.2)',
-};
-const LANDLORD_RED = '#8a1f2e';
-const HUMAN_EYE_WHITE = '#e8e8f0';
-const PUPIL = '#14121c';
-const SCREEN_DARK = '#06201f';
-const WALL = '#232a45';
-const PANEL_DOOR = '#2a3152';
-const PANEL_EDGE = '#3a4370';
 
 /* ---------- drawing primitives ---------- */
 const sceneCanvas = byId<HTMLCanvasElement>('scn');
@@ -103,13 +87,13 @@ function landlordSprite(look: LandlordLook, now: number, blink: boolean): Rect[]
     // coat
     [-13, 40, 26, 31, look.jacket],
     [-15, 43, 30, 28, look.jacket],
-    [5, 40, 10, 31, 'rgba(0,0,0,.22)'],
+    [5, 40, 10, 31, SHADE.shadow22],
     // shirt and tie
-    [-3, 39, 6, 9, '#c9ccd8'],
-    [-1, 40, 2, 10, LANDLORD_RED],
+    [-3, 39, 6, 9, CHARACTER.landlordShirt],
+    [-1, 40, 2, 10, CHARACTER.landlordRed],
     // lapels
-    [-7, 40, 4, 12, '#2a2636'],
-    [3, 40, 4, 12, '#2a2636'],
+    [-7, 40, 4, 12, CHARACTER.landlordLapel],
+    [3, 40, 4, 12, CHARACTER.landlordLapel],
     // gold chain
     [-9, 53, 18, 1, COLOR.gold],
     [-7, 54, 14, 1, COLOR.gold],
@@ -123,17 +107,17 @@ function landlordSprite(look: LandlordLook, now: number, blink: boolean): Rect[]
     [6, 31, 1, 3, look.skin],
     [3, 22, 3, 13, SHADE.shadow13],
     // eye and cyber monocle
-    [-4, 28, 2, 1, blink ? SHADE.closedEye : PUPIL],
+    [-4, 28, 2, 1, blink ? SHADE.closedEye : CHARACTER.pupil],
     [1, 27, 4, 3, COLOR.steel],
-    [2, 28, 2, 1, flicker(now, 600) ? look.eye : LANDLORD_RED],
+    [2, 28, 2, 1, flicker(now, 600) ? look.eye : CHARACTER.landlordRed],
     // moustache
-    [-4, 31, 8, 2, '#3a2a2a'],
-    [-5, 32, 2, 1, '#3a2a2a'],
-    [3, 32, 2, 1, '#3a2a2a'],
+    [-4, 31, 8, 2, CHARACTER.landlordMoustache],
+    [-5, 32, 2, 1, CHARACTER.landlordMoustache],
+    [3, 32, 2, 1, CHARACTER.landlordMoustache],
     // hat
-    [-10, 20, 20, 2, '#0e0c14'],
-    [-6, 12, 12, 8, '#0e0c14'],
-    [-6, 18, 12, 1, LANDLORD_RED],
+    [-10, 20, 20, 2, CHARACTER.landlordHat],
+    [-6, 12, 12, 8, CHARACTER.landlordHat],
+    [-6, 18, 12, 1, CHARACTER.landlordRed],
   ];
 }
 
@@ -148,7 +132,7 @@ const HAIR_STYLES: ((look: CustomerLook) => Rect[])[] = [
 
 const ACCESSORIES: ((look: CustomerLook) => Rect[])[] = [
   () => [],
-  look => [[-5, 27, 10, 2, look.eye], [-5, 27, 10, 1, 'rgba(255,255,255,.35)']], // visor
+  look => [[-5, 27, 10, 2, look.eye], [-5, 27, 10, 1, SHADE.shine35]], // visor
   () => [[-5, 30, 10, 5, COLOR.line], [-4, 32, 8, 1, COLOR.sceneBg]], // mask
   look => [[0, 26, 4, 4, COLOR.line], [1, 28, 2, 1, look.eye]], // eyepiece
   () => [],
@@ -172,7 +156,7 @@ function humanoidSprite(look: CustomerLook, blink: boolean): Rect[] {
     [-9, 39, 18, 1, look.jacket],
     [-11, 40, 22, 1, look.jacket],
     [-12, 41, 24, 30, look.jacket],
-    [4, 41, 8, 30, 'rgba(0,0,0,.16)'],
+    [4, 41, 8, 30, SHADE.shadow16],
     [-8, 45, 1, 24, look.jdark],
     [7, 45, 1, 24, look.jdark],
     [-3, 39, 6, 4, collar],
@@ -194,9 +178,9 @@ function humanoidSprite(look: CustomerLook, blink: boolean): Rect[] {
     [3, 23, 2, 11, SHADE.shadow13],
   );
   if (android) {
-    const eye = blink ? 'rgba(0,0,0,.4)' : look.eye;
+    const eye = blink ? SHADE.closedEyeAndroid : look.eye;
     rects.push(
-      [-5, 30, 10, 1, 'rgba(0,0,0,.3)'],
+      [-5, 30, 10, 1, SHADE.shadow30],
       [0, 23, 1, 4, SHADE.shadow25],
       [-7, 26, 2, 5, look.metal2],
       [5, 26, 2, 5, look.metal2],
@@ -210,13 +194,13 @@ function humanoidSprite(look: CustomerLook, blink: boolean): Rect[] {
   if (blink) {
     rects.push([-3, 28, 2, 1, SHADE.closedEye], [1, 28, 2, 1, SHADE.closedEye]);
   } else {
-    rects.push([-3, 28, 2, 1, HUMAN_EYE_WHITE], [-2, 28, 1, 1, PUPIL], [1, 28, 2, 1, HUMAN_EYE_WHITE], [1, 28, 1, 1, PUPIL]);
+    rects.push([-3, 28, 2, 1, CHARACTER.eyeWhite], [-2, 28, 1, 1, CHARACTER.pupil], [1, 28, 2, 1, CHARACTER.eyeWhite], [1, 28, 1, 1, CHARACTER.pupil]);
   }
   rects.push(
     [-3, 26, 2, 1, look.hair], // brows
     [1, 26, 2, 1, look.hair],
-    [0, 29, 1, 2, 'rgba(0,0,0,.18)'], // nose
-    [-1, 32, 3, 1, 'rgba(110,40,50,.7)'], // mouth
+    [0, 29, 1, 2, SHADE.shadow18], // nose
+    [-1, 32, 3, 1, CHARACTER.mouth], // mouth
   );
   rects.push(...HAIR_STYLES[look.style](look));
   rects.push(...ACCESSORIES[look.acc](look));
@@ -234,7 +218,7 @@ function boxBotSprite(look: CustomerLook, now: number, blink: boolean): Rect[] {
     [11, 41, 1, 1, COLOR.ink],
     // chest panel
     [-6, 44, 12, 9, COLOR.ink],
-    [-4, 46, 2, 2, flicker(now, 500) ? COLOR.cyan : '#1d4a47'],
+    [-4, 46, 2, 2, flicker(now, 500) ? COLOR.cyan : CHARACTER.botLedOff],
     [0, 46, 2, 2, COLOR.amber],
     [-4, 50, 8, 1, COLOR.green],
     [-9, 56, 1, 1, look.metal2],
@@ -244,9 +228,9 @@ function boxBotSprite(look: CustomerLook, now: number, blink: boolean): Rect[] {
     [1, 34, 2, 5, look.metal2],
     // head and screen face
     [-7, 21, 14, 13, look.metal],
-    [-7, 21, 14, 1, 'rgba(255,255,255,.25)'],
+    [-7, 21, 14, 1, SHADE.shine25],
     [3, 22, 4, 12, SHADE.shadow15],
-    [-5, 24, 10, 6, SCREEN_DARK],
+    [-5, 24, 10, 6, SHOP.screenDark],
     blink ? [-4, 27, 3, 1, look.eye] : [-4, 26, 3, 2, look.eye],
     blink ? [1, 27, 3, 1, look.eye] : [1, 26, 3, 2, look.eye],
     // grille mouth
@@ -283,7 +267,7 @@ function domeBotSprite(look: CustomerLook, now: number): Rect[] {
     [-5, 20, 10, 1, look.metal],
     [-6, 21, 12, 2, look.metal],
     [-7, 23, 14, 14, look.metal],
-    [-4, 21, 3, 1, 'rgba(255,255,255,.4)'],
+    [-4, 21, 3, 1, SHADE.shine40],
     [3, 23, 4, 14, SHADE.shadow15],
     // scanning eye
     [-6, 27, 12, 4, COLOR.ink],
@@ -365,72 +349,71 @@ function drawPixelText(text: string, x: number, y: number, color: string): void 
 }
 
 /* ---------- item sprites (anchor: horizontal center, bottom) ---------- */
-const ITEM_TONE = { mid: COLOR.steel, light: COLOR.dim, dark: COLOR.line };
 
 /** Item icons by type; a type without an entry is drawn without an icon. */
 const ITEM_SPRITES: Partial<Record<ItemType, (now: number) => Rect[]>> = {
   comm: () => [
-    [-3, -10, 6, 10, '#2a2f4a'],
+    [-3, -10, 6, 10, ITEM_COLORS.commBody],
     [-2, -9, 4, 6, COLOR.cyan],
-    [-2, -9, 4, 1, '#a5f0ea'],
-    [-1, -2, 2, 1, ITEM_TONE.light],
-    [2, -12, 1, 2, ITEM_TONE.light],
+    [-2, -9, 4, 1, ITEM_COLORS.glassShine],
+    [-1, -2, 2, 1, ITEM_COLORS.light],
+    [2, -12, 1, 2, ITEM_COLORS.light],
   ],
   battery: now => [
-    [-6, -6, 12, 6, '#2f6a42'],
-    [6, -4, 1, 2, '#c9ccd8'],
+    [-6, -6, 12, 6, ITEM_COLORS.batteryBody],
+    [6, -4, 1, 2, ITEM_COLORS.batteryTerminal],
     [-5, -5, Math.max(1, Math.floor((now / 400) % 5) + 1) * 2, 4, COLOR.green], // charge level
     [-6, -6, 12, 1, SHADE.shine20],
   ],
   servo: () => [
-    [-5, -7, 10, 7, ITEM_TONE.mid],
-    [-2, -9, 4, 2, ITEM_TONE.light],
+    [-5, -7, 10, 7, ITEM_COLORS.mid],
+    [-2, -9, 4, 2, ITEM_COLORS.light],
     [-1, -5, 2, 2, COLOR.amber],
     [3, -7, 2, 7, SHADE.shadow20],
-    [-7, -3, 2, 2, ITEM_TONE.dark],
-    [5, -3, 2, 2, ITEM_TONE.dark],
+    [-7, -3, 2, 2, ITEM_COLORS.dark],
+    [5, -3, 2, 2, ITEM_COLORS.dark],
   ],
   cutter: now => [
-    [-9, -4, 13, 4, ITEM_TONE.mid],
-    [-8, -1, 3, 1, ITEM_TONE.dark],
-    [-7, 0, 2, 0, ITEM_TONE.dark],
-    [4, -3, 4, 2, ITEM_TONE.dark],
-    [8, -3, 1, 2, flicker(now, 200) ? COLOR.red : '#ff9aa3'],
+    [-9, -4, 13, 4, ITEM_COLORS.mid],
+    [-8, -1, 3, 1, ITEM_COLORS.dark],
+    [-7, 0, 2, 0, ITEM_COLORS.dark],
+    [4, -3, 4, 2, ITEM_COLORS.dark],
+    [8, -3, 1, 2, flicker(now, 200) ? COLOR.red : ITEM_COLORS.cutterLedOff],
     [-9, -4, 13, 1, SHADE.shine20],
   ],
   visor: () => [
-    [-8, -3, 1, 2, ITEM_TONE.dark],
-    [7, -3, 1, 2, ITEM_TONE.dark],
-    [-7, -4, 14, 3, ITEM_TONE.dark],
+    [-8, -3, 1, 2, ITEM_COLORS.dark],
+    [7, -3, 1, 2, ITEM_COLORS.dark],
+    [-7, -4, 14, 3, ITEM_COLORS.dark],
     [-6, -4, 12, 2, COLOR.cyan],
-    [-6, -4, 5, 1, '#a5f0ea'],
+    [-6, -4, 5, 1, ITEM_COLORS.glassShine],
   ],
   drone: () => [
-    [-3, -4, 6, 4, ITEM_TONE.mid],
-    [-9, -6, 6, 1, ITEM_TONE.light],
-    [3, -6, 6, 1, ITEM_TONE.light],
-    [-7, -5, 1, 3, ITEM_TONE.dark],
-    [6, -5, 1, 3, ITEM_TONE.dark],
+    [-3, -4, 6, 4, ITEM_COLORS.mid],
+    [-9, -6, 6, 1, ITEM_COLORS.light],
+    [3, -6, 6, 1, ITEM_COLORS.light],
+    [-7, -5, 1, 3, ITEM_COLORS.dark],
+    [6, -5, 1, 3, ITEM_COLORS.dark],
     [-1, -3, 2, 1, COLOR.red],
   ],
   chip: now => {
     const rects: Rect[] = [
-      [-4, -6, 8, 6, '#1f6b4f'],
-      [-2, -4, 4, 2, '#0d0f18'],
+      [-4, -6, 8, 6, ITEM_COLORS.chipBoard],
+      [-2, -4, 4, 2, ITEM_COLORS.chipDie],
     ];
     for (let pin = 0; pin < 4; pin++) {
       rects.push([-4 + pin * 2 + 1, -7, 1, 1, COLOR.gold], [-4 + pin * 2 + 1, 0, 1, 0, COLOR.gold]);
     }
-    rects.push([2, -2, 1, 1, flicker(now, 300) ? COLOR.green : '#1f6b4f']);
+    rects.push([2, -2, 1, 1, flicker(now, 300) ? COLOR.green : ITEM_COLORS.chipBoard]);
     return rects;
   },
   arm: () => [
-    [-11, -4, 8, 4, ITEM_TONE.light],
-    [-3, -4, 6, 3, ITEM_TONE.mid],
+    [-11, -4, 8, 4, ITEM_COLORS.light],
+    [-3, -4, 6, 3, ITEM_COLORS.mid],
     [-3, -3, 1, 1, COLOR.cyan],
-    [3, -5, 3, 5, ITEM_TONE.light],
-    [6, -5, 2, 1, ITEM_TONE.light],
-    [6, -2, 2, 1, ITEM_TONE.light],
+    [3, -5, 3, 5, ITEM_COLORS.light],
+    [6, -5, 2, 1, ITEM_COLORS.light],
+    [6, -2, 2, 1, ITEM_COLORS.light],
     [-11, -1, 8, 1, SHADE.shadow25],
   ],
 };
@@ -467,27 +450,27 @@ const STARS = Array.from({ length: 26 }, () => ({
 function drawBackWall(): void {
   fillRect(0, 0, SCENE_W, SCENE_H, COLOR.sceneBg);
   for (let x = 0; x < SCENE_W; x += 20) {
-    fillRect(x, 0, 1, 68, '#1b2034');
+    fillRect(x, 0, 1, 68, SHOP.wallSeam);
   }
-  fillRect(0, 46, SCENE_W, 1, '#1b2034');
+  fillRect(0, 46, SCENE_W, 1, SHOP.wallSeam);
   for (let x = 10; x < SCENE_W; x += 20) {
-    fillRect(x, 3, 1, 1, '#262c46');
-    fillRect(x, 43, 1, 1, '#262c46');
+    fillRect(x, 3, 1, 1, SHOP.wallRivet);
+    fillRect(x, 43, 1, 1, SHOP.wallRivet);
   }
 }
 
 /** Porthole with drifting stars, a planet and a passing ship. */
 function drawWindow(seconds: number): void {
-  fillRect(5, 7, 54, 34, WALL);
-  fillRect(7, 9, 50, 30, '#05070f');
+  fillRect(5, 7, 54, 34, SHOP.wall);
+  fillRect(7, 9, 50, 30, SHOP.space);
   withClip(7, 9, 50, 30, () => {
     STARS.forEach(star => {
       const x = ((star.x - seconds * star.speed) % 50 + 50) % 50;
-      fillRect(7 + x, 9 + star.y, 1, 1, star.bright ? COLOR.fg : '#5b6288');
+      fillRect(7 + x, 9 + star.y, 1, 1, star.bright ? COLOR.fg : SHOP.starDim);
     });
-    fillCircle('#3a2a52', 52, 44, 15);
-    fillCircle('#4e3a6e', 50, 46, 13);
-    fillRect(34, 34, 26, 1, 'rgba(240,163,62,.55)');
+    fillCircle(SHOP.planetShadow, 52, 44, 15);
+    fillCircle(SHOP.planet, 50, 46, 13);
+    fillRect(34, 34, 26, 1, GLOW.planetRing);
     const shipProgress = (seconds % 15) / 15;
     if (shipProgress < 0.6) {
       const x = shipProgress / 0.6 * 66 - 8;
@@ -496,35 +479,35 @@ function drawWindow(seconds: number): void {
       fillRect(7 + x - 1, 17, 1, 1, COLOR.amber);
     }
   });
-  fillRect(9, 11, 1, 7, 'rgba(255,255,255,.07)');
+  fillRect(9, 11, 1, 7, SHADE.shine07);
 }
 
 function drawShelves(seconds: number): void {
   fillRect(5, 50, 54, 2, COLOR.line);
-  ([[7, '#3c4466', 8, 6], [17, '#5a3f2e', 6, 8], [25, '#2f6a42', 10, 5], [38, '#4a2f55', 7, 7], [47, '#3c4466', 9, 4]] as const)
+  ([[7, SHOP.shelfBoxSlate, 8, 6], [17, SHOP.shelfBoxBrown, 6, 8], [25, SHOP.shelfBoxGreen, 10, 5], [38, SHOP.shelfBoxPurple, 7, 7], [47, SHOP.shelfBoxSlate, 9, 4]] as const)
     .forEach(([x, color, w, h]) => fillRect(x, 50 - h, w, h, color));
-  fillRect(27, 46, 2, 1, (seconds * 2 | 0) % 3 ? COLOR.green : '#244a2f');
-  fillRect(49, 47, 1, 1, (seconds * 1.3 | 0) % 2 ? COLOR.red : '#4a1f26');
+  fillRect(27, 46, 2, 1, (seconds * 2 | 0) % 3 ? COLOR.green : SHOP.shelfLedGreenOff);
+  fillRect(49, 47, 1, 1, (seconds * 1.3 | 0) % 2 ? COLOR.red : SHOP.shelfLedRedOff);
   fillRect(5, 60, 54, 2, COLOR.line);
-  ([[9, COLOR.line, 12, 5], [24, '#3c4466', 6, 7], [34, COLOR.steel, 14, 4], [50, '#4a2f55', 6, 6]] as const)
+  ([[9, COLOR.line, 12, 5], [24, SHOP.shelfBoxSlate, 6, 7], [34, COLOR.steel, 14, 4], [50, SHOP.shelfBoxPurple, 6, 6]] as const)
     .forEach(([x, color, w, h]) => fillRect(x, 60 - h, w, h, color));
 }
 
 function drawDoorway(): void {
-  fillRect(118, 8, 40, 60, WALL);
-  fillRect(122, 12, 32, 56, '#090b16');
-  fillRect(122, 12, 32, 2, 'rgba(70,211,201,.25)');
+  fillRect(118, 8, 40, 60, SHOP.wall);
+  fillRect(122, 12, 32, 56, SHOP.doorway);
+  fillRect(122, 12, 32, 2, GLOW.doorway);
 }
 
 /** Neon "ЛАВКА 7Б" sign and the ceiling lamp. Off at night, flickers by day. */
 function drawSignAndLamp(night: boolean): void {
   const brightness = night ? 0 : (Math.random() < SIGN_FLICKER_CHANCE ? 0.3 : 1);
   fillRect(59, 3, 42, 11, COLOR.ink);
-  fillRect(60, 4, 40, 9, 'rgba(70,211,201,' + (0.10 * brightness) + ')');
-  drawPixelText('ЛАВКА 7Б', 65, 6, night ? '#1f3b3c' : brightness < 1 ? '#2a7f79' : COLOR.cyan);
+  fillRect(60, 4, 40, 9, GLOW.sign(brightness));
+  drawPixelText('ЛАВКА 7Б', 65, 6, night ? SHOP.signOff : brightness < 1 ? SHOP.signDim : COLOR.cyan);
   fillRect(77, 0, 6, 2, COLOR.line);
   if (!night) {
-    fillPolygon('rgba(240,163,62,.06)', [[78, 2], [82, 2], [112, 68], [48, 68]]);
+    fillPolygon(GLOW.shopLamp, [[78, 2], [82, 2], [112, 68], [48, 68]]);
   }
 }
 
@@ -550,28 +533,28 @@ function doorLightColor(): string {
 
 function drawSlidingDoor(): void {
   const panelWidth = 16 * (1 - actor.doorOpen);
-  fillRect(122, 12, panelWidth, 56, PANEL_DOOR);
-  fillRect(154 - panelWidth, 12, panelWidth, 56, PANEL_DOOR);
+  fillRect(122, 12, panelWidth, 56, SHOP.doorPanel);
+  fillRect(154 - panelWidth, 12, panelWidth, 56, SHOP.doorPanel);
   if (panelWidth > 1) {
-    fillRect(122 + panelWidth - 1, 12, 1, 56, PANEL_EDGE);
-    fillRect(154 - panelWidth, 12, 1, 56, PANEL_EDGE);
+    fillRect(122 + panelWidth - 1, 12, 1, 56, SHOP.panelEdge);
+    fillRect(154 - panelWidth, 12, 1, 56, SHOP.panelEdge);
   }
-  fillRect(118, 8, 4, 60, WALL);
-  fillRect(154, 8, 4, 60, WALL);
+  fillRect(118, 8, 4, 60, SHOP.wall);
+  fillRect(154, 8, 4, 60, SHOP.wall);
   fillRect(132, 9, 12, 2, doorLightColor());
 }
 
 function drawCounter(seconds: number): void {
-  fillRect(0, 68, SCENE_W, 32, '#1f2440');
-  fillRect(0, 68, SCENE_W, 2, PANEL_EDGE);
-  fillRect(0, 68, SCENE_W, 1, '#4f5d94');
+  fillRect(0, 68, SCENE_W, 32, SHOP.counter);
+  fillRect(0, 68, SCENE_W, 2, SHOP.panelEdge);
+  fillRect(0, 68, SCENE_W, 1, SHOP.counterHighlight);
   for (let x = 4; x < SCENE_W; x += 26) {
-    fillRect(x, 75, 22, 20, '#1a1e36');
-    fillRect(x, 75, 22, 1, '#262c4a');
+    fillRect(x, 75, 22, 20, SHOP.counterPanel);
+    fillRect(x, 75, 22, 1, SHOP.counterPanelEdge);
   }
-  fillRect(0, 97, SCENE_W, 3, '#171b2d');
+  fillRect(0, 97, SCENE_W, 3, SHOP.counterBase);
   for (let x = 0; x < SCENE_W; x += 8) {
-    fillRect(x, 97, 4, 1, 'rgba(240,163,62,.35)');
+    fillRect(x, 97, 4, 1, GLOW.counterHazard);
   }
   // card reader
   fillRect(18, 64, 12, 4, COLOR.line);
@@ -579,7 +562,7 @@ function drawCounter(seconds: number): void {
   fillRect(26, 63, 2, 1, COLOR.steel);
   // terminal with scrolling lines
   fillRect(112, 52, 24, 15, COLOR.line);
-  fillRect(114, 54, 20, 11, SCREEN_DARK);
+  fillRect(114, 54, 20, 11, SHOP.screenDark);
   for (let line = 0; line < 3; line++) {
     fillRect(116, 56 + line * 3, 6 + ((seconds * 3 + line * 5) | 0) % 10, 1, COLOR.cyan);
   }
@@ -591,8 +574,8 @@ function drawScanLine(now: number): void {
   if (progress >= 0 && progress < 1) {
     const y = 56 + progress * 12;
     fillRect(66, y, 28, 1, COLOR.cyan);
-    fillRect(66, y - 1, 28, 1, 'rgba(70,211,201,.35)');
-    fillRect(66, y + 1, 28, 1, 'rgba(70,211,201,.35)');
+    fillRect(66, y - 1, 28, 1, GLOW.scanLine);
+    fillRect(66, y + 1, 28, 1, GLOW.scanLine);
   }
 }
 
@@ -619,7 +602,7 @@ function drawShop(now: number): void {
     }
   }
   if (night) {
-    fillRect(0, 0, SCENE_W, SCENE_H, 'rgba(4,5,16,.5)');
+    fillRect(0, 0, SCENE_W, SCENE_H, SHOP.night);
   }
 }
 
@@ -635,12 +618,12 @@ function drawPile(index: number, now: number): void {
   for (let dx = -half; dx < half; dx += 2) {
     const k = dx / half;
     const columnHeight = Math.max(1, Math.round(height * (1 - k * k) + random() * 3));
-    const color = pileState.dug ? '#1c2035' : ((dx / 2) % 2 ? '#2a2f4a' : '#252a42');
+    const color = pileState.dug ? JUNKYARD.pileDug : ((dx / 2) % 2 ? JUNKYARD.pileLight : JUNKYARD.pileDark);
     fillRect(pile.x + dx, pile.y - columnHeight, 2, columnHeight, color);
   }
   if (pileState.dug) {
-    fillRect(pile.x - 3, pile.y - 6, 1, 1, '#5b6288');
-    fillRect(pile.x + 2, pile.y - 5, 1, 1, '#5b6288');
+    fillRect(pile.x - 3, pile.y - 6, 1, 1, JUNKYARD.pileSpeck);
+    fillRect(pile.x + 2, pile.y - 5, 1, 1, JUNKYARD.pileSpeck);
     return;
   }
   // scattered junk
@@ -649,8 +632,8 @@ function drawPile(index: number, now: number): void {
     const py = pile.y - height * 0.7 + random() * height * 0.5;
     const kind = Math.floor(random() * 4);
     if (kind === 0) {
-      fillRect(px, py, 4, 3, PANEL_EDGE);
-      fillRect(px + 1, py + 1, 2, 1, 'rgba(70,211,201,.5)');
+      fillRect(px, py, 4, 3, SHOP.panelEdge);
+      fillRect(px + 1, py + 1, 2, 1, GLOW.scrapScreen);
     }
     if (kind === 1) {
       fillRect(px, py, 7, 1, COLOR.steel);
@@ -660,21 +643,21 @@ function drawPile(index: number, now: number): void {
       fillRect(px + 1, py + 1, 1, 1, COLOR.steel);
     }
     if (kind === 3) {
-      fillRect(px, py, 2, 4, '#4a2f2a');
-      fillRect(px, py, 2, 1, '#8a5f55');
+      fillRect(px, py, 2, 4, JUNKYARD.rust);
+      fillRect(px, py, 2, 1, JUNKYARD.rustLight);
     }
   }
   // occasional glint
   if (((now / 1000 + index * 0.7) % 3.2) < 0.15) {
-    fillRect(pile.x - 4 + (pileState.seed % 9), pile.y - height + 2, 1, 1, '#ffffff');
+    fillRect(pile.x - 4 + (pileState.seed % 9), pile.y - height + 2, 1, 1, JUNKYARD.glint);
   }
 }
 
 function drawJunkyard(now: number): void {
   const seconds = now / 1000;
-  fillRect(0, 0, SCENE_W, SCENE_H, '#0a0c17');
+  fillRect(0, 0, SCENE_W, SCENE_H, JUNKYARD.sky);
   for (let i = 0; i < 20; i++) {
-    fillRect((i * 37) % SCENE_W, (i * 13) % 30, 1, 1, i % 3 ? '#3a3f62' : COLOR.dim);
+    fillRect((i * 37) % SCENE_W, (i * 13) % 30, 1, 1, i % 3 ? JUNKYARD.starDim : COLOR.dim);
   }
   // ceiling girders
   fillRect(0, 0, SCENE_W, 6, COLOR.sceneBg);
@@ -685,20 +668,20 @@ function drawJunkyard(now: number): void {
   // distant junk hills
   for (let x = 0; x < SCENE_W; x += 4) {
     const h = 10 + Math.round(Math.sin(x * 0.13) * 6 + Math.sin(x * 0.37) * 4);
-    fillRect(x, 52 - h, 4, h + 12, '#121527');
+    fillRect(x, 52 - h, 4, h + 12, JUNKYARD.hills);
   }
   // street lamp
   const brightness = Math.random() < LAMP_FLICKER_CHANCE ? 0.3 : 1;
   fillRect(12, 20, 2, 44, COLOR.line);
   fillRect(10, 19, 8, 2, COLOR.line);
-  fillRect(15, 21, 2, 1, brightness < 1 ? '#7a5320' : COLOR.amber);
-  fillPolygon(`rgba(240,163,62,${0.07 * brightness})`, [[14, 22], [18, 22], [50, 70], [0, 70]]);
+  fillRect(15, 21, 2, 1, brightness < 1 ? JUNKYARD.lampDim : COLOR.amber);
+  fillPolygon(GLOW.junkLamp(brightness), [[14, 22], [18, 22], [50, 70], [0, 70]]);
   // ground and guard post
-  fillRect(0, 60, SCENE_W, 40, '#15182a');
-  fillRect(0, 60, SCENE_W, 1, '#1f2440');
-  fillRect(146, 40, 10, 20, '#1c2035');
+  fillRect(0, 60, SCENE_W, 40, JUNKYARD.ground);
+  fillRect(0, 60, SCENE_W, 1, JUNKYARD.groundEdge);
+  fillRect(146, 40, 10, 20, JUNKYARD.guardPost);
   fillRect(147, 42, 8, 3, COLOR.ink);
-  fillRect(148, 43, 2, 1, (seconds | 0) % 2 ? COLOR.red : '#4a1f26');
+  fillRect(148, 43, 2, 1, (seconds | 0) % 2 ? COLOR.red : JUNKYARD.guardLedOff);
   JUNK_PILES.forEach((_, index) => drawPile(index, now));
 }
 

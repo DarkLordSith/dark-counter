@@ -1,7 +1,9 @@
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vitest/config';
+import type { Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { cssRootRule, THEME_COLOR } from './src/palette';
 
 // GitHub Pages serves the game from https://<user>.github.io/dark-counter/
 const BASE = '/dark-counter/';
@@ -22,6 +24,24 @@ function commitHash(): string {
   }
 }
 
+/**
+ * Colors live only in src/palette.ts. This plugin puts them into index.html
+ * (dev server and build alike) as an inline `<style>:root{--bg:…}</style>` in
+ * <head>: it is there before anything renders (no flash of default colors)
+ * and the precached index.html carries it offline. Also <meta name="theme-color">.
+ */
+function paletteCss(): Plugin {
+  return {
+    name: 'dark-counter:palette-css',
+    transformIndexHtml() {
+      return [
+        { tag: 'style', attrs: { id: 'palette' }, children: cssRootRule(), injectTo: 'head' },
+        { tag: 'meta', attrs: { name: 'theme-color', content: THEME_COLOR }, injectTo: 'head' },
+      ];
+    },
+  };
+}
+
 export default defineConfig({
   base: BASE,
   // Compile-time constants: Vite replaces these names in the code with the
@@ -31,6 +51,7 @@ export default defineConfig({
     __COMMIT_HASH__: JSON.stringify(commitHash()),
   },
   plugins: [
+    paletteCss(),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
@@ -47,8 +68,8 @@ export default defineConfig({
         scope: './',
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#0f1220',
-        theme_color: '#0f1220',
+        background_color: THEME_COLOR,
+        theme_color: THEME_COLOR,
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },

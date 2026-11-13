@@ -22,27 +22,10 @@ img {
 /* ==================== Design tokens ==================== */
 
 :root {
+  /* Color tokens (--bg, --cyan, …) come from src/palette.ts: vite.config.ts
+     injects them into index.html as a <style> before this file. */
   color-scheme: dark;
-  --bg: #0f1220;
-  --panel: #171b2d;
-  --panel2: #1f2440;
-  --line: #2d3455;
-  --fg: #dde1f3;
-  --dim: #8b92b5;
-  --cyan: #46d3c9;
-  --amber: #f0a33e;
-  --red: #ff6372;
-  --green: #7fd98e;
-  --scene-bg: #141829;
-  --on-accent: #0b1620;
-  --tile-edge: #2a3152;
-  --chip-bg: rgba(10, 12, 24, .8);
-  --backdrop: rgba(5, 7, 14, .8);
-  --shadow: rgba(0, 0, 0, .5);
-  --shadow-soft: rgba(0, 0, 0, .45);
-  --black: #000;
   --ceiling-bg: var(--panel);
-  --neon-glow: rgba(70, 211, 201, .45);
   /* Height of the "station ceiling" strip in the iOS PWA; tune by diagnostics. */
   --pwa-ceiling: 56px;
   --display: 'Silkscreen', 'Courier New', monospace;

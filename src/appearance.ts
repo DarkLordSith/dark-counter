@@ -2,7 +2,8 @@
 //  appearance.ts — a customer's look from a seed. Pure: used both by the
 //  rules (human or robot name) and by the scene (drawing).
 // =====================================================================
-import { COLOR, LANDLORD_SEED } from './data';
+import { LANDLORD_SEED } from './data';
+import { CHARACTER, COLOR, CUSTOMER_TONES } from './palette';
 import type { Appearance, LandlordLook } from './types';
 
 /** Deterministic PRNG (Park–Miller) so a seed always gives the same result. */
@@ -20,9 +21,9 @@ function pickSeeded<T>(random: () => number, list: readonly T[]): T {
 
 const LANDLORD_LOOK: LandlordLook = {
   kind: 'landlord',
-  skin: '#d9a07a',
-  jacket: '#1d1a26',
-  jdark: '#0e0c14',
+  skin: CHARACTER.landlordSkin,
+  jacket: CHARACTER.landlordCoat,
+  jdark: CHARACTER.landlordCoatDark,
   metal: COLOR.dim,
   metal2: COLOR.steel,
   eye: COLOR.red,
@@ -38,17 +39,17 @@ export function appearanceFor(seed: number): Appearance {
   const hue = Math.floor(random() * 360);
   return {
     kind: kindRoll < 0.6 ? 'human' : kindRoll < 0.74 ? 'android' : kindRoll < 0.88 ? 'box' : 'dome',
-    skin: pickSeeded(random, ['#f1c7a3', '#d9a07a', '#a8714f', '#6e4a35', '#e3b48f']),
-    hair: pickSeeded(random, ['#2a2233', '#d94f8a', '#46d3c9', '#f0a33e', '#e8e8f0', '#5b3b2a', '#7a5cff']),
+    skin: pickSeeded(random, CUSTOMER_TONES.skins),
+    hair: pickSeeded(random, CUSTOMER_TONES.hairs),
     style: Math.floor(random() * 6),
-    jacket: `hsl(${hue} 30% 34%)`,
-    jdark: `hsl(${hue} 30% 22%)`,
-    shirt: `hsl(${(hue + 40) % 360} 15% 70%)`,
-    trim: `hsl(${(hue + 150) % 360} 65% 60%)`,
-    eye: pickSeeded(random, ['#46d3c9', '#ff6372', '#f0a33e', '#7fd98e', '#ffffff']),
+    jacket: CUSTOMER_TONES.jacket(hue),
+    jdark: CUSTOMER_TONES.jacketDark(hue),
+    shirt: CUSTOMER_TONES.shirt(hue),
+    trim: CUSTOMER_TONES.trim(hue),
+    eye: pickSeeded(random, CUSTOMER_TONES.eyes),
     acc: Math.floor(random() * 5),
     pads: random() < 0.45,
-    metal: pickSeeded(random, ['#8b92b5', '#a8925a', '#6f7a8c', '#b5beca', '#8a5f55']),
-    metal2: pickSeeded(random, ['#5a6080', '#4a5266', '#6e5a3a']),
+    metal: pickSeeded(random, CUSTOMER_TONES.metals),
+    metal2: pickSeeded(random, CUSTOMER_TONES.darkMetals),
   };
 }
