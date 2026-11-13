@@ -56,7 +56,8 @@ for (const file of fs.existsSync(fixturesDir) ? fs.readdirSync(fixturesDir).filt
     document.querySelector('[data-a="loadsave"]').click();
     return { modalOpen: !document.getElementById('modal').hidden, hud: document.getElementById('hud').innerText };
   }, code);
-  const ok = !result.modalOpen && result.hud.includes(`${day}·`);
+  // the day number and the phase word may be separate elements (V1.3): allow whitespace between them
+  const ok = !result.modalOpen && new RegExp(`(^|\\D)${day}\\s*·`).test(result.hud);
   fixturesOk &&= ok;
   console.log(`fixture ${file}: day ${day} → ${ok ? 'loaded' : 'FAILED'}`);
 }

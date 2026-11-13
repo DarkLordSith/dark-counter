@@ -32,6 +32,16 @@ startScene(() => {
   renderPane();
 });
 
+// Google Fonts serves IBM Plex Mono in unicode subsets, fetched only when a glyph is
+// first drawn. Ask for the Cyrillic of every weight in use (400 text, 500 speech
+// bubble, 600 names and main buttons) right away, so the Workbox "google-fonts"
+// cache has them all and offline text never drops to a fallback face.
+if ('fonts' in document) {
+  for (const weight of [400, 500, 600]) {
+    void document.fonts.load(`${weight} 14px "IBM Plex Mono"`, 'Ёё Жж Яя').catch(() => {});
+  }
+}
+
 // The hand-written service worker (before Vite) cached files as
 // "dark-counter-vN"; Workbox uses its own caches, so drop the old ones.
 if ('caches' in window) {

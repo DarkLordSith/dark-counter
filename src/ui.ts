@@ -3,12 +3,12 @@
 //  plus all click/keyboard handlers (buttons carry data-a="action").
 // =====================================================================
 import { audio, toggleMusic } from './audio';
-import { BENCH_COST, BUYOUT_GOAL, CUSTOMERS_PER_DAY, HAGGLE, ITEM_TYPES, MARKET, MAX_HEAT, RECIPES, RENT, SUPPLIER } from './data';
+import { BENCH_COST, BUYOUT_GOAL, CUSTOMERS_PER_DAY, HAGGLE, HUNCH_VERDICT_TEXT, ITEM_TYPES, MARKET, MAX_HEAT, RECIPES, RENT, SUPPLIER } from './data';
 import { byId, maybeById } from './dom';
 import {
   askBuyer, availableOfType, buyFromSeller, buyOutShop, callNextCustomer, canCraft, canVisitMarket, closeShop,
   collateralHeatRelief, craft, customerLeaves, deferredDebt, deferRent, digPile, estimatedValue, evict, feedback,
-  goHome, goToJunkyard, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer, itemName,
+  goHome, goToJunkyard, hunchVerdict, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer, itemName,
   nextRent, offerToSeller, orderParts, payRent, payWithCollateral, perceivedChance, planCollateral, presentItem,
   recipeNeeds, scrapValue, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
 } from './economy';
@@ -97,11 +97,15 @@ function meterCells(total: number, filled: number): string {
 
 const hudStat = (label: string, valueHtml: string): string => `<span class="st"><small>${label}</small>${valueHtml}</span>`;
 
+/** Number in the pixel font, the word after it (unit, phase) in small mono: "25 смена", "1350 /3д". */
+const hudValue = (number: string | number, word = '', cssClass = ''): string =>
+  `<b class="${cssClass}">${number}</b>${word ? `<i class="${cssClass}">${word}</i>` : ''}`;
+
 function rentStat(): string {
   const daysLeft = state.nextDue - state.day;
   const urgent = state.credits < state.owed && daysLeft <= 1 || state.deferred;
-  const value = state.won ? '—' : state.owed + '/' + (daysLeft <= 0 ? 'сег.' : daysLeft + 'д');
-  return hudStat(state.deferred ? 'долг' : 'аренда', `<b class="${urgent ? 'm-risk' : ''}">${value}</b>`);
+  const value = state.won ? hudValue('—') : hudValue(state.owed, '/' + (daysLeft <= 0 ? 'сег.' : daysLeft + 'д'), urgent ? 'm-risk' : '');
+  return hudStat(state.deferred ? 'долг' : 'аренда', value);
 }
 
 function renderHud(): void {
@@ -112,7 +116,7 @@ function renderHud(): void {
   byId('hud').innerHTML = [
     '<span class="logo">ТЁМНЫЙ ПРИЛАВОК</span>',
     hudStat('кр', `<b>${state.credits}</b>`),
-    hudStat('день', `<b>${state.day}·${phaseLabel}</b>`),
+    hudStat('день', hudValue(state.day, '·' + phaseLabel)),
     rentStat(),
     hudStat('зап', `<b>${state.parts}</b>`),
     hudStat('розыск', `<span class="heat">${meterCells(MAX_HEAT, state.heat)}</span>`),
@@ -175,7 +179,7 @@ function priceRow(defaultPrice: number): string {
   return `<div class="pr"><button class="btn" data-a="adj" data-v="-50">−50</button><button class="btn" data-a="adj" data-v="-10">−10</button>
   <input id="offer" type="number" inputmode="numeric" min="0" step="10" value="${defaultPrice}" aria-label="Цена">
   <button class="btn" data-a="adj" data-v="10">+10</button><button class="btn" data-a="adj" data-v="50">+50</button></div>
-  <div class="chance"><span>Чуйка</span><div class="cbar"><i id="cbar"></i></div><b id="cval">—</b></div>`;
+  <div class="chance"><span>Чуйка</span><div class="cbar"><i id="cbar"></i></div><b id="cverdict" class="verdict">—</b><small id="cval">—</small></div>`;
 }
 
 const readOffer = (input: HTMLInputElement): number => Math.max(0, parseInt(input.value) || 0);
@@ -191,6 +195,7 @@ function updateChanceMeter(): void {
     return;
   }
   const chance = perceivedChance(customer, readOffer(input));
+  byId('cverdict').textContent = HUNCH_VERDICT_TEXT.ru[hunchVerdict(chance)];
   byId('cval').textContent = chance >= 1 ? 'согласится' : chance <= 0 ? 'обидится' : `~${Math.round(chance * 100)}%`;
   byId('cbar').style.width = (chance * 100) + '%';
 }
@@ -345,7 +350,7 @@ function workbench(item: Item): string {
     ${benchButton('fix', 'Убрать дефект', item.k.flaw && item.defect)}${benchButton('purge', 'Вычистить ИИ', item.k.flaw && item.infected)}
     ${benchButton('wipe', 'Перебить №', item.k.serial && item.stolen)}
     <button class="btn" data-a="bench" data-v="scrap" ${disabledIf(isOnCounter(item))}><span>Разобрать</span><span class="price">+${scrapValue(item)}⚙</span></button></div>
-    <div class="hint" style="font-size:11px">Перебитый серийник: +1 к розыску.</div></div>`;
+    <div class="hint note">Перебитый серийник: +1 к розыску.</div></div>`;
 }
 
 function inventoryPane(): string {
@@ -367,16 +372,16 @@ function inventoryPane(): string {
 
 function recipeRow(recipe: Recipe, index: number): string {
   const parts = recipeNeeds(recipe)
-    .map(([type, count]) => `<span class="${availableOfType(type).length >= count ? 'm-action' : 'm-inactive'}">${itemName(type)} ×${count}</span>`)
+    .map(([type, count]) => `<span class="${availableOfType(type).length >= count ? 'm-ok' : 'm-inactive'}">${itemName(type)} ×${count}</span>`)
     .join(' + ');
-  const partsClass = state.parts >= recipe.parts ? 'm-action' : 'm-inactive';
+  const partsClass = state.parts >= recipe.parts ? 'm-ok' : 'm-inactive';
   return `<div class="recipe">${iconCanvas(recipe.out)}<div class="rb"><div class="rn">${itemName(recipe.out)}</div><div class="need">${parts} + <span class="${partsClass}">${recipe.parts}⚙</span> · ~${ITEM_TYPES[recipe.out].basePrice} кр.</div></div>
     <button class="btn" data-a="craft" data-v="${index}" ${canCraft(recipe) ? '' : 'disabled'}>Собрать</button></div>`;
 }
 
 function craftPane(): string {
   return `<div class="recipes">${RECIPES.map(recipeRow).join('')}</div>
-    <div class="hint" style="font-size:11px;margin:8px 0">Сборка даёт новый серийник: краденые детали становятся чистыми. ИИ-заражение переносится.</div>
+    <div class="hint note" style="margin:8px 0">Сборка даёт новый серийник: краденые детали становятся чистыми. ИИ-заражение переносится.</div>
     <button class="btn" data-a="parts" ${state.credits >= SUPPLIER.price ? '' : 'disabled'} style="width:100%">Заказать ${SUPPLIER.parts} запчастей · ${SUPPLIER.price} кр.</button>`;
 }
 

@@ -64,6 +64,7 @@ export function preloadFonts(page) {
   const sample = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя ABCabc0123456789…·−×→⚙★☾⧗⚖♪⟲›';
   return page.evaluate(text => Promise.all([
     ...['400', '500', '600'].map(w => document.fonts.load(`${w} 13px "IBM Plex Mono"`, text)),
-    document.fonts.load('12px Silkscreen', text),
+    document.fonts.load('12px Silkscreen', text), // reference builds before V1.3
+    document.fonts.load('16px "Public Pixel"', text),
   ]).then(() => document.fonts.ready).catch(() => {}), sample);
 }

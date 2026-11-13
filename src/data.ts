@@ -121,6 +121,16 @@ export const HAGGLE = {
   buyerDefaultAskShare: 1.3,
 };
 
+// Gut-feeling verdict next to the chance bar: the lowest chance for each word.
+// Below `maybe` → "unlikely". Checked against perceivedChance (what the player sees).
+export const HUNCH_VERDICT = { maybe: 0.25, likely: 0.55, deal: 0.85 };
+
+/** Verdict words; one object per language for the future RU/EN dictionary. */
+export const HUNCH_VERDICT_TEXT = {
+  ru: { unlikely: 'вряд ли', maybe: 'может быть', likely: 'скорее да', deal: 'по рукам' },
+  en: { unlikely: 'unlikely', maybe: 'maybe', likely: 'likely', deal: 'deal' },
+} as const;
+
 // Acceptance curve: 50% at the hidden limit, up to 97% near their own price.
 export const ACCEPT = { atLimit: 0.5, slope: 0.47, cap: 0.97, feelStep: 20, feelMin: 0.05, feelMax: 0.95 };
 

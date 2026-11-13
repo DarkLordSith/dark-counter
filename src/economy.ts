@@ -5,7 +5,7 @@
 //  numbers are queued in `feedback` and shown by ui.ts.
 // =====================================================================
 import {
-  ACCEPT, BENCH_COST, BUYER_COUNTER_LINES, BUYER_INSULTED_LINES, BUYER_LINES, BUYOUT_GOAL, COLLATERAL,
+  ACCEPT, HUNCH_VERDICT, HUNCH_VERDICT_TEXT, BENCH_COST, BUYER_COUNTER_LINES, BUYER_INSULTED_LINES, BUYER_LINES, BUYOUT_GOAL, COLLATERAL,
   CRAFT_CONDITION_BONUS, CUSTOMER, CUSTOMERS_PER_DAY, DIG_LOOT, DIG_ODDS, EVENING_HOURS, HAGGLE, HUMAN_NAMES,
   INSPECT, ITEM_TYPES, JUNK, JUNK_PILES, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
   RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SELLER_COUNTER_LINES, SELLER_INSULTED_LINES, SELLER_LINES,
@@ -432,6 +432,19 @@ export function perceivedChance(customer: SellerCustomer | PresentedBuyer, price
     return chance;
   }
   return clamp(Math.round((chance + customer.noise) * ACCEPT.feelStep) / ACCEPT.feelStep, ACCEPT.feelMin, ACCEPT.feelMax);
+}
+
+export type HunchVerdict = keyof typeof HUNCH_VERDICT_TEXT.ru;
+
+/** One word for the gut feeling: "unlikely" < 25% ≤ "maybe" < 55% ≤ "likely" < 85% ≤ "deal". */
+export function hunchVerdict(chance: number): HunchVerdict {
+  if (chance >= HUNCH_VERDICT.deal) {
+    return 'deal';
+  }
+  if (chance >= HUNCH_VERDICT.likely) {
+    return 'likely';
+  }
+  return chance >= HUNCH_VERDICT.maybe ? 'maybe' : 'unlikely';
 }
 
 export function offerToSeller(price: number): void {

@@ -57,8 +57,10 @@ export const COLOR = {
  * color: `--m-risk` / `MEANING.risk`, not `--red`.
  */
 export const MEANING = {
-  /** Action, benefit: primary buttons, "clean", "have it", income. */
+  /** Action, benefit: primary buttons, "clean", income. */
   action: COLOR.cyan,
+  /** In stock, ready: recipe parts the player has (V1.3; green of the V1.7 palette). */
+  ok: COLOR.green,
   /** Risk: stolen goods, AI virus, wanted level, eviction. */
   risk: COLOR.red,
   /** Time and wear: defect, low condition, patience, broken find. */
@@ -244,6 +246,7 @@ export const CSS_TOKENS: Readonly<Record<string, string>> = {
   '--black': COLOR.black,
   '--neon-glow': withAlpha(COLOR.cyan, 0.45),
   '--m-action': MEANING.action,
+  '--m-ok': MEANING.ok,
   '--m-risk': MEANING.risk,
   '--m-wear': MEANING.wear,
   '--m-unknown': MEANING.unknown,
