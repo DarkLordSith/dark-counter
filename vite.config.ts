@@ -86,7 +86,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{html,js,css,png,webmanifest}'],
+        // woff2: Public Pixel (public/fonts/); the .ttf fallback is not needed by any target browser.
+        globPatterns: ['**/*.{html,js,css,png,webmanifest,woff2}'],
         cleanupOutdatedCaches: true,
         // Google Fonts: serve from cache, refresh in background (as the old sw.js did)
         runtimeCaching: [

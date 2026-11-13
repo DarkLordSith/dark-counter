@@ -1,5 +1,14 @@
 /* Layout: one-screen app — compact HUD → pixel scene (shop / junkyard) → ticker → tabs → scrolling pane. Single deliberate dark look. */
 
+/* ==================== Fonts ==================== */
+
+/* Public Pixel by GGBotNet, CC0 (public/fonts/README.md). Local file, precached by the PWA. */
+@font-face {
+  font-family: 'Public Pixel';
+  src: url('/fonts/PublicPixel.woff2') format('woff2'), url('/fonts/PublicPixel.ttf') format('truetype');
+  font-display: block;
+}
+
 /* ==================== Base reset ==================== */
 
 :root {
@@ -28,8 +37,19 @@ img {
   --ceiling-bg: var(--panel);
   /* Height of the "station ceiling" strip in the iOS PWA; tune by diagnostics. */
   --pwa-ceiling: 56px;
-  --display: 'Silkscreen', 'Courier New', monospace;
-  --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  /* Fonts. Public Pixel (CC0, public/fonts/) for headings and numbers, IBM Plex Mono for text.
+     Fallbacks are monospace on purpose: never a serif face. */
+  --display: 'Public Pixel', monospace;
+  --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  /* Type scale: components use only these. Public Pixel is drawn on an 8×8 grid,
+     so its sizes are multiples of 8px, otherwise the pixels blur. */
+  --fs-px-s: 8px;
+  --fs-px-m: 16px;
+  --fs-px-l: 24px;
+  /* Mono: captions and log / panel text (not below 14px) / big numbers in a deal. */
+  --fs-s: 12px;
+  --fs-m: 14px;
+  --fs-l: 18px;
 }
 
 /* ==================== Base elements ==================== */
@@ -47,7 +67,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: var(--fs-m);
   line-height: 1.4;
   overflow: hidden;
   padding-left: max(12px, env(safe-area-inset-left, 0px));
@@ -109,8 +129,7 @@ input:focus-visible {
 }
 
 .logo {
-  font-family: var(--display);
-  font-size: 12px;
+  font-size: var(--fs-px-s);
   color: var(--cyan);
   margin-right: auto;
 }
@@ -119,18 +138,24 @@ input:focus-visible {
   display: flex;
   align-items: baseline;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--fs-s);
 }
 
 .st small {
-  font-size: 9px;
+  font-size: var(--fs-s);
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--dim);
 }
 
+/* Word after a HUD number ("·смена", "/3д"): mono, small, so the pixel numbers fit. */
+.st i {
+  font-size: var(--fs-s);
+  font-style: normal;
+}
+
 .st b {
-  font-weight: 600;
+  font-size: var(--fs-px-m);
 }
 
 .heat {
@@ -152,7 +177,7 @@ input:focus-visible {
   background: var(--panel2);
   border: 1px solid var(--line);
   padding: 3px 7px;
-  font-size: 11px;
+  font-size: var(--fs-s);
 }
 
 /* ==================== Scene: canvas, speech bubble, queue chip, call button, floating numbers ==================== */
@@ -190,7 +215,7 @@ input:focus-visible {
   line-height: 1.3;
   background: var(--fg);
   color: var(--scene-bg);
-  font-size: 12px;
+  font-size: var(--fs-s);
   padding: 6px 8px;
   font-weight: 500;
   box-shadow: 3px 3px 0 var(--shadow-soft);
@@ -214,8 +239,7 @@ input:focus-visible {
   position: absolute;
   right: 2%;
   top: 4%;
-  font-family: var(--display);
-  font-size: 10px;
+  font-size: var(--fs-px-s);
   line-height: 1;
   background: var(--chip-bg);
   color: var(--cyan);
@@ -228,8 +252,7 @@ input:focus-visible {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  font-family: var(--display);
-  font-size: 13px;
+  font-size: var(--fs-px-m);
   line-height: 1;
   background: var(--m-action);
   color: var(--on-accent);
@@ -244,8 +267,7 @@ input:focus-visible {
   left: 50%;
   top: 46%;
   transform: translateX(-50%);
-  font-family: var(--display);
-  font-size: 18px;
+  font-size: var(--fs-px-m);
   line-height: 1;
   pointer-events: none;
   text-shadow: 2px 2px 0 var(--black);
@@ -290,7 +312,7 @@ input:focus-visible {
   border-bottom: 1px solid var(--line);
   text-align: left;
   padding: 6px 2px;
-  font-size: 11px;
+  font-size: var(--fs-s);
   color: var(--dim);
   white-space: nowrap;
   overflow: hidden;
@@ -313,11 +335,11 @@ input:focus-visible {
   background-color: transparent;
   border: none;
   padding: 8px 4px;
-  font-family: var(--display);
-  font-size: 11px;
+  font-size: var(--fs-m);
   color: var(--dim);
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
+  text-transform: uppercase;
 }
 
 .tab.on {
@@ -333,6 +355,11 @@ input:focus-visible {
 }
 
 /* ==================== Shared: text, cards, status colors, buttons ==================== */
+
+/* Small print under a pane: workbench and craft notes. */
+.note {
+  font-size: var(--fs-s);
+}
 
 .hint {
   color: var(--dim);
@@ -351,18 +378,11 @@ input:focus-visible {
 }
 
 .kind {
-  font-size: 10px;
+  font-size: var(--fs-s);
   letter-spacing: .1em;
   text-transform: uppercase;
   margin-left: 6px;
-}
-
-.kind.sell {
-  color: var(--amber);
-}
-
-.kind.buy {
-  color: var(--cyan);
+  color: var(--dim);
 }
 
 .pips {
@@ -401,7 +421,7 @@ input:focus-visible {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 1px 10px;
-  font-size: 12px;
+  font-size: var(--fs-m);
   min-width: 0;
 }
 
@@ -415,6 +435,10 @@ input:focus-visible {
 
 .m-action {
   color: var(--m-action);
+}
+
+.m-ok {
+  color: var(--m-ok);
 }
 
 .m-risk {
@@ -451,7 +475,7 @@ input:focus-visible {
   background: var(--panel2);
   border: 1px solid var(--line);
   padding: 7px 10px;
-  font-size: 12px;
+  font-size: var(--fs-m);
 }
 
 .btn:hover:not(:disabled) {
@@ -488,6 +512,7 @@ input:focus-visible {
 
 .price {
   font-variant-numeric: tabular-nums;
+  font-size: var(--fs-px-m);
 }
 
 .deal {
@@ -512,7 +537,7 @@ input:focus-visible {
   border: 1px solid var(--line);
   color: var(--fg);
   font: inherit;
-  font-size: 15px;
+  font-size: var(--fs-px-m);
   padding: 6px;
   font-variant-numeric: tabular-nums;
 }
@@ -525,8 +550,20 @@ input:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--fs-s);
   color: var(--dim);
+}
+
+/* Gut-feeling verdict ("скорее да"): the main signal, the number next to it is secondary. */
+.verdict {
+  font-size: var(--fs-px-m);
+  color: var(--m-hunch);
+  white-space: nowrap;
+}
+
+.chance small {
+  font-size: var(--fs-s);
+  white-space: nowrap;
 }
 
 /* "Чуйка" label: the gut feeling has its own color. */
@@ -554,20 +591,20 @@ input:focus-visible {
 }
 
 .ask {
-  font-size: 12px;
+  font-size: var(--fs-m);
   color: var(--dim);
 }
 
 .ask b {
   color: var(--fg);
-  font-size: 14px;
+  font-size: var(--fs-px-m);
 }
 
 /* ==================== Inventory shelf and workbench ==================== */
 
 .shelf {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   gap: 6px;
 }
 
@@ -581,7 +618,7 @@ input:focus-visible {
   border: 1px solid var(--line);
   border-bottom: 3px solid var(--tile-edge);
   padding: 6px 4px 4px;
-  font-size: 10px;
+  font-size: var(--fs-s);
   line-height: 1.2;
   text-align: center;
 }
@@ -628,7 +665,7 @@ input:focus-visible {
   width: auto;
   color: var(--m-unknown);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-s);
   font-style: normal;
   font-weight: 600;
   line-height: 6px;
@@ -638,7 +675,7 @@ input:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 10px;
-  font-size: 10px;
+  font-size: var(--fs-s);
   color: var(--dim);
   margin: 8px 0;
 }
@@ -678,7 +715,7 @@ input:focus-visible {
 }
 
 .tag {
-  font-size: 9px;
+  font-size: var(--fs-s);
   letter-spacing: .06em;
   text-transform: uppercase;
   padding: 1px 4px;
@@ -735,18 +772,17 @@ input:focus-visible {
 }
 
 .rn {
-  font-family: var(--display);
-  font-size: 11px;
+  font-size: var(--fs-px-m);
 }
 
 .need {
-  font-size: 11px;
+  font-size: var(--fs-m);
   color: var(--dim);
 }
 
-/* Recipe parts: have them → action, not in stock → inactive (never red). */
-.need .m-action {
-  color: var(--m-action);
+/* Recipe parts: in stock → ok, not in stock → inactive (never red). */
+.need .m-ok {
+  color: var(--m-ok);
 }
 
 .need .m-inactive {
@@ -781,13 +817,11 @@ input:focus-visible {
 }
 
 .opt b {
-  font-family: var(--display);
-  font-weight: 400;
-  font-size: 12px;
+  font-size: var(--fs-px-m);
 }
 
 .opt span {
-  font-size: 11px;
+  font-size: var(--fs-m);
   color: var(--dim);
 }
 
@@ -828,11 +862,9 @@ input:focus-visible {
 }
 
 .mbox h2 {
-  font-family: var(--display);
-  font-size: 16px;
+  font-size: var(--fs-px-m);
   color: var(--cyan);
   margin: 0;
-  font-weight: 400;
 }
 
 .mbox ul {
@@ -855,21 +887,23 @@ input:focus-visible {
   background: var(--bg);
   border: 1px solid var(--line);
   color: var(--fg);
-  font: 11px/1.3 var(--mono);
+  font-family: var(--mono);
+  font-size: var(--fs-s);
+  line-height: 1.3;
   padding: 6px;
   resize: vertical;
   word-break: break-all;
 }
 
 .mbox label {
-  font-size: 11px;
+  font-size: var(--fs-s);
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--dim);
 }
 
 .mbox .version {
-  font-size: 10px;
+  font-size: var(--fs-s);
   color: var(--dim);
   text-align: right;
   -webkit-user-select: none;
@@ -899,11 +933,9 @@ input:focus-visible {
 }
 
 .diag h2 {
-  font-family: var(--display);
-  font-size: 14px;
+  font-size: var(--fs-px-m);
   color: var(--amber);
   margin: 0;
-  font-weight: 400;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
@@ -911,8 +943,34 @@ input:focus-visible {
 
 .diag pre {
   margin: 0;
-  font: 11px/1.35 var(--mono);
+  font-family: var(--mono);
+  font-size: var(--fs-s);
+  line-height: 1.35;
   color: var(--fg);
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+/* ==================== Pixel font (Public Pixel) ====================
+   The one list of elements drawn in the pixel font: headings, item names, numbers,
+   the gut-feeling verdict. Single weight (no fake bold), no smoothing where the
+   browser allows it, no letter spacing: anything else blurs the 8×8 pixels. */
+
+.logo,
+.st b,
+.chip,
+.call,
+.fx,
+.rn,
+.opt b,
+.price,
+.pr input,
+.verdict,
+.mbox h2,
+.diag h2 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-synthesis: none;
+  letter-spacing: 0;
+  -webkit-font-smoothing: none;
 }

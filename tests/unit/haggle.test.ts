@@ -1,6 +1,7 @@
-// Acceptance curves of haggling (formerly pSell / pBuy) and the gut feeling.
+// Acceptance curves of haggling (formerly pSell / pBuy), the gut feeling and its verdict word.
 import { describe, expect, it } from 'vitest';
-import { buyerAcceptChance, perceivedChance, sellerAcceptChance } from '../../src/economy';
+import { HUNCH_VERDICT, HUNCH_VERDICT_TEXT } from '../../src/data';
+import { buyerAcceptChance, hunchVerdict, perceivedChance, sellerAcceptChance } from '../../src/economy';
 import { makePresentedBuyer, makeSeller } from './helpers';
 
 describe('sellerAcceptChance (pSell)', () => {
@@ -98,5 +99,34 @@ describe('perceivedChance (gut feeling)', () => {
 
   it('works for buyers too', () => {
     expect(perceivedChance(makePresentedBuyer({ offer: 65, max2: 100 }), 100)).toBe(0.5);
+  });
+});
+
+describe('hunchVerdict (gut-feeling word)', () => {
+  it('maps the chance to one word at the agreed thresholds', () => {
+    expect(hunchVerdict(0)).toBe('unlikely');
+    expect(hunchVerdict(0.24)).toBe('unlikely');
+    expect(hunchVerdict(0.25)).toBe('maybe');
+    expect(hunchVerdict(0.54)).toBe('maybe');
+    expect(hunchVerdict(0.55)).toBe('likely');
+    expect(hunchVerdict(0.84)).toBe('likely');
+    expect(hunchVerdict(0.85)).toBe('deal');
+    expect(hunchVerdict(1)).toBe('deal');
+  });
+
+  it('thresholds live in data.ts and go up', () => {
+    expect(HUNCH_VERDICT).toEqual({ maybe: 0.25, likely: 0.55, deal: 0.85 });
+  });
+
+  it('has a word for every verdict in Russian and English', () => {
+    expect(HUNCH_VERDICT_TEXT.ru).toEqual({ unlikely: 'вряд ли', maybe: 'может быть', likely: 'скорее да', deal: 'по рукам' });
+    expect(HUNCH_VERDICT_TEXT.en).toEqual({ unlikely: 'unlikely', maybe: 'maybe', likely: 'likely', deal: 'deal' });
+  });
+
+  it('works on what the player sees (perceivedChance)', () => {
+    const seller = makeSeller({ ask: 200, min: 100, noise: 0 });
+    expect(hunchVerdict(perceivedChance(seller, 75))).toBe('unlikely');
+    expect(hunchVerdict(perceivedChance(seller, 100))).toBe('maybe');
+    expect(hunchVerdict(perceivedChance(seller, 200))).toBe('deal');
   });
 });

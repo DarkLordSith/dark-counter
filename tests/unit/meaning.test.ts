@@ -24,13 +24,13 @@ const DECOR = [
   'button:focus-visible, input:focus-visible', '.ios-pwa .ceiling', '.logo', '.st small', '.chip', '.ticker', '.ticker b', '.tab', '.tab.on',
   '.hint', '.rows span:nth-child(odd)', '.chance', '.ask', '.tile .tv', '.legend', '.tag', '.need', '.opt span',
   '.mbox', '.mbox h2', '.mbox label', '.mbox .version', '.diag', '.diag h2',
-  // customer kind labels: who the customer is, not a state (open question for the owner)
-  '.kind.sell', '.kind.buy',
+  // customer kind label ("продаёт" / "покупает"): a type, not a state, so neutral grey (V1.3)
+  '.kind',
 ];
 
 describe('meaning tokens', () => {
-  it('cover the six meanings and reach CSS as --m-*', () => {
-    expect(Object.keys(MEANING).sort()).toEqual(['action', 'hunch', 'inactive', 'risk', 'unknown', 'wear']);
+  it('cover the seven meanings and reach CSS as --m-*', () => {
+    expect(Object.keys(MEANING).sort()).toEqual(['action', 'hunch', 'inactive', 'ok', 'risk', 'unknown', 'wear']);
     for (const [name, color] of Object.entries(MEANING)) {
       expect(CSS_TOKENS[`--m-${name}`]).toBe(color);
     }
@@ -53,10 +53,11 @@ describe('the interface uses meanings, not base colors', () => {
     expect(uiTs).not.toMatch(/cbar'\)\.style\.background/);
   });
 
-  it('craft: parts in stock = action, missing = inactive (not red)', () => {
-    expect(rule('.need .m-action')).toContain('var(--m-action)');
+  it('craft: parts in stock = ok, missing = inactive (not red)', () => {
+    expect(rule('.need .m-ok')).toContain('var(--m-ok)');
     expect(rule('.need .m-inactive')).toContain('var(--m-inactive)');
-    expect(uiTs).toContain("'m-action' : 'm-inactive'");
+    expect(uiTs).toContain("'m-ok' : 'm-inactive'");
+    expect(MEANING.ok).not.toBe(MEANING.action);
   });
 
   it('shelf legend shows exactly the marks the tiles use', () => {
@@ -83,7 +84,8 @@ describe('the interface uses meanings, not base colors', () => {
   });
 
   it('old color-named classes are gone', () => {
-    expect(uiTs).not.toMatch(/class="[^"]*\b(bad|ok|warn|q|amb|d-red|d-amb|d-q)\b/);
-    expect(styleCss).not.toMatch(/\.(bad|ok|warn|amb|d-red|d-amb|d-q|d-ok)\b/);
+    // (?<![\w-]) / (?![\w-]): "ok" must not match inside "m-ok"
+    expect(uiTs).not.toMatch(/class="[^"]*(?<![\w-])(bad|ok|warn|q|amb|d-red|d-amb|d-q)(?![\w-])/);
+    expect(styleCss).not.toMatch(/\.(bad|ok|warn|amb|d-red|d-amb|d-q|d-ok)(?![\w-])/);
   });
 });
