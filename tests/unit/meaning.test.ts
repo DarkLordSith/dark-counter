@@ -26,6 +26,8 @@ const DECOR = [
   '.mbox', '.mbox h2', '.mbox label', '.mbox .version', '.diag', '.diag h2',
   // customer kind label ("продаёт" / "покупает"): a type, not a state, so neutral grey (V1.3)
   '.kind',
+  // font lab: a debug sheet (src/fontlab.ts)
+  '.fontlab', '.fontlab h2', '.fontlab h3', '.fontlab .btn.fl-on', '.fl-measure, .fl-msg',
 ];
 
 describe('meaning tokens', () => {

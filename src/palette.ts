@@ -245,6 +245,8 @@ export const CSS_TOKENS: Readonly<Record<string, string>> = {
   '--shadow-soft': withAlpha(COLOR.black, 0.45),
   '--black': COLOR.black,
   '--neon-glow': withAlpha(COLOR.cyan, 0.45),
+  /** Debug sheets over the game (font lab): see-through enough to watch the change. */
+  '--sheet': withAlpha(COLOR.panel, 0.94),
   '--m-action': MEANING.action,
   '--m-ok': MEANING.ok,
   '--m-risk': MEANING.risk,

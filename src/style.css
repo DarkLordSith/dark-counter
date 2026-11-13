@@ -11,7 +11,11 @@
 
 /* ==================== Base reset ==================== */
 
+/* iOS may inflate small text in long lines (text autosizing): the log ticker came out
+   bigger than the pane text on an iPhone. Sizes are set on purpose, keep them. */
 :root {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -50,6 +54,9 @@ img {
   --fs-s: 12px;
   --fs-m: 14px;
   --fs-l: 18px;
+  /* The font lab's own text: fixed, so tuning the scale above does not resize the lab itself. */
+  --lab-fs: 12px;
+  --lab-title: 16px;
 }
 
 /* ==================== Base elements ==================== */
@@ -973,4 +980,147 @@ input:focus-visible {
   font-synthesis: none;
   letter-spacing: 0;
   -webkit-font-smoothing: none;
+}
+
+/* ==================== Font lab (src/fontlab.ts, debug) ====================
+   Per-group overrides from the font lab, set as data-fl-* attributes on <html>.
+   Without the attributes nothing here applies. */
+
+html[data-fl-names="mono"] .rn {
+  font-family: var(--mono);
+  font-size: var(--fs-l);
+  font-weight: var(--fl-names-weight, 400);
+  -webkit-font-smoothing: auto;
+}
+
+html[data-fl-names-case="upper"] .rn {
+  text-transform: uppercase;
+}
+
+html[data-fl-prices="mono"] .price {
+  font-family: var(--mono);
+  font-size: var(--fs-l);
+  font-weight: var(--fl-prices-weight, 400);
+  -webkit-font-smoothing: auto;
+}
+
+html[data-fl-prices-case="upper"] .price {
+  text-transform: uppercase;
+}
+
+html[data-fl-verdict="mono"] .verdict {
+  font-family: var(--mono);
+  font-size: var(--fs-l);
+  font-weight: var(--fl-verdict-weight, 400);
+  -webkit-font-smoothing: auto;
+}
+
+html[data-fl-verdict-case="upper"] .verdict {
+  text-transform: uppercase;
+}
+
+html[data-fl-hud="mono"] .st b {
+  font-family: var(--mono);
+  font-size: var(--fs-l);
+  font-weight: var(--fl-hud-weight, 400);
+  -webkit-font-smoothing: auto;
+}
+
+html[data-fl-hud-case="upper"] .st b {
+  text-transform: uppercase;
+}
+
+html[data-fl-headings="mono"] .mbox h2,
+html[data-fl-headings="mono"] .opt b {
+  font-family: var(--mono);
+  font-size: var(--fs-l);
+  font-weight: var(--fl-headings-weight, 400);
+  -webkit-font-smoothing: auto;
+}
+
+html[data-fl-headings-case="upper"] .mbox h2,
+html[data-fl-headings-case="upper"] .opt b {
+  text-transform: uppercase;
+}
+
+.fontlab {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 50dvh;
+  overflow: auto;
+  background: var(--sheet);
+  border-bottom: 1px solid var(--amber);
+  padding: 8px 12px 12px;
+  font-size: var(--lab-fs);
+}
+
+/* In the iOS PWA keep it below the blurred status-bar zone, like the HUD. */
+.ios-pwa .fontlab {
+  top: calc(env(safe-area-inset-top, 0px) + var(--pwa-ceiling));
+}
+
+.fontlab h2 {
+  font-family: var(--display);
+  font-size: var(--lab-title);
+  font-weight: 400;
+  color: var(--amber);
+  margin: 0;
+  margin-right: auto;
+}
+
+.fontlab h3 {
+  font-size: var(--lab-fs);
+  font-weight: 400;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin: 8px 0 4px;
+}
+
+.fl-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.fl-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.fl-row span {
+  flex: 1;
+  min-width: 0;
+}
+
+.fl-row b {
+  min-width: 28px;
+  text-align: center;
+}
+
+.fl-group {
+  flex-wrap: wrap;
+}
+
+.fontlab .btn {
+  min-height: 36px;
+  padding: 4px 8px;
+  font-size: var(--lab-fs);
+}
+
+.fontlab .btn.fl-on {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.fl-measure,
+.fl-msg {
+  color: var(--dim);
+  margin-top: 6px;
+  word-break: break-word;
 }
