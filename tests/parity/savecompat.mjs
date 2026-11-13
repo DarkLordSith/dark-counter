@@ -41,12 +41,14 @@ async function botSteps(page, n, seed) {
   }
 }
 
-const snap = page => page.evaluate(() => JSON.stringify({
+// PARITY_LOGIC_ONLY=1 (look changed on purpose): compare the save and the scene, not the markup.
+const LOGIC_ONLY = process.env.PARITY_LOGIC_ONLY === '1';
+const snap = page => page.evaluate(logicOnly => JSON.stringify({
   save: localStorage.getItem('dark-counter-v3'),
-  hud: document.getElementById('hud').innerHTML.replace(/\s+/g, ' '),
-  pane: document.getElementById('pane').innerHTML.replace(/\s+/g, ' '),
+  hud: logicOnly ? '' : document.getElementById('hud').innerHTML.replace(/\s+/g, ' '),
+  pane: logicOnly ? '' : document.getElementById('pane').innerHTML.replace(/\s+/g, ' '),
   scene: document.getElementById('scn').toDataURL(),
-}));
+}), LOGIC_ONLY);
 const exportCode = page => page.evaluate(() => {
   document.querySelector('[data-a="savemenu"]').click();
   const code = document.getElementById('savecode').value;

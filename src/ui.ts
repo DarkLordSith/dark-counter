@@ -25,7 +25,8 @@ import { VERSION_LABEL } from './version';
    Small HTML helpers
    ===================================================================== */
 
-const UNKNOWN = '<span class="q">?</span>';
+// Colors carry meaning only through the m-* classes (style.css → --m-* → MEANING in palette.ts).
+const UNKNOWN = '<span class="m-unknown">?</span>';
 const CLOSE_BUTTON = '<button class="btn pri" data-a="close">Закрыть</button>';
 const NEW_GAME_BUTTON = '<button class="btn pri" data-a="newgame-yes">Новая игра</button>';
 const FLOATING_TEXT_LIFETIME_MS = 1300;
@@ -38,44 +39,51 @@ function iconCanvas(type: ItemType, cssClass = '', infected = false): string {
 
 function itemTags(item: Item): string {
   const tags: string[] = [];
-  tags.push(item.k.cond ? `<span class="tag ${item.cond < 40 ? 'warn' : ''}">${item.cond}%</span>` : '<span class="tag">сост. ?</span>');
+  tags.push(item.k.cond ? `<span class="tag ${item.cond < 40 ? 'm-wear' : ''}">${item.cond}%</span>` : '<span class="tag m-unknown">сост. ?</span>');
   if (item.k.serial) {
-    tags.push(item.stolen ? '<span class="tag bad">краденое</span>' : '<span class="tag ok">чистый №</span>');
+    tags.push(item.stolen ? '<span class="tag m-risk">краденое</span>' : '<span class="tag m-action">чистый №</span>');
   } else {
-    tags.push('<span class="tag">№ ?</span>');
+    tags.push('<span class="tag m-unknown">№ ?</span>');
   }
   if (item.k.flaw) {
     if (item.defect) {
-      tags.push('<span class="tag warn">дефект</span>');
+      tags.push('<span class="tag m-wear">дефект</span>');
     }
     if (item.infected) {
-      tags.push('<span class="tag bad">ИИ</span>');
+      tags.push('<span class="tag m-risk">ИИ</span>');
     }
     if (!item.defect && !item.infected) {
-      tags.push('<span class="tag ok">начинка ок</span>');
+      tags.push('<span class="tag m-action">начинка ок</span>');
     }
   } else {
-    tags.push('<span class="tag">начинка ?</span>');
+    tags.push('<span class="tag m-unknown">начинка ?</span>');
   }
   return `<div class="tags">${tags.join('')}</div>`;
 }
 
 /** Colored corner dots on an inventory tile. */
+/** Status marks on a shelf tile; the legend under the shelf uses the same ones. */
+const DOT = {
+  unknown: '<i class="d-unknown">?</i>',
+  risk: '<i class="d-risk"></i>',
+  wear: '<i class="d-wear"></i>',
+};
+
 function itemDots(item: Item): string {
   const dots: string[] = [];
   if (!isFullyKnown(item)) {
-    dots.push('d-q');
+    dots.push(DOT.unknown);
   }
   if (item.k.serial && item.stolen) {
-    dots.push('d-red');
+    dots.push(DOT.risk);
   }
   if (item.k.flaw && item.infected) {
-    dots.push('d-red');
+    dots.push(DOT.risk);
   }
   if (item.k.flaw && item.defect) {
-    dots.push('d-amb');
+    dots.push(DOT.wear);
   }
-  return `<span class="dots">${dots.map(cls => `<i class="${cls}"></i>`).join('')}</span>`;
+  return `<span class="dots">${dots.join('')}</span>`;
 }
 
 /** Row of cells, the first `filled` of them lit (heat bar, patience pips). */
@@ -93,13 +101,13 @@ function rentStat(): string {
   const daysLeft = state.nextDue - state.day;
   const urgent = state.credits < state.owed && daysLeft <= 1 || state.deferred;
   const value = state.won ? '—' : state.owed + '/' + (daysLeft <= 0 ? 'сег.' : daysLeft + 'д');
-  return hudStat(state.deferred ? 'долг' : 'аренда', `<b class="${urgent ? 'bad' : ''}">${value}</b>`);
+  return hudStat(state.deferred ? 'долг' : 'аренда', `<b class="${urgent ? 'm-risk' : ''}">${value}</b>`);
 }
 
 function renderHud(): void {
   const phaseLabel = state.phase === 'shop' ? 'смена' : state.where === 'junk' ? 'свалка' : 'вечер';
   const buyoutButton = state.credits >= BUYOUT_GOAL && !state.won
-    ? '<button class="hb" data-a="buyout" style="border-color:var(--cyan);color:var(--cyan)">Выкупить</button>'
+    ? '<button class="hb m-action" data-a="buyout">Выкупить</button>'
     : '';
   byId('hud').innerHTML = [
     '<span class="logo">ТЁМНЫЙ ПРИЛАВОК</span>',
@@ -172,13 +180,6 @@ function priceRow(defaultPrice: number): string {
 
 const readOffer = (input: HTMLInputElement): number => Math.max(0, parseInt(input.value) || 0);
 
-function chanceColor(chance: number): string {
-  if (chance >= 0.6) {
-    return 'var(--green)';
-  }
-  return chance >= 0.3 ? 'var(--amber)' : 'var(--red)';
-}
-
 function updateChanceMeter(): void {
   const customer = state.cust;
   const input = maybeById<HTMLInputElement>('offer');
@@ -192,7 +193,6 @@ function updateChanceMeter(): void {
   const chance = perceivedChance(customer, readOffer(input));
   byId('cval').textContent = chance >= 1 ? 'согласится' : chance <= 0 ? 'обидится' : `~${Math.round(chance * 100)}%`;
   byId('cbar').style.width = (chance * 100) + '%';
-  byId('cbar').style.background = chanceColor(chance);
 }
 
 /* =====================================================================
@@ -242,7 +242,7 @@ function collateralDescription(plan: CollateralPlan): string {
     return 'Даже со всем складом не хватает.';
   }
   const goods = plan.items.length ? ' и ' + plan.items.map(item => itemName(item.t)).join(', ') : '';
-  const heatNote = plan.hot ? ` <span class="ok">Розыск −${collateralHeatRelief(plan)}.</span>` : '';
+  const heatNote = plan.hot ? ` <span class="m-action">Розыск −${collateralHeatRelief(plan)}.</span>` : '';
   return `Заберёт ${plan.cash} кр.${goods}. Сначала берёт краденое (за 50%), остальное за 60%, сдачи не даёт.${heatNote}`;
 }
 
@@ -250,17 +250,17 @@ function rentPane(customer: RentCustomer): string {
   const plan = planCollateral();
   const canPay = state.credits >= state.owed;
   const deferText = state.deferred ? 'Вторую отсрочку Гробов не даст.' : `Придёт через ${daysRu(RENT.deferDays)}, долг +20%: ${deferredDebt()} кр.`;
-  let html = `<div class="thead"><div><span class="cname">${customer.name}</span><span class="kind" style="color:var(--red)">за арендой</span></div></div>
+  let html = `<div class="thead"><div><span class="cname">${customer.name}</span><span class="kind m-risk">за арендой</span></div></div>
     <div class="card" style="flex-direction:column;gap:2px"><div class="rows">
-      <span>К оплате</span><span class="price"><b>${state.owed} кр.</b>${state.deferred ? ' <span class="bad">с пеней</span>' : ''}</span>
-      <span>У вас</span><span class="price ${canPay ? 'ok' : 'bad'}">${state.credits} кр.</span></div></div>
+      <span>К оплате</span><span class="price"><b>${state.owed} кр.</b>${state.deferred ? ' <span class="m-risk">с пеней</span>' : ''}</span>
+      <span>У вас</span><span class="price ${canPay ? 'm-action' : 'm-risk'}">${state.credits} кр.</span></div></div>
     <div class="opts" style="margin-top:8px">
       ${option('rentpay', !canPay, 'Заплатить', `Следующая аренда ${nextRent()} кр. через ${daysRu(RENT.periodDays)}.`, state.owed, ' class="price"')}
       ${option('rentdefer', state.deferred, 'Попросить отсрочку', deferText, '⧗')}
       ${option('rentitems', !(plan.ok && plan.items.length), 'Отдать деньги и товар', collateralDescription(plan), '⚖')}
     </div>`;
   if (!canPay && state.deferred && !plan.ok) {
-    html += '<button class="btn" data-a="evict" style="width:100%;margin-top:8px;border-color:var(--red);color:var(--red)">Нечем платить</button>';
+    html += '<button class="btn m-risk" data-a="evict" style="width:100%;margin-top:8px">Нечем платить</button>';
   }
   return html;
 }
@@ -276,9 +276,9 @@ function knownFact(known: boolean, html: string): string {
 
 function sellerPane(customer: SellerCustomer): string {
   const item = customer.item;
-  const condition = `<span class="${item.cond < 40 ? 'warn' : ''}">${item.cond}%</span>`;
-  const serial = item.stolen ? '<span class="bad">спилен</span>' : '<span class="ok">чистый</span>';
-  const insides = item.infected ? '<span class="bad">ИИ-вирус</span>' : item.defect ? '<span class="warn">дефект</span>' : '<span class="ok">ок</span>';
+  const condition = `<span class="${item.cond < 40 ? 'm-wear' : ''}">${item.cond}%</span>`;
+  const serial = item.stolen ? '<span class="m-risk">спилен</span>' : '<span class="m-action">чистый</span>';
+  const insides = item.infected ? '<span class="m-risk">ИИ-вирус</span>' : item.defect ? '<span class="m-wear">дефект</span>' : '<span class="m-action">ок</span>';
   const defaultOffer = Math.min(state.credits, roundTo10(customer.ask * HAGGLE.sellerDefaultOfferShare));
   return `<div class="card">${iconCanvas(item.t, 'bigico', showsInfection(item))}<div style="min-width:0"><div class="rn">${itemName(item.t)}</div><div class="rows">
       <span>Состояние</span><span>${knownFact(item.k.cond, condition)}</span>
@@ -291,7 +291,7 @@ function sellerPane(customer: SellerCustomer): string {
     <div class="deal"><div class="ask">Просит: <b class="price">${customer.ask}</b> кр. · у вас ${state.credits}</div>
       ${priceRow(defaultOffer)}
       <div class="acts"><button class="btn pri" data-a="offer">Предложить</button>
-      <button class="btn amb" data-a="accept" ${disabledIf(customer.ask > state.credits)}>За ${customer.ask}</button>
+      <button class="btn alt" data-a="accept" ${disabledIf(customer.ask > state.credits)}>За ${customer.ask}</button>
       <button class="btn" data-a="refuse">Отпустить</button></div></div>`;
 }
 
@@ -311,7 +311,7 @@ function buyerPane(customer: BuyerCustomer): string {
   }
   return html + `<div class="deal"><div class="ask">Предлагает: <b class="price">${customer.offer}</b> кр.</div>${priceRow(roundTo10(customer.offer * HAGGLE.buyerDefaultAskShare))}
         <div class="acts"><button class="btn pri" data-a="ask">Назвать цену</button>
-        <button class="btn amb" data-a="take">За ${customer.offer}</button>
+        <button class="btn alt" data-a="take">За ${customer.offer}</button>
         <button class="btn" data-a="refuse">Отпустить</button></div></div>`;
 }
 
@@ -356,7 +356,7 @@ function inventoryPane(): string {
     .map(item => `<button class="tile ${ui.sel === item.uid ? 'on' : ''}" data-a="sel" data-v="${item.uid}">${itemDots(item)}${iconCanvas(item.t, '', showsInfection(item))}<span>${itemName(item.t)}</span><span class="tv">${conditionText(item)} · ~${estimatedValue(item)}</span></button>`)
     .join('');
   const html = `<div class="shelf">${tiles}</div>
-  <div class="legend"><span><i class="d-q"></i>не проверено</span><span><i class="d-red"></i>краденое / ИИ</span><span><i class="d-amb"></i>дефект</span></div>`;
+  <div class="legend"><span>${DOT.unknown}не проверено</span><span>${DOT.risk}краденое / ИИ</span><span>${DOT.wear}дефект</span></div>`;
   const selected = findItem(ui.sel);
   return html + (selected ? workbench(selected) : '<div class="hint">Нажмите на предмет, чтобы открыть верстак.</div>');
 }
@@ -367,9 +367,9 @@ function inventoryPane(): string {
 
 function recipeRow(recipe: Recipe, index: number): string {
   const parts = recipeNeeds(recipe)
-    .map(([type, count]) => `<span class="${availableOfType(type).length >= count ? 'have' : 'miss'}">${itemName(type)} ×${count}</span>`)
+    .map(([type, count]) => `<span class="${availableOfType(type).length >= count ? 'm-action' : 'm-inactive'}">${itemName(type)} ×${count}</span>`)
     .join(' + ');
-  const partsClass = state.parts >= recipe.parts ? 'have' : 'miss';
+  const partsClass = state.parts >= recipe.parts ? 'm-action' : 'm-inactive';
   return `<div class="recipe">${iconCanvas(recipe.out)}<div class="rb"><div class="rn">${itemName(recipe.out)}</div><div class="need">${parts} + <span class="${partsClass}">${recipe.parts}⚙</span> · ~${ITEM_TYPES[recipe.out].basePrice} кр.</div></div>
     <button class="btn" data-a="craft" data-v="${index}" ${canCraft(recipe) ? '' : 'disabled'}>Собрать</button></div>`;
 }
@@ -456,7 +456,7 @@ function openSaveMenu(): void {
       <div class="mbtns"><button class="btn pri" data-a="copysave">Скопировать</button></div>
       <label for="loadcode">Загрузить сейв</label><textarea id="loadcode" placeholder="Вставьте код"></textarea>
       <div id="savemsg" class="hint"></div>`,
-    '<button class="btn amb" data-a="loadsave">Загрузить</button><button class="btn" data-a="close">Закрыть</button>',
+    '<button class="btn alt" data-a="loadsave">Загрузить</button><button class="btn" data-a="close">Закрыть</button>',
     `<div class="version">${VERSION_LABEL}</div>`,
   );
 }
@@ -482,7 +482,7 @@ function loadSaveCode(): boolean {
   const loaded = importSave(byId<HTMLTextAreaElement>('loadcode').value);
   if (!loaded) {
     byId('savemsg').textContent = 'Код не распознан. Проверьте, что скопирован весь код целиком.';
-    byId('savemsg').style.color = 'var(--red)';
+    byId('savemsg').classList.add('m-risk');
     return false;
   }
   setState(loaded);
