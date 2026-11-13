@@ -44,7 +44,7 @@ img {
   --ceiling-bg: var(--panel);
   --neon-glow: rgba(70, 211, 201, .45);
   /* Height of the "station ceiling" strip in the iOS PWA; tune by diagnostics. */
-  --pwa-ceiling: 32px;
+  --pwa-ceiling: 56px;
   --display: 'Silkscreen', 'Courier New', monospace;
   --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
 }
