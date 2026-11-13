@@ -7,9 +7,9 @@
 //  Do not rename fields; when a field is added or changed, upgrade old
 //  saves in migrate().
 // =====================================================================
-import { ITEM_TYPES, ITEM_ODDS, LOG_LIMIT, RENT, SAVE_CODE_PREFIX, SAVE_KEY, START } from './data';
+import { ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, RENT, SAVE_CODE_PREFIX, SAVE_KEY, START } from './data';
 import type { Actor, GameState, Item, ItemKnowledge, ItemType, SavedGame, UiState } from './types';
-import { randomInt } from './util';
+import { daysRu, randomInt } from './util';
 
 /* ---------- state ---------- */
 
@@ -61,7 +61,7 @@ export function newGame(): void {
   };
   state.inv.push(createItem('battery', { cond: 70, stolen: false, defect: false, infected: false, known: true }));
   state.inv.push(createItem('comm', { cond: 55, stolen: false, defect: false, infected: false, known: true }));
-  addLog('День 1. Лавка 7-Б, нижний ярус. Аренда каждые 3 дня, и она растёт.');
+  addLog(`День 1. Лавка 7-Б, нижний ярус. Аренда раз в ${daysRu(RENT.periodDays)}, и она растёт.`);
   actorReset();
   ui.tab = 'deal';
 }
@@ -169,9 +169,10 @@ export function migrate(data: SavedGame | null): GameState | null {
   if (!data) {
     return null;
   }
-  // v1/v2: rent was due every 3rd day and there was no landlord visit
+  // v1/v2: rent was due every 3rd day and there was no landlord visit.
+  // Uses the legacy period, not RENT.periodDays: the weekly rent applies from the next payment.
   if (data.nextDue == null) {
-    data.nextDue = data.day + ((RENT.periodDays - data.day % RENT.periodDays) % RENT.periodDays);
+    data.nextDue = data.day + ((LEGACY_RENT_PERIOD - data.day % LEGACY_RENT_PERIOD) % LEGACY_RENT_PERIOD);
     data.owed = data.rent;
     data.deferred = false;
     data.llAt = randomLandlordSlot();
