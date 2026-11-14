@@ -67,3 +67,16 @@ describe('font families', () => {
     expect(viteConfig).toMatch(/globPatterns:\s*\['\*\*\/\*\.\{[^}]*woff2/);
   });
 });
+
+describe('the approximation sign (bug B2)', () => {
+  it('"~" is written only by approx(), set in mono: Public Pixel draws it as "∾"', () => {
+    // the only "~" in ui.ts is inside approx() (and its comment)
+    const code = uiTs.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(code.match(/~/g)).toEqual(['~']);
+    expect(code).toContain('const approx = (value: string | number): string => `<span class="approx">~</span>${value}`;');
+    const approxRule = RULES.find(([sel]) => sel === '.approx')?.[1] ?? '';
+    expect(approxRule).toContain('font-family: var(--mono)');
+    // the price estimate in the deal is pixel-font text
+    expect(uiTs).toContain('<span class="price">${approx(estimatedValue(item))} кр.</span>');
+  });
+});

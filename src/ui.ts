@@ -34,6 +34,12 @@ const FLOATING_TEXT_LIFETIME_MS = 1300;
 /** Viewport shrink that means an on-screen keyboard, not a browser bar. */
 const KEYBOARD_MIN_PX = 150;
 const disabledIf = (condition: unknown): string => condition ? 'disabled' : '';
+
+/**
+ * "About N": the one place that writes the approximation sign. Public Pixel draws "~" as "∾"
+ * and its "≈" is unreadable, so the sign is set in mono (.approx) and the number keeps its font.
+ */
+const approx = (value: string | number): string => `<span class="approx">~</span>${value}`;
 const conditionText = (item: Item): string => item.k.cond ? item.cond + '%' : '?%';
 
 function iconCanvas(type: ItemType, cssClass = '', infected = false): string {
@@ -213,7 +219,7 @@ function updateChanceMeter(): void {
   }
   const chance = perceivedChance(customer, readOffer(input));
   byId('cverdict').textContent = HUNCH_VERDICT_TEXT.ru[hunchVerdict(chance)];
-  byId('cval').textContent = chance >= 1 ? 'согласится' : chance <= 0 ? 'обидится' : `~${Math.round(chance * 100)}%`;
+  byId('cval').innerHTML = chance >= 1 ? 'согласится' : chance <= 0 ? 'обидится' : approx(`${Math.round(chance * 100)}%`);
   byId('cbar').style.width = (chance * 100) + '%';
 }
 
@@ -306,7 +312,7 @@ function sellerPane(customer: SellerCustomer): string {
       <span>Состояние</span><span>${knownFact(item.k.cond, condition)}</span>
       <span>Серийник</span><span>${knownFact(item.k.serial, serial)}</span>
       <span>Начинка</span><span>${knownFact(item.k.flaw, insides)}</span>
-      <span>Оценка</span><span class="price">~${estimatedValue(item)} кр.</span></div></div></div>
+      <span>Оценка</span><span class="price">${approx(estimatedValue(item))} кр.</span></div></div></div>
       <div class="tools"><button class="btn" data-a="insp" data-v="cond" ${disabledIf(customer.done.cond)}>Сканер</button>
       <button class="btn" data-a="insp" data-v="serial" ${disabledIf(customer.done.serial)}>Серийник</button>
       <button class="btn" data-a="insp" data-v="flaw" ${disabledIf(customer.done.flaw)}>Диагностика</button></div>
@@ -325,7 +331,7 @@ function buyerPane(customer: BuyerCustomer): string {
   }
   const tiles = matching.map(item => {
     const shown = customer.item && customer.item.uid === item.uid;
-    return `<button class="tile ${shown ? 'on' : ''}" data-a="show" data-v="${item.uid}">${itemDots(item)}${iconCanvas(item.t, '', showsInfection(item))}<span>${conditionText(item)}</span><span class="tv">~${estimatedValue(item)}</span></button>`;
+    return `<button class="tile ${shown ? 'on' : ''}" data-a="show" data-v="${item.uid}">${itemDots(item)}${iconCanvas(item.t, '', showsInfection(item))}<span>${conditionText(item)}</span><span class="tv">${approx(estimatedValue(item))}</span></button>`;
   }).join('');
   html += `<div class="shelf">${tiles}</div>`;
   if (!isPresentedBuyer(customer)) {
@@ -362,7 +368,7 @@ function benchButton(action: string, label: string, enabled: boolean): string {
 }
 
 function workbench(item: Item): string {
-  return `<div class="bench"><div class="card">${iconCanvas(item.t, 'bigico', showsInfection(item))}<div style="min-width:0"><div class="rn">${itemName(item.t)}</div><div class="hint">Оценка ~${estimatedValue(item)} кр.</div>${itemTags(item)}</div></div>
+  return `<div class="bench"><div class="card">${iconCanvas(item.t, 'bigico', showsInfection(item))}<div style="min-width:0"><div class="rn">${itemName(item.t)}</div><div class="hint">Оценка ${approx(estimatedValue(item))} кр.</div>${itemTags(item)}</div></div>
     <div class="bgrid">${benchButton('diag', 'Диагностика', !isFullyKnown(item))}${benchButton('repair', 'Ремонт +25%', item.cond < 100)}
     ${benchButton('fix', 'Убрать дефект', item.k.flaw && item.defect)}${benchButton('purge', 'Вычистить ИИ', item.k.flaw && item.infected)}
     ${benchButton('wipe', 'Перебить №', item.k.serial && item.stolen)}
@@ -375,7 +381,7 @@ function inventoryPane(): string {
     return '<div class="hint">Склад пуст. Покупайте у клиентов или копайте на свалке.</div>';
   }
   const tiles = state.inv
-    .map(item => `<button class="tile ${ui.sel === item.uid ? 'on' : ''}" data-a="sel" data-v="${item.uid}">${itemDots(item)}${iconCanvas(item.t, '', showsInfection(item))}<span>${itemName(item.t)}</span><span class="tv">${conditionText(item)} · ~${estimatedValue(item)}</span></button>`)
+    .map(item => `<button class="tile ${ui.sel === item.uid ? 'on' : ''}" data-a="sel" data-v="${item.uid}">${itemDots(item)}${iconCanvas(item.t, '', showsInfection(item))}<span>${itemName(item.t)}</span><span class="tv">${conditionText(item)} · ${approx(estimatedValue(item))}</span></button>`)
     .join('');
   const html = `<div class="shelf">${tiles}</div>
   <div class="legend"><span>${DOT.unknown}не проверено</span><span>${DOT.risk}краденое / ИИ</span><span>${DOT.wear}дефект</span></div>`;
@@ -392,7 +398,7 @@ function recipeRow(recipe: Recipe, index: number): string {
     .map(([type, count]) => `<span class="${availableOfType(type).length >= count ? 'm-ok' : 'm-inactive'}">${itemName(type)} ×${count}</span>`)
     .join(' + ');
   const partsClass = state.parts >= recipe.parts ? 'm-ok' : 'm-inactive';
-  return `<div class="recipe">${iconCanvas(recipe.out)}<div class="rb"><div class="rn">${itemName(recipe.out)}</div><div class="need">${parts} + <span class="${partsClass}">${recipe.parts}⚙</span> · ~${ITEM_TYPES[recipe.out].basePrice} кр.</div></div>
+  return `<div class="recipe">${iconCanvas(recipe.out)}<div class="rb"><div class="rn">${itemName(recipe.out)}</div><div class="need">${parts} + <span class="${partsClass}">${recipe.parts}⚙</span> · ${approx(ITEM_TYPES[recipe.out].basePrice)} кр.</div></div>
     <button class="btn" data-a="craft" data-v="${index}" ${canCraft(recipe) ? '' : 'disabled'}>Собрать</button></div>`;
 }
 

@@ -3,9 +3,9 @@
 import { describe, expect, it } from 'vitest';
 import { MUSIC_KEY, musicWanted, rememberMusic, type PrefStorage } from '../../src/audio';
 import { HUD_TEXT, MAX_HEAT, SAVE_KEY } from '../../src/data';
-import { blinkLit, HEAT_METER, heatMeterHeight, heatMeterRects } from '../../src/heatmeter';
+import { blinkLit, HEAT_METER, heatMeterCells, heatMeterHeight, heatMeterRects, sirenLit } from '../../src/heatmeter';
 import { ICONS, iconSvg, ICON_SCALE } from '../../src/icons';
-import { COLOR, MEANING } from '../../src/palette';
+import { COLOR, MEANING, SHOP } from '../../src/palette';
 import styleCss from '../../src/style.css?raw';
 import uiTs from '../../src/ui.ts?raw';
 import sceneTs from '../../src/scene.ts?raw';
@@ -96,15 +96,16 @@ describe('the wanted level is on the scene, not in the HUD', () => {
 
   it('10 cells 4×4 with 1 px gaps on the left wall, clear of the window at x = 7', () => {
     expect(MAX_HEAT).toBe(10);
-    const rects = heatMeterRects(0, MAX_HEAT, 0);
-    const cells = rects.slice(2);
+    const cells = heatMeterCells(0, MAX_HEAT, 0);
     expect(cells).toHaveLength(10);
     for (const [x, , w, h] of cells) {
       expect([w, h]).toEqual([4, 4]);
       expect(x + w).toBeLessThanOrEqual(6);
     }
-    for (const [x, , w] of rects) {
-      expect(x + w).toBeLessThanOrEqual(6);
+    const rects = heatMeterRects(9, MAX_HEAT, 0);
+    for (const [x, y, w] of rects) {
+      expect(x + w, 'clear of the window and shelves (x ≥ 7)').toBeLessThanOrEqual(6);
+      expect(y).toBeGreaterThanOrEqual(0);
     }
     expect(heatMeterHeight(10)).toBe(49);
     // above the counter top (y = 68)
@@ -112,21 +113,47 @@ describe('the wanted level is on the scene, not in the HUD', () => {
     expect(sceneTs).toContain('drawHeatMeter(now)');
   });
 
-  it('fills from the bottom: empty cells wall-line, filled cells risk', () => {
-    const cells = heatMeterRects(3, MAX_HEAT, 0).slice(2);
-    const byHeight = [...cells].sort((a, b) => b[1] - a[1]); // lowest first
-    expect(byHeight.map(cell => cell[4])).toEqual([...Array(3).fill(MEANING.risk), ...Array(7).fill(COLOR.line)]);
+  it('a siren 6×5 sits on top of the plate', () => {
+    const plateTop = HEAT_METER.top - 1;
+    const siren = heatMeterRects(0, MAX_HEAT, 0).filter(([, y, , h]) => y + h <= plateTop);
+    expect(siren.length).toBeGreaterThanOrEqual(2);
+    const left = Math.min(...siren.map(r => r[0]));
+    const right = Math.max(...siren.map(r => r[0] + r[2]));
+    const topY = Math.min(...siren.map(r => r[1]));
+    const bottom = Math.max(...siren.map(r => r[1] + r[3]));
+    expect([right - left, bottom - topY]).toEqual([6, 5]);
+    expect(bottom).toBeLessThan(plateTop);
   });
 
-  it('from 7 on the highest filled cell blinks once a second; below 7 nothing blinks', () => {
-    expect(HEAT_METER.blinkFrom).toBe(7);
+  it('fills from the bottom: filled cells solid risk, empty cells a line-colored outline', () => {
+    const rects = heatMeterRects(3, MAX_HEAT, 0);
+    const cells = heatMeterCells(3, MAX_HEAT, 0);
+    expect(cells.map(cell => cell[4])).toEqual([...Array(3).fill(MEANING.risk), ...Array(7).fill(COLOR.line)]);
+    // every empty cell has the wall color inside its 1 px outline
+    for (const [x, y] of cells.slice(3)) {
+      expect(rects).toContainEqual([x + 1, y + 1, 2, 2, SHOP.wall]);
+    }
+    // a filled cell has nothing drawn over it
+    const [fx, fy] = cells[0];
+    expect(rects.filter(([x, y]) => x === fx + 1 && y === fy + 1)).toHaveLength(0);
+  });
+
+  it('the siren is off below 8; from 8 it and the highest filled cell blink once a second', () => {
+    expect(HEAT_METER.blinkFrom).toBe(8);
     expect(HEAT_METER.blinkPeriodMs).toBeGreaterThanOrEqual(1000);
     expect(blinkLit(0)).toBe(true);
     expect(blinkLit(600)).toBe(false);
-    const risky = (heat: number, now: number): number => heatMeterRects(heat, MAX_HEAT, now).filter(r => r[4] === MEANING.risk).length;
-    expect(risky(7, 0)).toBe(7);
-    expect(risky(7, 600)).toBe(6);
-    expect(risky(6, 600)).toBe(6);
+    const solid = (heat: number, now: number): number => heatMeterCells(heat, MAX_HEAT, now).filter(r => r[4] === MEANING.risk).length;
+    const sirenRisk = (heat: number, now: number): boolean => heatMeterRects(heat, MAX_HEAT, now)
+      .some(([, y, , , color]) => y < HEAT_METER.top - 1 && color === MEANING.risk);
+    expect(solid(7, 600)).toBe(7);
+    expect(sirenRisk(7, 0)).toBe(false);
+    expect(sirenLit(7, 0)).toBe(false);
+    expect(solid(8, 0)).toBe(8);
+    expect(solid(8, 600)).toBe(7);
+    expect(sirenRisk(8, 0)).toBe(true);
+    expect(sirenRisk(8, 600)).toBe(false);
+    expect(sirenRisk(10, 0)).toBe(true);
   });
 
   it('screen readers hear it as text', () => {

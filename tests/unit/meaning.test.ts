@@ -2,7 +2,7 @@
 // never from a base color like --red or COLOR.amber.
 import { describe, expect, it } from 'vitest';
 import { COLOR, CSS_TOKENS, MEANING } from '../../src/palette';
-import { heatMeterRects } from '../../src/heatmeter';
+import { heatMeterCells } from '../../src/heatmeter';
 import styleCss from '../../src/style.css?raw';
 import uiTs from '../../src/ui.ts?raw';
 import economyTs from '../../src/economy.ts?raw';
@@ -52,7 +52,8 @@ describe('meaning tokens', () => {
 describe('the interface uses meanings, not base colors', () => {
   it('scales: wanted level = risk, patience = wear, gut feeling = hunch', () => {
     // the wanted level is drawn on the scene wall (V1.4 fix): filled cells are MEANING.risk
-    expect(heatMeterRects(10, 10, 0).slice(2).every(cell => cell[4] === MEANING.risk)).toBe(true);
+    expect(heatMeterCells(10, 10, 0).every(cell => cell[4] === MEANING.risk)).toBe(true);
+    expect(heatMeterCells(0, 10, 0).every(cell => cell[4] === COLOR.line)).toBe(true);
     expect(rule('.pips i.on')).toContain('var(--m-wear)');
     expect(rule('.cbar i')).toContain('var(--m-hunch)');
     expect(rule('.chance span')).toContain('var(--m-hunch)');
