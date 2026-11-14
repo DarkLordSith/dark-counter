@@ -32,12 +32,13 @@
 - `index.html` — разметка, подключает `src/main.ts`.
 - `src/main.ts` — инициализация: загрузка сейва, связка модулей, рендер, цикл анимации.
 - `src/types.ts` — `GameState`, `Item`, `ItemType`, `Customer` (размеченное объединение по `kind`: `'sell' | 'buy' | 'rent'`). Короткие поля сейва описаны с комментариями.
-- `src/data.ts` — товары (`ITEM_TYPES`), рецепты (`RECIPES`), имена, реплики, все балансовые числа (`RENT`, `HAGGLE`, `DIG_ODDS`…). Новый контент добавляется здесь.
+- `src/data.ts` — товары (`ITEM_TYPES`), рецепты (`RECIPES`), имена, реплики, все балансовые числа (`RENT`, `HAGGLE`, `DIG_ODDS`…), строки HUD и меню RU/EN (`HUD_TEXT`). Новый контент добавляется здесь.
 - `src/state.ts` — `state` (сейв), `ui` и `actor` (состояние экрана, не сохраняются), `newGame`, `createItem`, `saveGame`, `loadGame`, `migrate`, `exportSave`, `importSave`.
 - `src/economy.ts` — торг (`sellerAcceptChance`/`buyerAcceptChance`, `perceivedChance`), аренда и залог (`planCollateral`), свалка (`digPile`), верстак (`useWorkbench`), сборка (`craft`), ночь (`sleepUntilMorning`). **Чистые функции без DOM.**
 - `src/appearance.ts` — внешность клиента по сиду (`appearanceFor`). Чистая функция: её используют и `economy` (имя человека или робота), и `scene` (отрисовка).
 - `src/scene.ts` — canvas: лавка, свалка, спрайты клиентов и товаров (`ITEM_SPRITES`), анимации, `startScene`.
-- `src/ui.ts` — HUD, вкладки, панели, модалки, таблица обработчиков `ACTIONS` (кнопки несут `data-a`).
+- `src/ui.ts` — HUD, вкладки, панели, модалки, меню ☰ (шторка: «Сохранение», «Новая игра» с подтверждением), таблица обработчиков `ACTIONS` (кнопки несут `data-a`).
+- `src/icons.ts` — пиксельные иконки интерфейса (♪, ☰, глаз розыска): inline SVG из прямоугольников на сетке, рисуются 2×, цвет — `currentColor` из CSS. Не эмодзи и не символы шрифта.
 - `src/audio.ts` — лофи.
 - `src/util.ts` — random и math-хелперы без игровой логики и без DOM.
 - `src/palette.ts` — **все цвета игры**, единственное место с цветовыми литералами: общие `COLOR`, группы по месту использования (`SHOP`, `JUNKYARD`, `CHARACTER`, `CUSTOMER_TONES`, `ITEM_COLORS`), полупрозрачные `SHADE`/`GLOW` через `withAlpha()`, `MEANING` — цветовой словарь поверх базовых цветов, `CSS_TOKENS` для CSS (включая `--m-*`). Имена базовых цветов — по месту в сцене или интерфейсе, смыслы (риск, польза) — только в `MEANING`. Чистые данные: импортируют и canvas, и Vitest, и `vite.config.ts`.
@@ -53,7 +54,7 @@
 - `tests/parity/` — стенд паритета: эталонная версия против кандидата в headless Chrome (см. его README). Гонять при рефакторинге и миграциях; если вид меняется намеренно — `PARITY_LOGIC_ONLY=1`.
 
 Правило: логика меняет `GameState` и возвращает результат. Например, `sleepUntilMorning()` возвращает события ночи, а всплывающие числа кладутся в очередь `feedback`. DOM трогают только `ui.ts` и `scene.ts` (через `dom.ts`). Без `any`; если тип неочевиден, описываем его в `types.ts`.
-Импорты без циклов: `types`/`data`/`util`/`palette` → `appearance` → `state` → `economy` → `scene` → `ui` → `main`.
+Импорты без циклов: `types`/`data`/`util`/`palette`/`icons` → `appearance` → `state` → `economy` → `scene` → `ui` → `main`.
 
 ### Новый товар
 1. Одна строка в `ITEM_TYPES` в `src/data.ts`. Тип `ItemType` выводится из ключей каталога, правка в `types.ts` не нужна.
@@ -85,6 +86,7 @@
   - пиксельный — `--fs-px-s` 8px, `--fs-px-m` 16px, `--fs-px-l` 24px. Только кратные 8, иначе пиксели размываются; без жирного и без `letter-spacing`;
   - моно — `--fs-s` 12px (подписи, лог, метки HUD), `--fs-m` 14px (текст панелей, не меньше), `--fs-l` 18px.
   - Два профиля: **телефон** — `:root`, **десктоп** — `@media (min-width: 900px) { :root }` (тот же набор токенов, пока копия). Ширина совпадает с `DESKTOP_QUERY` в `src/fontlab.ts`, значения — с `PROFILE_SIZES` (тест `fontlab.test.ts`). Минимумы проверяются для телефона.
+- HUD (V1.4) — одна строка фиксированной высоты `--hud-height`: статы «метка над числом» и две кнопки-иконки 44×44. Должен помещаться на 375 pt.
 - Без `alert`, `confirm`, `prompt`: только свои модалки.
 
 ## Релиз

@@ -5,7 +5,7 @@
 // PARITY_IGNORE=<css selector> hides and skips intentionally new elements
 // in both versions (the version label .version is always skipped).
 import fs from 'node:fs';
-import { deterministicInit, hash as h, launch, preloadFonts, rng } from './common.mjs';
+import { clickMenuItem, deterministicInit, hash as h, launch, MENU_ACTIONS, preloadFonts, rng } from './common.mjs';
 
 const [, , URL_A, URL_B, RUNS = '12', STEPS = '250'] = process.argv;
 // The version label ("v0.7 · <commit>") differs between any two builds by
@@ -24,17 +24,28 @@ const WEIGHTS = { call: 8, offer: 6, ask: 6, accept: 4, take: 4, show: 5, insp: 
   parts: 2, tab: 1, log: 0.5, savemenu: 1.5, newgame: 0.3, 'newgame-yes': 1, buyout: 5, loadsave: 2 };
 const SKIP = new Set(['music', 'copysave']);
 
+/**
+ * Buttons the bot may press now. Layout-independent, so a reference and a
+ * candidate with a different header still make the same choices:
+ * - the ☰ menu button stands for the actions inside it (savemenu, newgame),
+ *   which were plain HUD buttons before V1.4;
+ * - the list is sorted, so moving a button in the DOM changes nothing.
+ */
 async function candidates(page) {
-  return page.evaluate(skip => {
+  return page.evaluate((skip, menuActions) => {
     const modalOpen = !document.getElementById('modal').hidden;
     const root = modalOpen ? document.getElementById('modal') : document.getElementById('app');
     const out = [...root.querySelectorAll('[data-a]')]
       .filter(b => !b.disabled && !b.hidden && b.offsetParent !== null && !skip.includes(b.dataset.a))
       .map(b => ({ a: b.dataset.a, v: b.dataset.v ?? null }));
+    if (out.some(c => c.a === 'menu')) {
+      out.splice(out.findIndex(c => c.a === 'menu'), 1, ...menuActions.map(a => ({ a, v: null })));
+    }
     if (!modalOpen && document.getElementById('offer')) out.push({ a: '__type', v: null });
     if (!modalOpen && document.querySelector('.pile, [data-a="dig"]')) out.push({ a: '__canvas', v: null });
-    return out;
-  }, [...SKIP]);
+    const key = c => c.a + '\u0000' + (c.v ?? '');
+    return out.sort((x, y) => key(x) < key(y) ? -1 : key(x) > key(y) ? 1 : 0);
+  }, [...SKIP], MENU_ACTIONS);
 }
 
 async function act(page, c, r) {
@@ -65,6 +76,11 @@ async function act(page, c, r) {
       }
       document.getElementById('loadcode').value = out;
     }, mode);
+  }
+  // header actions: a HUD button before V1.4, an item of the ☰ menu since
+  const modalClosed = await page.evaluate(() => document.getElementById('modal').hidden);
+  if (MENU_ACTIONS.includes(c.a) && modalClosed) {
+    return page.evaluate(clickMenuItem, c.a);
   }
   return page.evaluate(c => {
     const sel = `[data-a="${c.a}"]` + (c.v !== null ? `[data-v="${c.v}"]` : '');

@@ -54,6 +54,25 @@ export const deterministicInit = (seed, presetSave = null) => `(() => {
 })();`;
 
 /**
+ * Clicks a header action in the page; works on both layouts: before V1.4
+ * "сейв" and "⟲" were HUD buttons, since V1.4 they are items of the ☰ menu.
+ * Pass to page.evaluate: page.evaluate(clickMenuItem, 'savemenu').
+ */
+export function clickMenuItem(action) {
+  const visible = el => el.offsetParent !== null;
+  const direct = [...document.querySelectorAll(`[data-a="${action}"]`)].find(visible);
+  if (direct) {
+    direct.click();
+    return;
+  }
+  document.querySelector('[data-a="menu"]').click();
+  document.querySelector(`#modal [data-a="${action}"]`).click();
+}
+
+/** Actions that moved from the HUD into the ☰ menu (V1.4). */
+export const MENU_ACTIONS = ['savemenu', 'newgame'];
+
+/**
  * Loads every font face up front. Otherwise a weight first used later
  * (e.g. 500 in the speech bubble) may still be downloading when a
  * screenshot is taken — that made screenshots flaky.

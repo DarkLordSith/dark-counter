@@ -51,7 +51,9 @@ async function record(url) {
     const click = () => document.querySelector('[data-a="music"]').click();
     click(); // on
     for (let i = 0; i < 1200; i++) { __ac.currentTime += 0.025; __tick(); } // 30 s of music
-    const label = document.querySelector('[data-a="music"]').textContent;
+    // state of the music button: aria-pressed since V1.4 (an icon), the "♪ выкл" text before
+    const button = document.querySelector('[data-a="music"]');
+    const label = button.hasAttribute('aria-pressed') ? (button.getAttribute('aria-pressed') === 'true' ? 'on' : 'off') : (button.textContent.includes('выкл') ? 'on' : 'off');
     click(); // off
     for (let i = 0; i < 40; i++) { __ac.currentTime += 0.025; __tick(); }
     click(); // on again

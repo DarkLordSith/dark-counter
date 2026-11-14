@@ -3,7 +3,7 @@
 //  2) old localStorage (dark-counter-v3) → page load of new
 //  3) code exported from new → loads in old (downgrade still works)
 // Usage: node savecompat.mjs <oldUrl> <newUrl>
-import { deterministicInit, launch, rng } from './common.mjs';
+import { clickMenuItem, deterministicInit, launch, rng } from './common.mjs';
 
 const [, , OLD, NEW] = process.argv;
 const W = { call: 8, offer: 6, ask: 6, accept: 4, take: 4, show: 5, insp: 4, closeshop: 6, sleep: 4, junk: 5, dig: 6, market: 3, close: 6, rentpay: 6, rentdefer: 3, rentitems: 3, sel: 3, bench: 4, craft: 4, parts: 2, tab: 1, refuse: 2 };
@@ -49,19 +49,23 @@ const snap = page => page.evaluate(logicOnly => JSON.stringify({
   pane: logicOnly ? '' : document.getElementById('pane').innerHTML.replace(/\s+/g, ' '),
   scene: document.getElementById('scn').toDataURL(),
 }), LOGIC_ONLY);
-const exportCode = page => page.evaluate(() => {
-  document.querySelector('[data-a="savemenu"]').click();
-  const code = document.getElementById('savecode').value;
-  document.querySelector('#modal [data-a="close"]').click();
-  return code;
-});
-const importCode = (page, code) => page.evaluate(code => {
-  document.querySelector('[data-a="savemenu"]').click();
-  document.getElementById('loadcode').value = code;
-  document.querySelector('[data-a="loadsave"]').click();
-  __step(90);
-  return { modalOpen: !document.getElementById('modal').hidden, msg: document.getElementById('savemsg')?.textContent };
-}, code);
+const exportCode = async page => {
+  await page.evaluate(clickMenuItem, 'savemenu');
+  return page.evaluate(() => {
+    const code = document.getElementById('savecode').value;
+    document.querySelector('#modal [data-a="close"]').click();
+    return code;
+  });
+};
+const importCode = async (page, code) => {
+  await page.evaluate(clickMenuItem, 'savemenu');
+  return page.evaluate(code => {
+    document.getElementById('loadcode').value = code;
+    document.querySelector('[data-a="loadsave"]').click();
+    __step(90);
+    return { modalOpen: !document.getElementById('modal').hidden, msg: document.getElementById('savemsg')?.textContent };
+  }, code);
+};
 
 async function compareContinuation(label, a, b, seed) {
   const sa = await snap(a), sb = await snap(b);

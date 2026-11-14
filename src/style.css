@@ -57,6 +57,8 @@ img {
   /* The font lab's own text: fixed, so tuning the scale above does not resize the lab itself. */
   --lab-fs: 12px;
   --lab-title: 16px;
+  /* HUD: one row of 44 pt buttons plus air above and below (V1.4). */
+  --hud-height: 60px;
 }
 
 /* Desktop type profile: the :root above is the phone profile. A copy for now,
@@ -139,54 +141,76 @@ input:focus-visible {
 
 /* ==================== HUD (top bar) ==================== */
 
+/* One row (V1.4): stats on the left, two 44×44 icon buttons on the right.
+   Fixed height, so the scene below never moves when numbers grow. */
 .hud {
   flex: none;
+  height: var(--hud-height);
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
-  padding-block: 8px;
+  gap: 4px;
   font-variant-numeric: tabular-nums;
 }
 
-.logo {
-  font-size: var(--fs-px-s);
-  color: var(--cyan);
-  margin-right: auto;
+.stats {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  /* Very wide numbers (day 100+, 10 000+ credits on a 375 pt screen) clip on the right
+     instead of sliding under the buttons. */
+  overflow: hidden;
 }
 
+/* A stat: small mono label above a pixel-font number. */
 .st {
   display: flex;
-  align-items: baseline;
-  gap: 4px;
-  font-size: var(--fs-s);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .st small {
   font-size: var(--fs-s);
-  letter-spacing: .1em;
+  line-height: 1;
   text-transform: uppercase;
   color: var(--dim);
 }
 
-/* Word after a HUD number ("·смена", "/3д"): mono, small, so the pixel numbers fit. */
-.st i {
-  font-size: var(--fs-s);
-  font-style: normal;
+/* Urgent rent / the buy-out button: the label takes the meaning color too. */
+.st.m-risk small,
+.st-btn small {
+  color: inherit;
 }
 
 .st b {
   font-size: var(--fs-px-m);
+  line-height: 1;
+}
+
+/* Credits turn into the "buy out" button when the goal is reached. */
+.st-btn {
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 2px;
+  background: var(--panel2);
+  border: 1px solid var(--m-action);
 }
 
 .heat {
   display: flex;
   gap: 1px;
+  height: 16px;
+  align-items: center;
 }
 
 .heat i {
-  width: 4px;
-  height: 9px;
+  width: 2px;
+  height: 12px;
   background: var(--line);
 }
 
@@ -194,11 +218,33 @@ input:focus-visible {
   background: var(--m-risk);
 }
 
-.hb {
+/* Icon buttons (♪, ☰): 44×44 pt touch target, 16×16 pixel icon drawn 2×. */
+.ib {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
   background: var(--panel2);
   border: 1px solid var(--line);
-  padding: 3px 7px;
-  font-size: var(--fs-s);
+  color: var(--fg);
+}
+
+.ico {
+  display: block;
+  fill: currentColor;
+}
+
+/* The eye label sits on the text baseline like the word labels. */
+.st small .ico {
+  display: inline-block;
+  vertical-align: bottom;
+}
+
+/* Gap around the strike on the muted note: the button background. */
+.ico .ico-cut {
+  fill: var(--panel2);
 }
 
 /* ==================== Scene: canvas, speech bubble, queue chip, call button, floating numbers ==================== */
@@ -523,10 +569,6 @@ input:focus-visible {
 
 .btn.m-risk {
   border-color: var(--m-risk);
-}
-
-.hb.m-action {
-  border-color: var(--m-action);
 }
 
 /* ==================== Deal: price input, chance meter, actions ==================== */
@@ -868,6 +910,27 @@ input:focus-visible {
   padding: 16px;
 }
 
+/* ☰ menu (V1.4): a sheet right under the HUD, at the menu button's side. */
+.modal.sheet {
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: calc(env(safe-area-inset-top, 0px) + var(--hud-height)) max(12px, env(safe-area-inset-right, 0px)) 16px max(12px, env(safe-area-inset-left, 0px));
+}
+
+.ios-pwa .modal.sheet {
+  padding-top: calc(env(safe-area-inset-top, 0px) + var(--pwa-ceiling) + var(--hud-height));
+}
+
+.modal.sheet .mbox {
+  max-width: 280px;
+}
+
+.menu-item {
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+}
+
 .mbox {
   background: var(--panel);
   border: 1px solid var(--cyan);
@@ -977,7 +1040,6 @@ input:focus-visible {
    the gut-feeling verdict. Single weight (no fake bold), no smoothing where the
    browser allows it, no letter spacing: anything else blurs the 8×8 pixels. */
 
-.logo,
 .st b,
 .chip,
 .call,
