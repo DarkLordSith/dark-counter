@@ -116,9 +116,9 @@ describe('copied result', () => {
     settings.groups.names = { font: 'mono', weight: 600, upper: false };
     settings.groups.verdict.upper = true;
     expect(formatSettings(settings, 'ru', 'phone', 3)).toBe(
-      '[телефон, DPR 3] --fs-s: 12px; --fs-m: 15px; --fs-l: 18px; --fs-px-s: 8px; --fs-px-m: 16px; --fs-px-l: 24px; '
+      '[телефон, DPR 3] --fs-xs: 11px; --fs-s: 12px; --fs-m: 15px; --fs-l: 18px; --fs-px-s: 8px; --fs-px-m: 16px; --fs-px-l: 24px; '
       + 'названия: mono 600; цены: pixel; вердикт: pixel ЗАГЛАВНЫЕ; числа HUD: pixel; заголовки: pixel');
-    expect(formatSettings(defaultSettings('desktop'), 'en', 'desktop', 2)).toMatch(/^\[desktop, DPR 2\] --fs-s: 12px;/);
+    expect(formatSettings(defaultSettings('desktop'), 'en', 'desktop', 2)).toMatch(/^\[desktop, DPR 2\] --fs-xs: 11px; --fs-s: 12px;/);
   });
 });
 

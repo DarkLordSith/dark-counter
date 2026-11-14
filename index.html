@@ -23,9 +23,10 @@
 <!-- .ceiling = "station ceiling": decorative strip under the iOS 26+ blurred status bar zone, only in the iOS PWA (html.ios-pwa). -->
 <div id="app">
   <div class="ceiling" aria-hidden="true"></div>
-  <header class="hud" id="hud"></header>
   <div class="scene"><div class="stage" id="stage">
     <canvas id="scn" width="160" height="100" aria-label="Сцена игры"></canvas>
+    <!-- the wanted-level meter is drawn on the canvas; this is its text for screen readers -->
+    <span class="sr-only" id="heatText" aria-live="polite"></span>
     <div class="bubble" id="bubble" hidden></div>
     <div class="chip" id="chip"></div>
     <button class="call" id="callBtn" data-a="call" hidden>Позвать следующего</button>
@@ -33,6 +34,8 @@
   <button class="ticker" id="ticker" data-a="log"></button>
   <nav class="tabs" id="tabs"></nav>
   <section class="pane" id="pane"></section>
+  <!-- HUD at the bottom (V1.4 fix): the world on top, the console below -->
+  <footer class="hud" id="hud"></footer>
 </div>
 <div class="modal" id="modal" hidden><div class="mbox" id="mbox"></div></div>
 

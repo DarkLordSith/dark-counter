@@ -16,6 +16,9 @@ const IGNORE = ['.version', process.env.PARITY_IGNORE].filter(Boolean).join(', '
 // skips markup, computed styles, screenshots and floating-number colors.
 const LOGIC_ONLY = process.env.PARITY_LOGIC_ONLY === '1';
 const LOGIC_KEYS = new Set(['save', 'values', 'canv']);
+// PARITY_SKIP_SCENE=1: the scene drawing changes on purpose (e.g. the wanted-level meter on the wall);
+// the scene canvas is left out, item icons are still compared.
+const SKIP_SCENE = process.env.PARITY_SKIP_SCENE === '1';
 const OUT = new URL('./out/shots/', import.meta.url);
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -91,8 +94,8 @@ async function act(page, c, r) {
 }
 
 async function snapshot(page, deep) {
-  return page.evaluate((deep, ignore) => {
-    const canv = [...document.querySelectorAll('canvas')].map(c => c.toDataURL());
+  return page.evaluate((deep, ignore, skipScene) => {
+    const canv = [...document.querySelectorAll('canvas')].filter(c => !(skipScene && c.id === 'scn')).map(c => c.toDataURL());
     const app = document.getElementById('app').cloneNode(true);
     app.querySelectorAll('.fx').forEach(n => n.remove());
     const mbox = document.getElementById('mbox').cloneNode(true);
@@ -116,7 +119,7 @@ async function snapshot(page, deep) {
       }).join('\n');
     }
     return s;
-  }, deep, IGNORE);
+  }, deep, IGNORE, SKIP_SCENE);
 }
 
 async function runOne(browser, label, url, seed, steps, shots, viewport) {

@@ -2,7 +2,7 @@
 // compares the logs. AudioContext is replaced by a recording fake with a
 // controllable clock; the scheduler's setInterval(…, 25) is driven by hand.
 // Usage: node audiotest.mjs <urlA> <urlB>
-import { hash as h, launch } from './common.mjs';
+import { clickMenuItem, hash as h, launch } from './common.mjs';
 
 const [, , OLD, NEW] = process.argv;
 const INIT = `(() => {
@@ -46,13 +46,15 @@ async function record(url) {
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   await page.evaluateOnNewDocument(INIT);
+  // the music toggle: a HUD button before the V1.4 fix, an item of the ☰ menu since
+  await page.evaluateOnNewDocument(`window.__clickMenuItem = ${clickMenuItem.toString()};`);
   await page.goto(url, { waitUntil: 'load' });
   const log = await page.evaluate(() => {
-    const click = () => document.querySelector('[data-a="music"]').click();
+    const click = () => __clickMenuItem('music');
     click(); // on
     for (let i = 0; i < 1200; i++) { __ac.currentTime += 0.025; __tick(); } // 30 s of music
-    // state of the music button: aria-pressed since V1.4 (an icon), the "♪ выкл" text before
-    const button = document.querySelector('[data-a="music"]');
+    // state of the music button: aria-pressed since V1.4, the "♪ выкл" text before
+    const button = [...document.querySelectorAll('[data-a="music"]')].find(el => el.offsetParent !== null);
     const label = button.hasAttribute('aria-pressed') ? (button.getAttribute('aria-pressed') === 'true' ? 'on' : 'off') : (button.textContent.includes('выкл') ? 'on' : 'off');
     click(); // off
     for (let i = 0; i < 40; i++) { __ac.currentTime += 0.025; __tick(); }
