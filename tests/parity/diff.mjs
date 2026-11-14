@@ -145,7 +145,8 @@ const actionsSeen = {};
 for (let run = 0; run < +RUNS; run++) {
   const seed = 1234 + run * 101;
   const shots = run < 3 && !LOGIC_ONLY;
-  const viewport = run % 2 ? { width: 390, height: 844, deviceScaleFactor: 1 } : { width: 1024, height: 768, deviceScaleFactor: 1 };
+  // even runs on a desktop window (DESKTOP_WIDTH, default 1024; the desktop type profile starts at 900px)
+  const viewport = run % 2 ? { width: 390, height: 844, deviceScaleFactor: 1 } : { width: +(process.env.DESKTOP_WIDTH || 1024), height: 768, deviceScaleFactor: 1 };
   const [A, B] = await Promise.all([runOne(browser, 'A', URL_A, seed, +STEPS, shots, viewport), runOne(browser, 'B', URL_B, seed, +STEPS, shots, viewport)]);
   let diverged = null;
   for (let i = 0; i < A.snaps.length && !diverged; i++) {

@@ -59,6 +59,20 @@ img {
   --lab-title: 16px;
 }
 
+/* Desktop type profile: the :root above is the phone profile. A copy for now,
+   kept apart so desktop sizes can be tuned separately (the font lab knows both).
+   The width is DESKTOP_QUERY in src/fontlab.ts. */
+@media (min-width: 900px) {
+  :root {
+    --fs-px-s: 8px;
+    --fs-px-m: 16px;
+    --fs-px-l: 24px;
+    --fs-s: 12px;
+    --fs-m: 14px;
+    --fs-l: 18px;
+  }
+}
+
 /* ==================== Base elements ==================== */
 
 * {
@@ -1101,6 +1115,11 @@ html[data-fl-headings-case="upper"] .opt b {
 .fl-row b {
   min-width: 28px;
   text-align: center;
+}
+
+/* "sharp" / "soft" next to a pixel size: same width either way, so the buttons do not jump. */
+.fl-row small {
+  min-width: 6ch;
 }
 
 .fl-group {
