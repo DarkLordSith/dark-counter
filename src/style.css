@@ -1051,6 +1051,13 @@ input:focus-visible {
   -webkit-font-smoothing: none;
 }
 
+/* "About N" (approx() in ui.ts): Public Pixel draws "~" as "∾" and has no readable "≈",
+   so the sign is in mono even inside pixel-font numbers; the number keeps the pixel font. */
+.approx {
+  font-family: var(--mono);
+  -webkit-font-smoothing: auto;
+}
+
 /* ==================== Font lab (src/fontlab.ts, debug) ====================
    Per-group overrides from the font lab, set as data-fl-* attributes on <html>.
    Without the attributes nothing here applies. */
