@@ -21,7 +21,7 @@ const BASE_ACCENTS = /var\(--(red|amber|green|cyan|dim|violet)\)/;
 
 /** Decoration, not meaning: allowed to use base accents directly. Keep short. */
 const DECOR = [
-  'button:focus-visible, input:focus-visible', '.ios-pwa .ceiling', '.logo', '.st small', '.chip', '.ticker', '.ticker b', '.tab', '.tab.on',
+  'button:focus-visible, input:focus-visible', '.ios-pwa .ceiling', '.st small', '.chip', '.ticker', '.ticker b', '.tab', '.tab.on',
   '.hint', '.rows span:nth-child(odd)', '.chance', '.ask', '.tile .tv', '.legend', '.tag', '.need', '.opt span',
   '.mbox', '.mbox h2', '.mbox label', '.mbox .version', '.diag', '.diag h2',
   // customer kind label ("продаёт" / "покупает"): a type, not a state, so neutral grey (V1.3)

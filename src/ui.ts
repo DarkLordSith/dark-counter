@@ -3,8 +3,9 @@
 //  plus all click/keyboard handlers (buttons carry data-a="action").
 // =====================================================================
 import { audio, toggleMusic } from './audio';
-import { BENCH_COST, BUYOUT_GOAL, CUSTOMERS_PER_DAY, HAGGLE, HUNCH_VERDICT_TEXT, ITEM_TYPES, MARKET, MAX_HEAT, RECIPES, RENT, SUPPLIER } from './data';
+import { BENCH_COST, BUYOUT_GOAL, CUSTOMERS_PER_DAY, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, MARKET, MAX_HEAT, RECIPES, RENT, SUPPLIER } from './data';
 import { byId, maybeById } from './dom';
+import { iconSvg } from './icons';
 import {
   askBuyer, availableOfType, buyFromSeller, buyOutShop, callNextCustomer, canCraft, canVisitMarket, closeShop,
   collateralHeatRelief, craft, customerLeaves, deferredDebt, deferRent, digPile, estimatedValue, evict, feedback,
@@ -95,36 +96,46 @@ function meterCells(total: number, filled: number): string {
    HUD, scene overlay, tabs
    ===================================================================== */
 
-const hudStat = (label: string, valueHtml: string): string => `<span class="st"><small>${label}</small>${valueHtml}</span>`;
+/** Interface language; the game is Russian for now, the strings are ready for RU/EN. */
+const HUD = HUD_TEXT.ru;
 
-/** Number in the pixel font, the word after it (unit, phase) in small mono: "25 смена", "1350 /3д". */
-const hudValue = (number: string | number, word = '', cssClass = ''): string =>
-  `<b class="${cssClass}">${number}</b>${word ? `<i class="${cssClass}">${word}</i>` : ''}`;
+/** One HUD stat: a small mono label above a pixel-font number (V1.4: one row on a 375 pt screen). */
+const hudStat = (label: string, valueHtml: string, cssClass = ''): string =>
+  `<span class="st ${cssClass}"><small>${label}</small>${valueHtml}</span>`;
 
+/** Rent: days left go into the label ("аренда·3д"), so the number column stays narrow. */
 function rentStat(): string {
+  if (state.won) {
+    return hudStat(HUD.rent, '<b>—</b>');
+  }
   const daysLeft = state.nextDue - state.day;
   const urgent = state.credits < state.owed && daysLeft <= 1 || state.deferred;
-  const value = state.won ? hudValue('—') : hudValue(state.owed, '/' + (daysLeft <= 0 ? 'сег.' : daysLeft + 'д'), urgent ? 'm-risk' : '');
-  return hudStat(state.deferred ? 'долг' : 'аренда', value);
+  // due today = "0д": same width as "6д" (the scene chip says "+АРЕНДА" on that day)
+  const when = Math.max(0, daysLeft) + HUD.daysShort;
+  return hudStat(`${state.deferred ? HUD.debt : HUD.rent}·${when}`, `<b>${state.owed}</b>`, urgent ? 'm-risk' : '');
+}
+
+/** Credits; once the shop can be bought out, the stat itself is the "buy out" button. */
+function creditsStat(): string {
+  if (state.credits >= BUYOUT_GOAL && !state.won) {
+    return `<button class="st st-btn m-action" data-a="buyout"><small>${HUD.buyout}</small><b>${state.credits}</b></button>`;
+  }
+  return hudStat(HUD.credits, `<b>${state.credits}</b>`);
 }
 
 function renderHud(): void {
-  const phaseLabel = state.phase === 'shop' ? 'смена' : state.where === 'junk' ? 'свалка' : 'вечер';
-  const buyoutButton = state.credits >= BUYOUT_GOAL && !state.won
-    ? '<button class="hb m-action" data-a="buyout">Выкупить</button>'
-    : '';
-  byId('hud').innerHTML = [
-    '<span class="logo">ТЁМНЫЙ ПРИЛАВОК</span>',
-    hudStat('кр', `<b>${state.credits}</b>`),
-    hudStat('день', hudValue(state.day, '·' + phaseLabel)),
+  const music = `<button class="ib" data-a="music" aria-pressed="${audio.on}" aria-label="${audio.on ? HUD.musicOn : HUD.musicOff}">`
+    + `${audio.on ? iconSvg('note') : iconSvg('note', 'strike')}</button>`;
+  const menu = `<button class="ib" data-a="menu" aria-haspopup="dialog" aria-label="${HUD.menu}">${iconSvg('menu')}</button>`;
+  byId('hud').innerHTML = `<div class="stats">${[
+    creditsStat(),
+    hudStat(HUD.day, `<b>${state.day}</b>`),
     rentStat(),
-    hudStat('зап', `<b>${state.parts}</b>`),
-    hudStat('розыск', `<span class="heat">${meterCells(MAX_HEAT, state.heat)}</span>`),
-    buyoutButton,
-    `<button class="hb" data-a="music">${audio.on ? '♪ выкл' : '♪ лофи'}</button>`,
-    '<button class="hb" data-a="savemenu">сейв</button>',
-    '<button class="hb" data-a="newgame">⟲</button>',
-  ].join('\n');
+    hudStat(HUD.parts, `<b>${state.parts}</b>`),
+    // wanted level: an eye instead of the word (the widest label), the meter says the rest
+    `<span class="st" role="img" aria-label="${HUD.heat}: ${state.heat}/${MAX_HEAT}"><small>${iconSvg('eye')}</small>`
+      + `<span class="heat">${meterCells(MAX_HEAT, state.heat)}</span></span>`,
+  ].join('')}</div>${music}${menu}`;
 }
 
 function chipText(): string {
@@ -429,6 +440,17 @@ function flushFeedback(): void {
 
 function openModal(title: string, body: string, buttons: string, footer = ''): void {
   byId('mbox').innerHTML = `<h2>${title}</h2>${body}<div class="mbtns">${buttons}</div>${footer}`;
+  byId('modal').classList.remove('sheet');
+  byId('modal').hidden = false;
+}
+
+/** ☰ menu: a sheet under the HUD with the game title, save and new game (later: RU/EN). */
+function openMenu(): void {
+  byId('mbox').innerHTML = `<h2>${HUD.gameTitle}</h2>
+    <button class="btn menu-item" data-a="savemenu">${HUD.save}</button>
+    <button class="btn menu-item" data-a="newgame">${HUD.newGame}</button>
+    <div class="mbtns"><button class="btn" data-a="close">${HUD.close}</button></div>`;
+  byId('modal').classList.add('sheet');
   byId('modal').hidden = false;
 }
 
@@ -508,7 +530,8 @@ function openLog(): void {
 }
 
 function confirmNewGame(): void {
-  openModal('Начать заново?', '<p>Текущая лавка будет потеряна.</p>', '<button class="btn pri" data-a="newgame-yes">Да, заново</button><button class="btn" data-a="close">Отмена</button>');
+  openModal(HUD.confirmTitle, `<p>${HUD.confirmText}</p>`,
+    `<button class="btn pri" data-a="newgame-yes">${HUD.confirmYes}</button><button class="btn" data-a="close">${HUD.confirmNo}</button>`);
 }
 
 /* =====================================================================
@@ -585,6 +608,10 @@ const ACTIONS: Record<string, ActionHandler> = {
   sleep: () => showMorningReport(sleepUntilMorning()),
   // header & modals
   music: () => toggleMusic(),
+  menu: () => {
+    openMenu();
+    return NO_RENDER;
+  },
   savemenu: () => {
     openSaveMenu();
     return NO_RENDER;
@@ -611,6 +638,12 @@ const ACTIONS: Record<string, ActionHandler> = {
 };
 
 function onClick(event: MouseEvent): void {
+  // a tap past the ☰ sheet closes it (other modals wait for their buttons)
+  const modal = byId('modal');
+  if (event.target === modal && modal.classList.contains('sheet')) {
+    closeModal();
+    return;
+  }
   const button = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-a]') : null;
   if (!button || (button instanceof HTMLButtonElement && button.disabled)) {
     return;

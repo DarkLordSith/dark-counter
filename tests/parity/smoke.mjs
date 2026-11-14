@@ -4,7 +4,7 @@
 // offline reload works from the SW cache. Saves out/mobile.png.
 // Usage: node smoke.mjs <url>
 import fs from 'node:fs';
-import { launch } from './common.mjs';
+import { clickMenuItem, launch } from './common.mjs';
 
 const [, , TARGET_URL] = process.argv;
 const OUT = new URL('./out/', import.meta.url);
@@ -50,14 +50,14 @@ let fixturesOk = true;
 for (const file of fs.existsSync(fixturesDir) ? fs.readdirSync(fixturesDir).filter(f => f.endsWith('.txt')).sort() : []) {
   const code = fs.readFileSync(new URL(file, fixturesDir), 'utf8');
   const day = JSON.parse(Buffer.from(code.trim().replace(/\s+/g, '').slice(4), 'base64').toString('utf8')).day;
+  await page.evaluate(clickMenuItem, 'savemenu');
   const result = await page.evaluate(code => {
-    document.querySelector('[data-a="savemenu"]').click();
     document.getElementById('loadcode').value = code;
     document.querySelector('[data-a="loadsave"]').click();
     return { modalOpen: !document.getElementById('modal').hidden, hud: document.getElementById('hud').innerText };
   }, code);
-  // the day number and the phase word may be separate elements (V1.3): allow whitespace between them
-  const ok = !result.modalOpen && new RegExp(`(^|\\D)${day}\\s*·`).test(result.hud);
+  // "ДЕНЬ" then the number: one line before V1.3 ("1 ·смена"), separate elements later, no phase word since V1.4
+  const ok = !result.modalOpen && new RegExp(`день\\s*${day}(\\D|$)`, 'i').test(result.hud);
   fixturesOk &&= ok;
   console.log(`fixture ${file}: day ${day} → ${ok ? 'loaded' : 'FAILED'}`);
 }

@@ -131,6 +131,52 @@ export const HUNCH_VERDICT_TEXT = {
   en: { unlikely: 'unlikely', maybe: 'maybe', likely: 'likely', deal: 'deal' },
 } as const;
 
+/** HUD (V1.4): stat labels, icon-button labels for screen readers, the menu and the new-game confirmation. */
+export const HUD_TEXT = {
+  ru: {
+    credits: 'кр',
+    day: 'день',
+    rent: 'аренда',
+    debt: 'долг',
+    daysShort: 'д',
+    parts: 'зап',
+    heat: 'розыск',
+    buyout: 'выкуп',
+    musicOn: 'Музыка играет. Выключить',
+    musicOff: 'Музыка выключена. Включить',
+    menu: 'Меню',
+    gameTitle: 'Тёмный прилавок',
+    save: 'Сохранение',
+    newGame: 'Новая игра',
+    close: 'Закрыть',
+    confirmTitle: 'Начать заново?',
+    confirmText: 'Текущая игра пропадёт, сохраните код.',
+    confirmYes: 'Начать',
+    confirmNo: 'Отмена',
+  },
+  en: {
+    credits: 'cr',
+    day: 'day',
+    rent: 'rent',
+    debt: 'debt',
+    daysShort: 'd',
+    parts: 'parts',
+    heat: 'wanted',
+    buyout: 'buy out',
+    musicOn: 'Music is on. Turn off',
+    musicOff: 'Music is off. Turn on',
+    menu: 'Menu',
+    gameTitle: 'Dark Counter',
+    save: 'Save',
+    newGame: 'New game',
+    close: 'Close',
+    confirmTitle: 'Start over?',
+    confirmText: 'The current game will be lost, save the code.',
+    confirmYes: 'Start',
+    confirmNo: 'Cancel',
+  },
+} as const;
+
 // Acceptance curve: 50% at the hidden limit, up to 97% near their own price.
 export const ACCEPT = { atLimit: 0.5, slope: 0.47, cap: 0.97, feelStep: 20, feelMin: 0.05, feelMax: 0.95 };
 
