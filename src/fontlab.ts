@@ -3,7 +3,8 @@
 //  live on the phone. Opened from the diagnostics overlay (long press on
 //  the version → «Шрифты»). Changes CSS variables and data attributes on
 //  <html> only; never touches the save or gameplay. Settings live in
-//  localStorage under their own key.
+//  localStorage under their own key, one per type profile (phone /
+//  desktop, see style.css).
 // =====================================================================
 import { maybeById } from './dom';
 
@@ -28,21 +29,49 @@ export interface FontLabSettings {
   groups: Record<GroupId, GroupSettings>;
 }
 
-/** Same values as :root in style.css (checked by tests/unit/fontlab.test.ts). */
-export const DEFAULT_SIZES: Readonly<Record<SizeToken, number>> = {
-  '--fs-s': 12,
-  '--fs-m': 14,
-  '--fs-l': 18,
-  '--fs-px-s': 8,
-  '--fs-px-m': 16,
-  '--fs-px-l': 24,
+/** Type profiles of style.css: phone = :root, desktop = @media DESKTOP_QUERY. */
+export type Profile = 'phone' | 'desktop';
+export const PROFILES: readonly Profile[] = ['phone', 'desktop'];
+export const DESKTOP_QUERY = '(min-width: 900px)';
+
+/** Same values as style.css for each profile (checked by tests/unit/fontlab.test.ts). */
+export const PROFILE_SIZES: Readonly<Record<Profile, Readonly<Record<SizeToken, number>>>> = {
+  phone: {
+    '--fs-s': 12,
+    '--fs-m': 14,
+    '--fs-l': 18,
+    '--fs-px-s': 8,
+    '--fs-px-m': 16,
+    '--fs-px-l': 24,
+  },
+  desktop: {
+    '--fs-s': 12,
+    '--fs-m': 14,
+    '--fs-l': 18,
+    '--fs-px-s': 8,
+    '--fs-px-m': 16,
+    '--fs-px-l': 24,
+  },
 };
+
+/** The phone profile: the base the game is designed for. */
+export const DEFAULT_SIZES = PROFILE_SIZES.phone;
 
 export const SIZE_TOKENS = Object.keys(DEFAULT_SIZES) as SizeToken[];
 
-/** Mono: any size 10–20 in 1px steps. Pixel: only multiples of 8 (the 8×8 grid of Public Pixel). */
+/**
+ * Mono: any size 10–20 in 1px steps. Pixel: the 8×8 grid of Public Pixel is
+ * sharp when size × DPR / 8 is a whole number: multiples of 8 everywhere, and
+ * 12 on DPR 2 screens (Mac Retina) — so the lab offers 12 to try on desktop.
+ */
 export const MONO_RANGE = { min: 10, max: 20, step: 1 };
-export const PIXEL_SIZES = [8, 16, 24, 32] as const;
+export const PIXEL_SIZES = [8, 12, 16, 24, 32] as const;
+
+/** Whether the pixel font is drawn sharp: one font pixel = a whole number of device pixels. */
+export function isCrisp(size: number, dpr: number): boolean {
+  const devicePixels = size * dpr / 8;
+  return Math.abs(devicePixels - Math.round(devicePixels)) < 0.01;
+}
 
 export const isPixelToken = (token: SizeToken): boolean => token.startsWith('--fs-px-');
 
@@ -51,9 +80,9 @@ export const GROUPS: readonly GroupId[] = ['names', 'prices', 'verdict', 'hud', 
 
 export const WEIGHTS: readonly MonoWeight[] = [400, 500, 600];
 
-export function defaultSettings(): FontLabSettings {
+export function defaultSettings(profile: Profile = 'phone'): FontLabSettings {
   const groups = Object.fromEntries(GROUPS.map(id => [id, { font: 'pixel', weight: 400, upper: false }])) as Record<GroupId, GroupSettings>;
-  return { sizes: { ...DEFAULT_SIZES }, groups };
+  return { sizes: { ...PROFILE_SIZES[profile] }, groups };
 }
 
 /** One step up (+1) or down (−1) from the current size, within the allowed values. */
@@ -66,27 +95,27 @@ export function stepSize(token: SizeToken, current: number, direction: 1 | -1): 
   return Math.min(MONO_RANGE.max, Math.max(MONO_RANGE.min, current + direction * MONO_RANGE.step));
 }
 
-function validSize(token: SizeToken, value: unknown): number {
+function validSize(token: SizeToken, value: unknown, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return DEFAULT_SIZES[token];
+    return fallback;
   }
   if (isPixelToken(token)) {
-    return (PIXEL_SIZES as readonly number[]).includes(value) ? value : DEFAULT_SIZES[token];
+    return (PIXEL_SIZES as readonly number[]).includes(value) ? value : fallback;
   }
-  return Number.isInteger(value) && value >= MONO_RANGE.min && value <= MONO_RANGE.max ? value : DEFAULT_SIZES[token];
+  return Number.isInteger(value) && value >= MONO_RANGE.min && value <= MONO_RANGE.max ? value : fallback;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 
 /** Settings from storage, with anything unknown or out of range replaced by the default. */
-export function sanitize(raw: unknown): FontLabSettings {
-  const result = defaultSettings();
+export function sanitize(raw: unknown, profile: Profile = 'phone'): FontLabSettings {
+  const result = defaultSettings(profile);
   if (!isRecord(raw)) {
     return result;
   }
   const sizes = isRecord(raw.sizes) ? raw.sizes : {};
   for (const token of SIZE_TOKENS) {
-    result.sizes[token] = validSize(token, sizes[token]);
+    result.sizes[token] = validSize(token, sizes[token], result.sizes[token]);
   }
   const groups = isRecord(raw.groups) ? raw.groups : {};
   for (const id of GROUPS) {
@@ -103,7 +132,8 @@ export function sanitize(raw: unknown): FontLabSettings {
   return result;
 }
 
-export const isDefault = (settings: FontLabSettings): boolean => JSON.stringify(settings) === JSON.stringify(defaultSettings());
+export const isDefault = (settings: FontLabSettings, profile: Profile = 'phone'): boolean =>
+  JSON.stringify(settings) === JSON.stringify(defaultSettings(profile));
 
 /* =====================================================================
    Texts (RU / EN), one object for the future dictionary
@@ -128,6 +158,11 @@ export const FONTLAB_TEXT = {
     measured: 'Факт',
     ticker: 'лента',
     pane: 'панель',
+    profile: 'Профиль',
+    profileNames: { phone: 'телефон', desktop: 'десктоп' },
+    profileHint: 'у каждого профиля свои настройки; десктоп — окно от 900px',
+    crisp: 'чётко',
+    soft: 'мягко',
     sizeNames: { '--fs-s': 'моно S (лог, подписи)', '--fs-m': 'моно M (текст панелей)', '--fs-l': 'моно L (группы в моно)',
       '--fs-px-s': 'пикс S', '--fs-px-m': 'пикс M', '--fs-px-l': 'пикс L' },
     groupNames: { names: 'названия', prices: 'цены', verdict: 'вердикт', hud: 'числа HUD', headings: 'заголовки' },
@@ -148,14 +183,19 @@ export const FONTLAB_TEXT = {
     measured: 'Measured',
     ticker: 'log',
     pane: 'pane',
+    profile: 'Profile',
+    profileNames: { phone: 'phone', desktop: 'desktop' },
+    profileHint: 'each profile keeps its own settings; desktop is a window from 900px',
+    crisp: 'sharp',
+    soft: 'soft',
     sizeNames: { '--fs-s': 'mono S (log, captions)', '--fs-m': 'mono M (pane text)', '--fs-l': 'mono L (groups in mono)',
       '--fs-px-s': 'pixel S', '--fs-px-m': 'pixel M', '--fs-px-l': 'pixel L' },
     groupNames: { names: 'item names', prices: 'prices', verdict: 'verdict', hud: 'HUD numbers', headings: 'headings' },
   },
 } as const satisfies Record<Lang, unknown>;
 
-/** The result to paste into a task: "--fs-m: 15px; …; названия: mono 600; вердикт: pixel ЗАГЛАВНЫЕ". */
-export function formatSettings(settings: FontLabSettings, lang: Lang): string {
+/** The result to paste into a task: "[телефон, DPR 3] --fs-m: 15px; …; названия: mono 600; вердикт: pixel ЗАГЛАВНЫЕ". */
+export function formatSettings(settings: FontLabSettings, lang: Lang, profile: Profile, dpr: number): string {
   const text = FONTLAB_TEXT[lang];
   const sizes = SIZE_TOKENS.map(token => `${token}: ${settings.sizes[token]}px`);
   const groups = GROUPS.map(id => {
@@ -163,20 +203,28 @@ export function formatSettings(settings: FontLabSettings, lang: Lang): string {
     const face = group.font === 'mono' ? `mono ${group.weight}` : 'pixel';
     return `${text.groupNames[id]}: ${face}${group.upper ? ' ' + text.upper : ''}`;
   });
-  return [...sizes, ...groups].join('; ');
+  return `[${text.profileNames[profile]}, DPR ${formatDpr(dpr)}] ${[...sizes, ...groups].join('; ')}`;
 }
 
-/** localStorage key; separate from the save (dark-counter-v3). */
+/** "3", "2", "1.5": devicePixelRatio for people, not floats. */
+export const formatDpr = (dpr: number): string => String(Math.round(dpr * 100) / 100);
+
+/** localStorage keys, one per profile; separate from the save (dark-counter-v3). The phone keeps the PR #11 key. */
 export const FONTLAB_KEY = 'dark-counter-fontlab';
+export const FONTLAB_KEYS: Readonly<Record<Profile, string>> = {
+  phone: FONTLAB_KEY,
+  desktop: `${FONTLAB_KEY}-desktop`,
+};
 
 /* =====================================================================
    Applying to the page
    ===================================================================== */
 
 /** Writes the settings onto <html>: sizes as CSS variables, groups as data-fl-* attributes. */
-export function applySettings(settings: FontLabSettings, root: HTMLElement = document.documentElement): void {
+export function applySettings(settings: FontLabSettings, profile: Profile, root: HTMLElement = document.documentElement): void {
   for (const token of SIZE_TOKENS) {
-    if (settings.sizes[token] === DEFAULT_SIZES[token]) {
+    // equal to the profile in style.css → no inline value, the stylesheet decides
+    if (settings.sizes[token] === PROFILE_SIZES[profile][token]) {
       root.style.removeProperty(token);
     } else {
       root.style.setProperty(token, `${settings.sizes[token]}px`);
@@ -202,30 +250,47 @@ function setAttr(root: HTMLElement, name: string, value: string | null): void {
   }
 }
 
-function loadSettings(): FontLabSettings {
+/** The profile style.css is using right now (the same media query). */
+const desktopMedia = (): MediaQueryList | null => typeof matchMedia === 'function' ? matchMedia(DESKTOP_QUERY) : null;
+const currentProfile = (): Profile => desktopMedia()?.matches ? 'desktop' : 'phone';
+const currentDpr = (): number => window.devicePixelRatio || 1;
+
+function loadSettings(profile: Profile): FontLabSettings {
   try {
-    const raw = localStorage.getItem(FONTLAB_KEY);
-    return sanitize(raw ? JSON.parse(raw) : null);
+    const raw = localStorage.getItem(FONTLAB_KEYS[profile]);
+    return sanitize(raw ? JSON.parse(raw) : null, profile);
   } catch {
-    return defaultSettings();
+    return defaultSettings(profile);
   }
 }
 
-function storeSettings(settings: FontLabSettings): void {
+function storeSettings(settings: FontLabSettings, profile: Profile): void {
   try {
-    if (isDefault(settings)) {
-      localStorage.removeItem(FONTLAB_KEY);
+    if (isDefault(settings, profile)) {
+      localStorage.removeItem(FONTLAB_KEYS[profile]);
     } else {
-      localStorage.setItem(FONTLAB_KEY, JSON.stringify(settings));
+      localStorage.setItem(FONTLAB_KEYS[profile], JSON.stringify(settings));
     }
   } catch {
     // private mode / storage full: settings simply do not persist
   }
 }
 
-/** Called once at startup, before the first render, so stored sizes apply without a jump. */
+/**
+ * Called once at startup, before the first render, so stored sizes apply without a jump.
+ * When the window crosses DESKTOP_QUERY (resize, rotation), the other profile's settings apply.
+ */
 export function applyStoredFontLab(): void {
-  applySettings(loadSettings());
+  const applyCurrent = (): void => {
+    profile = currentProfile();
+    settings = loadSettings(profile);
+    applySettings(settings, profile);
+    if (maybeById(SHEET_ID)) {
+      render();
+    }
+  };
+  applyCurrent();
+  desktopMedia()?.addEventListener('change', applyCurrent);
 }
 
 /* =====================================================================
@@ -260,13 +325,18 @@ function measure(element: Element | null): string {
 const SHEET_ID = 'fontlab';
 const detectLang = (): Lang => typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('ru') ? 'ru' : 'en';
 
+let profile: Profile = 'phone';
 let settings: FontLabSettings = defaultSettings();
 
 function sizeRow(token: SizeToken, text: typeof FONTLAB_TEXT[Lang]): string {
+  const size = settings.sizes[token];
+  // pixel font: sharp or soft on this screen (whole device pixels per font pixel)
+  // (an empty cell on mono rows keeps the −/+ columns aligned)
+  const sharpness = `<small>${isPixelToken(token) ? (isCrisp(size, currentDpr()) ? text.crisp : text.soft) : ''}</small>`;
   return `<div class="fl-row"><span>${text.sizeNames[token]}</span>
     <button class="btn" data-fl="size" data-token="${token}" data-dir="-1">−</button>
-    <b>${settings.sizes[token]}</b>
-    <button class="btn" data-fl="size" data-token="${token}" data-dir="1">+</button></div>`;
+    <b>${size}</b>
+    <button class="btn" data-fl="size" data-token="${token}" data-dir="1">+</button>${sharpness}</div>`;
 }
 
 function choice(label: string, on: boolean, attrs: string): string {
@@ -295,6 +365,7 @@ function render(): void {
       <button class="btn pri" data-fl="copy">${text.copy}</button>
       <button class="btn" data-fl="close">${text.close}</button></div>
     <div class="fl-measure">${text.measured}: ${text.ticker} ${measure(maybeById('ticker'))} · ${text.pane} ${measure(document.querySelector('#pane .hint, #pane .rows span'))}</div>
+    <div class="fl-measure">${text.profile}: <b>${text.profileNames[profile]}</b> · DPR ${formatDpr(currentDpr())} — ${text.profileHint}</div>
     <div class="fl-msg" id="${SHEET_ID}-msg"></div>
     <h3>${text.sizes}</h3>${SIZE_TOKENS.map(token => sizeRow(token, text)).join('')}
     <h3>${text.groups}</h3>${GROUPS.map(id => groupRow(id, text)).join('')}`;
@@ -302,15 +373,15 @@ function render(): void {
 
 function update(change: () => void): void {
   change();
-  applySettings(settings);
-  storeSettings(settings);
+  applySettings(settings, profile);
+  storeSettings(settings, profile);
   // measure after the browser has laid out the new sizes
   requestAnimationFrame(render);
 }
 
 function copySettings(): void {
   const text = FONTLAB_TEXT[detectLang()];
-  const result = formatSettings(settings, detectLang());
+  const result = formatSettings(settings, detectLang(), profile, currentDpr());
   const message = maybeById(`${SHEET_ID}-msg`);
   const showManual = () => {
     if (message) {
@@ -350,7 +421,7 @@ function onSheetClick(event: MouseEvent): void {
   } else if (fl === 'upper' && isGroup(group)) {
     update(() => { settings.groups[group].upper = !settings.groups[group].upper; });
   } else if (fl === 'reset') {
-    update(() => { settings = defaultSettings(); });
+    update(() => { settings = defaultSettings(profile); });
   } else if (fl === 'copy') {
     copySettings();
   } else if (fl === 'close') {
@@ -360,7 +431,8 @@ function onSheetClick(event: MouseEvent): void {
 
 /** Opens the sheet (called from the diagnostics overlay). */
 export function openFontLab(): void {
-  settings = loadSettings();
+  profile = currentProfile();
+  settings = loadSettings(profile);
   if (!maybeById(SHEET_ID)) {
     const sheet = document.createElement('div');
     sheet.id = SHEET_ID;
