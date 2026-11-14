@@ -43,12 +43,14 @@ async function botSteps(page, n, seed) {
 
 // PARITY_LOGIC_ONLY=1 (look changed on purpose): compare the save and the scene, not the markup.
 const LOGIC_ONLY = process.env.PARITY_LOGIC_ONLY === '1';
-const snap = page => page.evaluate(logicOnly => JSON.stringify({
+// PARITY_SKIP_SCENE=1: the scene drawing changed on purpose, compare the save only.
+const SKIP_SCENE = process.env.PARITY_SKIP_SCENE === '1';
+const snap = page => page.evaluate((logicOnly, skipScene) => JSON.stringify({
   save: localStorage.getItem('dark-counter-v3'),
   hud: logicOnly ? '' : document.getElementById('hud').innerHTML.replace(/\s+/g, ' '),
   pane: logicOnly ? '' : document.getElementById('pane').innerHTML.replace(/\s+/g, ' '),
-  scene: document.getElementById('scn').toDataURL(),
-}), LOGIC_ONLY);
+  scene: skipScene ? '' : document.getElementById('scn').toDataURL(),
+}), LOGIC_ONLY, SKIP_SCENE);
 const exportCode = async page => {
   await page.evaluate(clickMenuItem, 'savemenu');
   return page.evaluate(() => {

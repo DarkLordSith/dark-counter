@@ -21,6 +21,51 @@ const MELODY_NOTES = [72, 74, 76, 79, 81, 84];
 /* ---------- state ---------- */
 export const audio = { on: false };
 
+/* ---------- the player's choice (V1.4 fix) ----------
+   Music is on by default and starts on the first touch (browsers do not let
+   sound start without one). Turning it off in the menu is remembered in
+   localStorage under its own key, not in the save. */
+
+/** localStorage key; separate from the save (dark-counter-v3). */
+export const MUSIC_KEY = 'dark-counter-music';
+
+/** The part of Storage this needs (localStorage in the game, a fake in tests). */
+export interface PrefStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+const browserStorage = (): PrefStorage | null => {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage;
+  } catch {
+    return null;
+  }
+};
+
+/** True unless the player turned the music off earlier. */
+export function musicWanted(storage: PrefStorage | null = browserStorage()): boolean {
+  try {
+    return storage?.getItem(MUSIC_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+/** Remembers the choice: "off" is stored, "on" (the default) removes the key. */
+export function rememberMusic(on: boolean, storage: PrefStorage | null = browserStorage()): void {
+  try {
+    if (on) {
+      storage?.removeItem(MUSIC_KEY);
+    } else {
+      storage?.setItem(MUSIC_KEY, 'off');
+    }
+  } catch {
+    // private mode / storage full: the choice simply is not remembered
+  }
+}
+
 /** Created on the first "music on" click (browsers require a user gesture). */
 interface Engine {
   ac: AudioContext;
@@ -194,12 +239,12 @@ function scheduleAhead(eng: Engine): void {
   }
 }
 
-export function toggleMusic(): void {
+function setMusic(on: boolean): void {
   try {
     if (!engine) {
       engine = initAudio();
     }
-    audio.on = !audio.on;
+    audio.on = on;
     if (audio.on) {
       void engine.ac.resume();
       engine.next = engine.ac.currentTime + START_DELAY_S;
@@ -209,4 +254,27 @@ export function toggleMusic(): void {
   } catch {
     audio.on = false;
   }
+}
+
+/** The menu item: turns the music on or off and remembers the choice. */
+export function toggleMusic(): void {
+  setMusic(!audio.on);
+  rememberMusic(audio.on);
+}
+
+/**
+ * Called on a touch / key press until the music runs: starts it if the
+ * player has not turned it off. Returns true when nothing is left to do
+ * (playing, or not wanted), so the caller can stop listening.
+ */
+export function startMusicOnGesture(): boolean {
+  if (!musicWanted()) {
+    return true;
+  }
+  if (!audio.on) {
+    setMusic(true);
+  } else if (engine && engine.ac.state !== 'running') {
+    void engine.ac.resume();
+  }
+  return audio.on && engine !== null && engine.ac.state === 'running';
 }

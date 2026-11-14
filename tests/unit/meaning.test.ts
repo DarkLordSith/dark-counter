@@ -2,6 +2,7 @@
 // never from a base color like --red or COLOR.amber.
 import { describe, expect, it } from 'vitest';
 import { COLOR, CSS_TOKENS, MEANING } from '../../src/palette';
+import { heatMeterRects } from '../../src/heatmeter';
 import styleCss from '../../src/style.css?raw';
 import uiTs from '../../src/ui.ts?raw';
 import economyTs from '../../src/economy.ts?raw';
@@ -23,6 +24,8 @@ const BASE_ACCENTS = /var\(--(red|amber|green|cyan|dim|violet)\)/;
 const DECOR = [
   'button:focus-visible, input:focus-visible', '.ios-pwa .ceiling', '.st small', '.chip', '.ticker', '.ticker b', '.tab', '.tab.on',
   '.hint', '.rows span:nth-child(odd)', '.chance', '.ask', '.tile .tv', '.legend', '.tag', '.need', '.opt span',
+  // ☰ in the bottom bar: a grey icon, no meaning (V1.4 fix)
+  '.ib',
   '.mbox', '.mbox h2', '.mbox label', '.mbox .version', '.diag', '.diag h2',
   // customer kind label ("продаёт" / "покупает"): a type, not a state, so neutral grey (V1.3)
   '.kind',
@@ -48,7 +51,8 @@ describe('meaning tokens', () => {
 
 describe('the interface uses meanings, not base colors', () => {
   it('scales: wanted level = risk, patience = wear, gut feeling = hunch', () => {
-    expect(rule('.heat i.on')).toContain('var(--m-risk)');
+    // the wanted level is drawn on the scene wall (V1.4 fix): filled cells are MEANING.risk
+    expect(heatMeterRects(10, 10, 0).slice(2).every(cell => cell[4] === MEANING.risk)).toBe(true);
     expect(rule('.pips i.on')).toContain('var(--m-wear)');
     expect(rule('.cbar i')).toContain('var(--m-hunch)');
     expect(rule('.chance span')).toContain('var(--m-hunch)');

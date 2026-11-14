@@ -5,7 +5,8 @@
 //  anchor point.
 // =====================================================================
 import { appearanceFor, seededRandom } from './appearance';
-import { CUSTOMERS_PER_DAY, JUNK_PILES } from './data';
+import { CUSTOMERS_PER_DAY, JUNK_PILES, MAX_HEAT } from './data';
+import { heatMeterRects } from './heatmeter';
 import { CHARACTER, COLOR, GLOW, ITEM_COLORS, JUNKYARD, SHADE, SHOP } from './palette';
 import { byId } from './dom';
 import { actor, COUNTER_X, DOOR_X, state } from './state';
@@ -440,6 +441,8 @@ export function paintIcons(): void {
 }
 
 /* ---------- shop ---------- */
+// The window starts at x = 7 (V1.4 fix: x 0–5 is the wanted-level plate), so its glass is 48 wide.
+const WINDOW_GLASS_W = 48;
 const STARS = Array.from({ length: 26 }, () => ({
   x: Math.random() * 48,
   y: Math.random() * 28,
@@ -461,35 +464,36 @@ function drawBackWall(): void {
 
 /** Porthole with drifting stars, a planet and a passing ship. */
 function drawWindow(seconds: number): void {
-  fillRect(5, 7, 54, 34, SHOP.wall);
-  fillRect(7, 9, 50, 30, SHOP.space);
-  withClip(7, 9, 50, 30, () => {
+  fillRect(7, 7, 52, 34, SHOP.wall);
+  fillRect(9, 9, WINDOW_GLASS_W, 30, SHOP.space);
+  withClip(9, 9, WINDOW_GLASS_W, 30, () => {
     STARS.forEach(star => {
-      const x = ((star.x - seconds * star.speed) % 50 + 50) % 50;
-      fillRect(7 + x, 9 + star.y, 1, 1, star.bright ? COLOR.fg : SHOP.starDim);
+      const x = ((star.x - seconds * star.speed) % WINDOW_GLASS_W + WINDOW_GLASS_W) % WINDOW_GLASS_W;
+      fillRect(9 + x, 9 + star.y, 1, 1, star.bright ? COLOR.fg : SHOP.starDim);
     });
     fillCircle(SHOP.planetShadow, 52, 44, 15);
     fillCircle(SHOP.planet, 50, 46, 13);
     fillRect(34, 34, 26, 1, GLOW.planetRing);
     const shipProgress = (seconds % 15) / 15;
     if (shipProgress < 0.6) {
-      const x = shipProgress / 0.6 * 66 - 8;
-      fillRect(7 + x, 17, 6, 1, COLOR.dim);
-      fillRect(7 + x + 2, 16, 2, 1, COLOR.dim);
-      fillRect(7 + x - 1, 17, 1, 1, COLOR.amber);
+      const x = shipProgress / 0.6 * 64 - 8;
+      fillRect(9 + x, 17, 6, 1, COLOR.dim);
+      fillRect(9 + x + 2, 16, 2, 1, COLOR.dim);
+      fillRect(9 + x - 1, 17, 1, 1, COLOR.amber);
     }
   });
-  fillRect(9, 11, 1, 7, SHADE.shine07);
+  fillRect(11, 11, 1, 7, SHADE.shine07);
 }
 
 function drawShelves(seconds: number): void {
-  fillRect(5, 50, 54, 2, COLOR.line);
-  ([[7, SHOP.shelfBoxSlate, 8, 6], [17, SHOP.shelfBoxBrown, 6, 8], [25, SHOP.shelfBoxGreen, 10, 5], [38, SHOP.shelfBoxPurple, 7, 7], [47, SHOP.shelfBoxSlate, 9, 4]] as const)
+  // shelves start at x = 7, right of the wanted-level plate; boxes moved 2 px right with them
+  fillRect(7, 50, 52, 2, COLOR.line);
+  ([[9, SHOP.shelfBoxSlate, 8, 6], [19, SHOP.shelfBoxBrown, 6, 8], [27, SHOP.shelfBoxGreen, 10, 5], [40, SHOP.shelfBoxPurple, 7, 7], [49, SHOP.shelfBoxSlate, 9, 4]] as const)
     .forEach(([x, color, w, h]) => fillRect(x, 50 - h, w, h, color));
-  fillRect(27, 46, 2, 1, (seconds * 2 | 0) % 3 ? COLOR.green : SHOP.shelfLedGreenOff);
-  fillRect(49, 47, 1, 1, (seconds * 1.3 | 0) % 2 ? COLOR.red : SHOP.shelfLedRedOff);
-  fillRect(5, 60, 54, 2, COLOR.line);
-  ([[9, COLOR.line, 12, 5], [24, SHOP.shelfBoxSlate, 6, 7], [34, COLOR.steel, 14, 4], [50, SHOP.shelfBoxPurple, 6, 6]] as const)
+  fillRect(29, 46, 2, 1, (seconds * 2 | 0) % 3 ? COLOR.green : SHOP.shelfLedGreenOff);
+  fillRect(51, 47, 1, 1, (seconds * 1.3 | 0) % 2 ? COLOR.red : SHOP.shelfLedRedOff);
+  fillRect(7, 60, 52, 2, COLOR.line);
+  ([[11, COLOR.line, 12, 5], [26, SHOP.shelfBoxSlate, 6, 7], [36, COLOR.steel, 14, 4], [52, SHOP.shelfBoxPurple, 6, 6]] as const)
     .forEach(([x, color, w, h]) => fillRect(x, 60 - h, w, h, color));
 }
 
@@ -604,6 +608,13 @@ function drawShop(now: number): void {
   if (night) {
     fillRect(0, 0, SCENE_W, SCENE_H, SHOP.night);
   }
+  // after the night shade: the wanted level stays readable in the evening
+  drawHeatMeter(now);
+}
+
+/** Wanted level: a vertical meter on the left wall (shop) or the fence (junkyard). */
+function drawHeatMeter(now: number): void {
+  fillRects(0, 0, heatMeterRects(state.heat, MAX_HEAT, now));
 }
 
 /* ---------- junkyard ---------- */
@@ -683,6 +694,7 @@ function drawJunkyard(now: number): void {
   fillRect(147, 42, 8, 3, COLOR.ink);
   fillRect(148, 43, 2, 1, (seconds | 0) % 2 ? COLOR.red : JUNKYARD.guardLedOff);
   JUNK_PILES.forEach((_, index) => drawPile(index, now));
+  drawHeatMeter(now);
 }
 
 /** Index of the junk pile under a click, or -1. */

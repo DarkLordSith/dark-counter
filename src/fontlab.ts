@@ -12,7 +12,7 @@ import { maybeById } from './dom';
    Settings (pure)
    ===================================================================== */
 
-export type SizeToken = '--fs-s' | '--fs-m' | '--fs-l' | '--fs-px-s' | '--fs-px-m' | '--fs-px-l';
+export type SizeToken = '--fs-xs' | '--fs-s' | '--fs-m' | '--fs-l' | '--fs-px-s' | '--fs-px-m' | '--fs-px-l';
 export type GroupId = 'names' | 'prices' | 'verdict' | 'hud' | 'headings';
 export type GroupFont = 'pixel' | 'mono';
 export type MonoWeight = 400 | 500 | 600;
@@ -37,6 +37,7 @@ export const DESKTOP_QUERY = '(min-width: 900px)';
 /** Same values as style.css for each profile (checked by tests/unit/fontlab.test.ts). */
 export const PROFILE_SIZES: Readonly<Record<Profile, Readonly<Record<SizeToken, number>>>> = {
   phone: {
+    '--fs-xs': 11,
     '--fs-s': 12,
     '--fs-m': 14,
     '--fs-l': 18,
@@ -45,6 +46,7 @@ export const PROFILE_SIZES: Readonly<Record<Profile, Readonly<Record<SizeToken, 
     '--fs-px-l': 24,
   },
   desktop: {
+    '--fs-xs': 11,
     '--fs-s': 12,
     '--fs-m': 14,
     '--fs-l': 18,
@@ -163,7 +165,7 @@ export const FONTLAB_TEXT = {
     profileHint: 'у каждого профиля свои настройки; десктоп — окно от 900px',
     crisp: 'чётко',
     soft: 'мягко',
-    sizeNames: { '--fs-s': 'моно S (лог, подписи)', '--fs-m': 'моно M (текст панелей)', '--fs-l': 'моно L (группы в моно)',
+    sizeNames: { '--fs-xs': 'моно XS (метки HUD)', '--fs-s': 'моно S (лог, подписи)', '--fs-m': 'моно M (текст панелей)', '--fs-l': 'моно L (группы в моно)',
       '--fs-px-s': 'пикс S', '--fs-px-m': 'пикс M', '--fs-px-l': 'пикс L' },
     groupNames: { names: 'названия', prices: 'цены', verdict: 'вердикт', hud: 'числа HUD', headings: 'заголовки' },
   },
@@ -188,7 +190,7 @@ export const FONTLAB_TEXT = {
     profileHint: 'each profile keeps its own settings; desktop is a window from 900px',
     crisp: 'sharp',
     soft: 'soft',
-    sizeNames: { '--fs-s': 'mono S (log, captions)', '--fs-m': 'mono M (pane text)', '--fs-l': 'mono L (groups in mono)',
+    sizeNames: { '--fs-xs': 'mono XS (HUD labels)', '--fs-s': 'mono S (log, captions)', '--fs-m': 'mono M (pane text)', '--fs-l': 'mono L (groups in mono)',
       '--fs-px-s': 'pixel S', '--fs-px-m': 'pixel M', '--fs-px-l': 'pixel L' },
     groupNames: { names: 'item names', prices: 'prices', verdict: 'verdict', hud: 'HUD numbers', headings: 'headings' },
   },

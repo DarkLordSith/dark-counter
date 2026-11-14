@@ -2,7 +2,7 @@
 //  ui.ts — HTML rendering of the HUD, scene overlay, tabs and panes,
 //  plus all click/keyboard handlers (buttons carry data-a="action").
 // =====================================================================
-import { audio, toggleMusic } from './audio';
+import { audio, startMusicOnGesture, toggleMusic } from './audio';
 import { BENCH_COST, BUYOUT_GOAL, CUSTOMERS_PER_DAY, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, MARKET, MAX_HEAT, RECIPES, RENT, SUPPLIER } from './data';
 import { byId, maybeById } from './dom';
 import { iconSvg } from './icons';
@@ -31,6 +31,8 @@ const UNKNOWN = '<span class="m-unknown">?</span>';
 const CLOSE_BUTTON = '<button class="btn pri" data-a="close">Закрыть</button>';
 const NEW_GAME_BUTTON = '<button class="btn pri" data-a="newgame-yes">Новая игра</button>';
 const FLOATING_TEXT_LIFETIME_MS = 1300;
+/** Viewport shrink that means an on-screen keyboard, not a browser bar. */
+const KEYBOARD_MIN_PX = 150;
 const disabledIf = (condition: unknown): string => condition ? 'disabled' : '';
 const conditionText = (item: Item): string => item.k.cond ? item.cond + '%' : '?%';
 
@@ -123,20 +125,19 @@ function creditsStat(): string {
   return hudStat(HUD.credits, `<b>${state.credits}</b>`);
 }
 
+/** Bottom bar: кр · день · аренда · зап, then ☰. The wanted level is on the scene wall, music in the menu. */
 function renderHud(): void {
-  const music = `<button class="ib" data-a="music" aria-pressed="${audio.on}" aria-label="${audio.on ? HUD.musicOn : HUD.musicOff}">`
-    + `${audio.on ? iconSvg('note') : iconSvg('note', 'strike')}</button>`;
   const menu = `<button class="ib" data-a="menu" aria-haspopup="dialog" aria-label="${HUD.menu}">${iconSvg('menu')}</button>`;
   byId('hud').innerHTML = `<div class="stats">${[
     creditsStat(),
     hudStat(HUD.day, `<b>${state.day}</b>`),
     rentStat(),
     hudStat(HUD.parts, `<b>${state.parts}</b>`),
-    // wanted level: an eye instead of the word (the widest label), the meter says the rest
-    `<span class="st" role="img" aria-label="${HUD.heat}: ${state.heat}/${MAX_HEAT}"><small>${iconSvg('eye')}</small>`
-      + `<span class="heat">${meterCells(MAX_HEAT, state.heat)}</span></span>`,
-  ].join('')}</div>${music}${menu}`;
+  ].join('')}</div>${menu}`;
 }
+
+/** Screen-reader text of the wanted-level meter drawn on the scene ("розыск 3 из 10"). */
+const heatText = (): string => `${HUD.heat} ${state.heat} ${HUD.of} ${MAX_HEAT}`;
 
 function chipText(): string {
   if (state.over) {
@@ -172,6 +173,11 @@ export function renderSceneOverlay(): void {
     && (state.slot < CUSTOMERS_PER_DAY || isLandlordDue());
   byId('callBtn').hidden = !canCall;
   byId('ticker').innerHTML = `<b>›</b> ${state.log[0] || ''}`;
+  const heat = byId('heatText');
+  if (heat.textContent !== heatText()) {
+    // aria-live: announced only when the level changes
+    heat.textContent = heatText();
+  }
 }
 
 function renderTabs(): void {
@@ -447,6 +453,7 @@ function openModal(title: string, body: string, buttons: string, footer = ''): v
 /** ☰ menu: a sheet under the HUD with the game title, save and new game (later: RU/EN). */
 function openMenu(): void {
   byId('mbox').innerHTML = `<h2>${HUD.gameTitle}</h2>
+    <button class="btn menu-item" data-a="music" aria-pressed="${audio.on}">${HUD.music}: ${audio.on ? HUD.on : HUD.off}</button>
     <button class="btn menu-item" data-a="savemenu">${HUD.save}</button>
     <button class="btn menu-item" data-a="newgame">${HUD.newGame}</button>
     <div class="mbtns"><button class="btn" data-a="close">${HUD.close}</button></div>`;
@@ -607,7 +614,11 @@ const ACTIONS: Record<string, ActionHandler> = {
   market: () => visitMarket(),
   sleep: () => showMorningReport(sleepUntilMorning()),
   // header & modals
-  music: () => toggleMusic(),
+  music: () => {
+    toggleMusic();
+    // the item lives in the menu: show the new state, keep the menu open
+    openMenu();
+  },
   menu: () => {
     openMenu();
     return NO_RENDER;
@@ -689,4 +700,38 @@ export function bindEvents(): void {
   });
   document.addEventListener('keydown', onKeyDown);
   onSceneClick(onSceneCanvasClick);
+  startMusicOnFirstTouch();
+  trackKeyboard();
+}
+
+/**
+ * Music is on by default, but browsers start sound only from a user gesture.
+ * Listen to the first touches / key presses (pointerdown for a mouse,
+ * touchend for iOS Safari) until the music runs or the player turned it off.
+ */
+function startMusicOnFirstTouch(): void {
+  const events = ['pointerdown', 'touchend', 'keydown'] as const;
+  const onGesture = (): void => {
+    if (startMusicOnGesture()) {
+      events.forEach(type => document.removeEventListener(type, onGesture, true));
+    }
+  };
+  events.forEach(type => document.addEventListener(type, onGesture, true));
+}
+
+/** Hides the bottom bar while the on-screen keyboard is open, so it does not cover the price box. */
+function trackKeyboard(): void {
+  const viewport = window.visualViewport;
+  if (!viewport) {
+    return;
+  }
+  const update = (): void => {
+    const typing = document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement;
+    // the keyboard takes far more than this; pinch zoom alone does not count (scale > 1)
+    const keyboardOpen = typing && viewport.scale <= 1 && window.innerHeight - viewport.height > KEYBOARD_MIN_PX;
+    document.documentElement.classList.toggle('kb-open', keyboardOpen);
+  };
+  viewport.addEventListener('resize', update);
+  document.addEventListener('focusin', update);
+  document.addEventListener('focusout', () => requestAnimationFrame(update));
 }

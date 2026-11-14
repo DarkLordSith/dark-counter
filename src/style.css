@@ -1,4 +1,4 @@
-/* Layout: one-screen app — compact HUD → pixel scene (shop / junkyard) → ticker → tabs → scrolling pane. Single deliberate dark look. */
+/* Layout: one-screen app — pixel scene (shop / junkyard) → ticker → tabs → scrolling pane → HUD bar at the bottom. Single deliberate dark look. */
 
 /* ==================== Fonts ==================== */
 
@@ -50,15 +50,16 @@ img {
   --fs-px-s: 8px;
   --fs-px-m: 16px;
   --fs-px-l: 24px;
-  /* Mono: captions and log / panel text (not below 14px) / big numbers in a deal. */
+  /* Mono: HUD labels (the smallest allowed) / captions and log / panel text (not below 14px) / big numbers in a deal. */
+  --fs-xs: 11px;
   --fs-s: 12px;
   --fs-m: 14px;
   --fs-l: 18px;
   /* The font lab's own text: fixed, so tuning the scale above does not resize the lab itself. */
   --lab-fs: 12px;
   --lab-title: 16px;
-  /* HUD: one row of 44 pt buttons plus air above and below (V1.4). */
-  --hud-height: 60px;
+  /* HUD: one bottom row of 44 pt buttons plus air above and below (V1.4). */
+  --hud-height: 52px;
 }
 
 /* Desktop type profile: the :root above is the phone profile. A copy for now,
@@ -69,6 +70,7 @@ img {
     --fs-px-s: 8px;
     --fs-px-m: 16px;
     --fs-px-l: 24px;
+    --fs-xs: 11px;
     --fs-s: 12px;
     --fs-m: 14px;
     --fs-l: 18px;
@@ -139,17 +141,24 @@ input:focus-visible {
   pointer-events: none;
 }
 
-/* ==================== HUD (top bar) ==================== */
+/* ==================== HUD (bottom bar) ==================== */
 
-/* One row (V1.4): stats on the left, two 44×44 icon buttons on the right.
-   Fixed height, so the scene below never moves when numbers grow. */
+/* One row at the bottom (V1.4 fix: the world on top, the console below):
+   stats on the left at an even step, the ☰ button on the right.
+   Fixed height, so the pane above never jumps when numbers grow. */
 .hud {
   flex: none;
   height: var(--hud-height);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  border-top: 1px solid var(--line);
   font-variant-numeric: tabular-nums;
+}
+
+/* While the on-screen keyboard is open (price box), the bar would cover the field. */
+.kb-open .hud {
+  display: none;
 }
 
 .stats {
@@ -157,10 +166,9 @@ input:focus-visible {
   min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  /* Very wide numbers (day 100+, 10 000+ credits on a 375 pt screen) clip on the right
-     instead of sliding under the buttons. */
+  justify-content: flex-start;
+  gap: 16px;
+  /* Very wide numbers clip on the right instead of sliding under the button. */
   overflow: hidden;
 }
 
@@ -169,13 +177,13 @@ input:focus-visible {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
+  gap: 4px;
   line-height: 1;
   white-space: nowrap;
 }
 
 .st small {
-  font-size: var(--fs-s);
+  font-size: var(--fs-xs);
   line-height: 1;
   text-transform: uppercase;
   color: var(--dim);
@@ -201,24 +209,7 @@ input:focus-visible {
   border: 1px solid var(--m-action);
 }
 
-.heat {
-  display: flex;
-  gap: 1px;
-  height: 16px;
-  align-items: center;
-}
-
-.heat i {
-  width: 2px;
-  height: 12px;
-  background: var(--line);
-}
-
-.heat i.on {
-  background: var(--m-risk);
-}
-
-/* Icon buttons (♪, ☰): 44×44 pt touch target, 16×16 pixel icon drawn 2×. */
+/* Icon button (☰): 44×44 pt touch target, 16×16 pixel icon drawn 2×, no tile behind it. */
 .ib {
   flex: none;
   width: 44px;
@@ -226,8 +217,12 @@ input:focus-visible {
   display: grid;
   place-items: center;
   padding: 0;
-  background: var(--panel2);
-  border: 1px solid var(--line);
+  background: none;
+  border: none;
+  color: var(--dim);
+}
+
+.ib:active {
   color: var(--fg);
 }
 
@@ -236,15 +231,15 @@ input:focus-visible {
   fill: currentColor;
 }
 
-/* The eye label sits on the text baseline like the word labels. */
-.st small .ico {
-  display: inline-block;
-  vertical-align: bottom;
-}
-
-/* Gap around the strike on the muted note: the button background. */
-.ico .ico-cut {
-  fill: var(--panel2);
+/* Text for screen readers only (the wanted level drawn on the canvas). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* ==================== Scene: canvas, speech bubble, queue chip, call button, floating numbers ==================== */
@@ -276,7 +271,8 @@ input:focus-visible {
 
 .bubble {
   position: absolute;
-  left: 3%;
+  /* clear of the wanted-level plate on the left wall (scene x 0–5 of 160 = 3.75%) */
+  left: 5%;
   top: 5%;
   max-width: 44%;
   line-height: 1.3;
@@ -911,14 +907,11 @@ input:focus-visible {
 }
 
 /* ☰ menu (V1.4): a sheet right under the HUD, at the menu button's side. */
+/* ☰ menu: a sheet sliding up from the bottom bar, at the menu button's side. */
 .modal.sheet {
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: flex-end;
-  padding: calc(env(safe-area-inset-top, 0px) + var(--hud-height)) max(12px, env(safe-area-inset-right, 0px)) 16px max(12px, env(safe-area-inset-left, 0px));
-}
-
-.ios-pwa .modal.sheet {
-  padding-top: calc(env(safe-area-inset-top, 0px) + var(--pwa-ceiling) + var(--hud-height));
+  padding: 16px max(12px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + var(--hud-height)) max(12px, env(safe-area-inset-left, 0px));
 }
 
 .modal.sheet .mbox {
