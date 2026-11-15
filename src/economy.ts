@@ -7,13 +7,14 @@
 // =====================================================================
 import {
   ACCEPT, HUNCH_VERDICT, HUNCH_VERDICT_TEXT, BENCH_COST, BUYER_COUNTER_LINES, BUYER_INSULTED_LINES, BUYER_LINES, COLLATERAL,
-  CRAFT_CONDITION_BONUS, CUSTOMER, CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, DIG_LOOT, DIG_ODDS, EVENING_HOURS, JUNK_TEXT, HAGGLE, HUMAN_NAMES,
+  CRAFT_CONDITION_BONUS, CUSTOMER, DAY_TEXT, DEBT, DEBT_TEXT, ENDING_TEXT, DIG_LOOT, DIG_ODDS, EVENING_HOURS, JUNK_TEXT, HAGGLE, HUMAN_NAMES,
   INSPECT, ITEM_TYPES, JUNK, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
   RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SELLER_COUNTER_LINES, SELLER_INSULTED_LINES, SELLER_LINES,
   SELLER_STOLEN_LINE, SUPPLIER, VALUE,
 } from './data';
 import { COLOR, MEANING } from './palette';
 import { appearanceFor } from './appearance';
+import { customersToday, formatHour, openingHour } from './day';
 import {
   actor, actorEnter, addLog, createItem, findItem, fullKnowledge, randomLandlordSlot, state, ui,
 } from './state';
@@ -24,6 +25,7 @@ import { clamp, daysRu, fill, pickRandom, randomBetween, randomInt, randomSeed, 
 
 const TEXT = DEBT_TEXT.ru;
 const JUNK_WORDS = JUNK_TEXT.ru;
+const DAY_WORDS = DAY_TEXT.ru;
 
 /* =====================================================================
    Feedback for the UI: floating numbers to show after the action.
@@ -143,11 +145,11 @@ export function callNextCustomer(): void {
   if (state.phase !== 'shop' || state.cust || state.over || actor.phase !== 'empty') {
     return;
   }
-  if (isLandlordDue() && state.slot >= Math.min(state.llAt, CUSTOMERS_PER_DAY)) {
+  if (isLandlordDue() && state.slot >= Math.min(state.llAt, state.cn)) {
     spawnLandlord();
     return;
   }
-  if (state.slot >= CUSTOMERS_PER_DAY) {
+  if (state.slot >= state.cn) {
     return;
   }
   // the very first visitor of a new game always sells, to teach the basics
@@ -204,6 +206,7 @@ function losePatience(amount: number): void {
 export function closeShop(): void {
   state.phase = 'evening';
   state.hours = EVENING_HOURS;
+  state.late = 0; // today's late opening is over; tonight counts its own digs past midnight
   state.where = 'home';
   state.market = false;
   ui.tab = 'deal';
@@ -642,10 +645,24 @@ export const digBonus = (_game: GameState = state): number => 0;
 /** Digs of a fresh visit. */
 export const digsPerVisit = (game: GameState = state): number => JUNK.digsBase + digBonus(game);
 
-/** Evening hours a junkyard visit costs (fixed: road + the heap). */
-export const junkVisitHours = (): number => JUNK.travelHours + JUNK.visitHours;
+/** Evening hours the road to the junkyard costs; every dig then pays its own JUNK.digHours. */
+export const junkVisitHours = (): number => JUNK.travelHours;
 
-export const canGoToJunkyard = (): boolean => state.phase === 'evening' && state.where === 'home' && state.hours >= junkVisitHours();
+/** The junkyard is open while the road and at least one dig still fit in the evening. */
+export const canGoToJunkyard = (): boolean =>
+  state.phase === 'evening' && state.where === 'home' && state.hours >= junkVisitHours() + JUNK.digHours;
+
+/** The next dig goes past midnight: the evening hours are spent (each such dig costs a customer tomorrow). */
+export const digIsLate = (): boolean => state.hours < JUNK.digHours;
+
+/** A dig takes its hour of the evening, or, once the evening is spent, goes past midnight. */
+function spendDigTime(): void {
+  if (digIsLate()) {
+    state.late++;
+  } else {
+    state.hours -= JUNK.digHours;
+  }
+}
 
 /** Noise word index: 0 тихо, 1 слышно, 2 громко, 3 дрон рядом. */
 export type NoiseLevel = 0 | 1 | 2 | 3;
@@ -760,6 +777,7 @@ export function dig(): DigResult | null {
   visit.n = Math.min(100, visit.n + JUNK.noisePerDig + randomInt(-JUNK.noiseSpread, JUNK.noiseSpread));
   visit.d--;
   visit.dp++;
+  spendDigTime();
   const result = caught ? droneCatches(visit) : rollLoot(visit);
   state.jmsg = result.message;
   addLog('Свалка: ' + result.message);
@@ -816,6 +834,7 @@ function spreadInfection(events: string[]): void {
 function startNewDay(): void {
   state.day++;
   state.slot = 0;
+  // state.late stays: last night's digs past midnight open the shop later today
   state.phase = 'shop';
   state.hours = 0;
   state.junk = null;
@@ -858,6 +877,13 @@ export function sleepUntilMorning(): string[] {
     events.push(fill(TEXT.landlordToday, { amount: state.owed }) + (state.deferred ? ' Отсрочки больше не будет.' : ''));
   }
   coolDownAndMaybeRaid(events);
+  // the morning's heat (after the night and a raid) and last night's digs decide today's customers
+  state.cn = customersToday(state).count;
+  // the late opening goes to the log only: the morning window already lists it as a reason
+  if (state.late > 0) {
+    addLog(fill(DAY_WORDS.overslept, { n: state.late * JUNK.lateCustomerLoss }));
+    addLog(fill(DAY_WORDS.opened, { time: formatHour(openingHour(state)) }));
+  }
   if (!events.length) {
     events.push('Тихая ночь на нижнем ярусе.');
   }

@@ -21,6 +21,8 @@ export function makeState(overrides: Partial<GameState> = {}): GameState {
   const state: GameState = {
     day: 3,
     slot: 0,
+    cn: 6,
+    late: 0,
     credits: 400,
     parts: 4,
     heat: 0,

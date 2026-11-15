@@ -5,7 +5,8 @@
 //  anchor point.
 // =====================================================================
 import { appearanceFor, seededRandom } from './appearance';
-import { CUSTOMERS_PER_DAY, MAX_HEAT, SHOP_SIGN } from './data';
+import { MAX_HEAT, SHOP_SIGN } from './data';
+import { clockOf } from './day';
 import { noiseLevel } from './economy';
 import type { DigResult } from './economy';
 import { heatMeterRects } from './heatmeter';
@@ -534,7 +535,7 @@ function doorLightColor(): string {
   if (actor.phase === 'in' || actor.phase === 'out') {
     return COLOR.green;
   }
-  return state.phase === 'shop' && state.slot < CUSTOMERS_PER_DAY && !state.over ? COLOR.amber : COLOR.red;
+  return state.phase === 'shop' && state.slot < state.cn && !state.over ? COLOR.amber : COLOR.red;
 }
 
 function drawSlidingDoor(): void {
@@ -737,8 +738,10 @@ function drawGuardDrone(visit: JunkVisit, now: number): void {
 
 function drawJunkyard(visit: JunkVisit, now: number): void {
   const seconds = now / 1000;
-  fillRect(0, 0, SCENE_W, SCENE_H, JUNKYARD.sky);
-  for (let i = 0; i < 20; i++) {
+  // past midnight the sky is darker and the stars are thicker (task 16)
+  const night = clockOf(state).night;
+  fillRect(0, 0, SCENE_W, SCENE_H, night ? JUNKYARD.skyNight : JUNKYARD.sky);
+  for (let i = 0; i < (night ? 34 : 20); i++) {
     fillRect((i * 37) % SCENE_W, (i * 13) % 30, 1, 1, i % 3 ? JUNKYARD.starDim : COLOR.dim);
   }
   // ceiling girders

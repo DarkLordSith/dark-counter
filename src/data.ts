@@ -66,8 +66,33 @@ export const BUYER_INSULTED_LINES = ['За такие деньги я новый
 export const BUYER_COUNTER_LINES = ['Дорого. Могу', 'Ладно, подниму:', 'Последнее слово —'];
 
 // ---------- day & economy ----------
+/** Customers on an ordinary day; the station week and the reasons move it (customersToday). */
 export const CUSTOMERS_PER_DAY = 6;
 export const EVENING_HOURS = 4;
+
+// Task 16: the station week = the cycle of Grobov's payment, its 7th day is the payment day.
+// Sum 42 = 6 × 7, as before the week.
+export const CUSTOMERS_BY_WEEKDAY = [5, 5, 6, 6, 10, 6, 4] as const;
+/** Why a weekday differs from CUSTOMERS_PER_DAY: keys of DAY_TEXT.reasons, '' on an ordinary day. */
+export const WEEKDAY_REASONS = ['quiet', 'quiet', '', '', 'payday', '', 'saving'] as const;
+export const CUSTOMER_FLOW = {
+  /** Never fewer customers a day. */
+  minPerDay: 2,
+  /** Wanted level from which honest buyers avoid the shop… */
+  heatShy: 7,
+  /** …and this many customers fewer. */
+  heatLoss: 1,
+};
+/** Game clock, hours of the day: the shift, the evening (EVENING_HOURS = midnight − shiftEnd), the late opening. */
+export const CLOCK = {
+  shiftStart: 8,
+  shiftEnd: 20,
+  midnight: 24,
+  /** The shop opens this much later for each dig past midnight (= the time of the customers lost). */
+  lateHoursPerDig: 2,
+  /** Never opens later than this. */
+  latestOpen: 18,
+};
 export const MAX_HEAT = 10;
 export const LOG_LIMIT = 50;
 export const START = { credits: 400, parts: 4 };
@@ -437,8 +462,12 @@ export const NIGHT = { infectionSpreadChance: 0.35, raidChancePerHeat: 0.1, raid
  * times; each dig adds noise, and the noise raises the drone chance.
  */
 export const JUNK = {
+  /** Road to the junkyard, evening hours (task 16: digs pay their own time). */
   travelHours: 1,
-  visitHours: 2,
+  /** Evening hours of one dig; once the evening is spent, each dig goes past midnight. */
+  digHours: 1,
+  /** Customers lost the next day for each dig past midnight (the shop opens later). */
+  lateCustomerLoss: 1,
   digsBase: 5,
   /** Noise added by one dig: noisePerDig ± noiseSpread (0…100 scale). */
   noisePerDig: 13,
@@ -468,7 +497,7 @@ export const DIG_LOOT = {
 export const JUNK_TEXT = {
   ru: {
     title: 'Свалка «Кольцо Б»',
-    about: 'Дорога и свалка — {hours} ч. {digs} раскопок, глубже — больше редкого. Шумно — прилетает сторожевой дрон.',
+    about: 'Дорога — {hours} ч, раскопка — {dig} ч. {digs} раскопок, глубже — больше редкого. Шумно — прилетает сторожевой дрон. После полуночи лавка завтра откроется позже.',
     arrive: 'Свалка «Кольцо Б». Одна большая куча. Копайте, пока тихо.',
     dig: 'Копать',
     digsLeft: 'Осталось',
@@ -484,10 +513,13 @@ export const JUNK_TEXT = {
     noDigs: 'Куча перекопана. Пора домой.',
     home: 'Свалка: домой. Находок за визит: {n}.',
     homeHint: 'Уйти можно в любой момент.',
+    lastFree: 'Ещё 1 раскопка — и уже за полночь.',
+    pastMidnight: 'За полночь: завтра −1 клиент за каждую раскопку.',
+    lateSoFar: 'Завтра клиентов меньше: −{n}.',
   },
   en: {
     title: 'Ring B junkyard',
-    about: 'Road and junkyard — {hours} h. {digs} digs, deeper means rarer finds. Too loud and a guard drone comes.',
+    about: 'Road — {hours} h, a dig — {dig} h. {digs} digs, deeper means rarer finds. Too loud and a guard drone comes. After midnight the shop opens later tomorrow.',
     arrive: 'Ring B junkyard. One big heap. Dig while it is quiet.',
     dig: 'Dig',
     digsLeft: 'Left',
@@ -503,6 +535,50 @@ export const JUNK_TEXT = {
     noDigs: 'The heap is dug through. Time to go home.',
     home: 'Junkyard: home. Finds this visit: {n}.',
     homeHint: 'You can leave at any moment.',
+    lastFree: 'One more dig and it is past midnight.',
+    pastMidnight: 'Past midnight: −1 customer tomorrow for every dig.',
+    lateSoFar: 'Fewer customers tomorrow: −{n}.',
+  },
+} as const;
+/** The day (task 16): the morning window, the clock chip, the reasons for fewer or more customers. RU/EN. */
+export const DAY_TEXT = {
+  ru: {
+    expected: 'Ожидается клиентов: {n}',
+    reasons: {
+      quiet: 'Начало недели, на ярусе тихо',
+      payday: 'День зарплаты на ярусе',
+      saving: 'Все копят на долги',
+      heat: 'Розыск высокий, честные покупатели обходят лавку',
+      late: 'Вы открылись в {time} после свалки',
+    },
+    overslept: 'Проспал после свалки: лавка открылась позже, клиентов на {n} меньше.',
+    opened: 'Лавка открылась в {time}.',
+    queue: 'ОЧЕРЕДЬ: {n}',
+    shiftOver: 'СМЕНА ОКОНЧЕНА',
+    payment: '+ПЛАТЁЖ',
+    evening: 'ВЕЧЕР',
+    junk: 'СВАЛКА',
+    night: 'НОЧЬ',
+    closed: 'ЗАКРЫТО',
+  },
+  en: {
+    expected: 'Customers expected: {n}',
+    reasons: {
+      quiet: 'Start of the week, the deck is quiet',
+      payday: 'Payday on the deck',
+      saving: 'Everyone saves for their debts',
+      heat: 'Wanted level is high, honest buyers stay away',
+      late: 'You opened at {time} after the junkyard',
+    },
+    overslept: 'Overslept after the junkyard: the shop opened late, {n} customers fewer.',
+    opened: 'The shop opened at {time}.',
+    queue: 'QUEUE: {n}',
+    shiftOver: 'SHIFT OVER',
+    payment: '+PAYMENT',
+    evening: 'EVENING',
+    junk: 'JUNKYARD',
+    night: 'NIGHT',
+    closed: 'CLOSED',
   },
 } as const;
 /** Neon "ЛАВКА 7Б" sign with its dark frame, in scene pixels (160×100). The speech bubble and the queue chip keep clear of it (V1.6). */

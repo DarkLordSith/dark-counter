@@ -1234,6 +1234,15 @@ input:focus-visible {
   gap: 4px;
 }
 
+/* Morning window (task 16): "Ожидается клиентов: N", the reasons right under it. */
+.mbox .expect {
+  margin: 0;
+}
+
+.mbox .reasons {
+  margin-top: -6px;
+}
+
 .mbtns {
   display: flex;
   gap: 8px;

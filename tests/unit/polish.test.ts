@@ -74,13 +74,18 @@ describe('queue chip', () => {
     chips.push(chipLines());
     state.where = 'junk';
     chips.push(chipLines());
+    state.hours = 0;
+    state.late = 2;
+    chips.push(chipLines()); // 02:00 · НОЧЬ
+    makeState({ slot: 3, late: 2, cn: 4 });
+    chips.push(chipLines()); // 16:00 / ОЧЕРЕДЬ: 1
     makeState({ over: 'конец', ending: 'stayed' });
     chips.push(chipLines());
     return chips;
   }
 
   it('"+ПЛАТЁЖ" goes on its own line', () => {
-    expect(allChips()).toContainEqual(['ОЧЕРЕДЬ: 5', '+ПЛАТЁЖ']);
+    expect(allChips()).toContainEqual(['10:00', 'ОЧЕРЕДЬ: 5', '+ПЛАТЁЖ']);
     expect(allChips().flat().every(line => !line.includes(' +ПЛАТЁЖ'))).toBe(true);
   });
 
