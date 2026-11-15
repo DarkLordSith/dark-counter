@@ -27,8 +27,11 @@ async function botSteps(page, n, seed) {
     const cs = await page.evaluate(w => {
       const modal = !document.getElementById('modal').hidden;
       const root = document.getElementById(modal ? 'modal' : 'app');
+      // sorted, like diff.mjs: moving a button in the DOM (V1.5: "call" from the scene to the action bar) changes nothing
+      const key = c => c.a + '\u0000' + (c.v ?? '');
       return [...root.querySelectorAll('[data-a]')].filter(b => !b.disabled && !b.hidden && b.offsetParent && w[b.dataset.a])
-        .map(b => ({ a: b.dataset.a, v: b.dataset.v ?? null }));
+        .map(b => ({ a: b.dataset.a, v: b.dataset.v ?? null }))
+        .sort((x, y) => key(x) < key(y) ? -1 : key(x) > key(y) ? 1 : 0);
     }, W);
     if (!cs.length) break;
     const total = cs.reduce((s, c) => s + W[c.a], 0);

@@ -2,6 +2,7 @@
 //  ui.ts — HTML rendering of the HUD, scene overlay, tabs and panes,
 //  plus all click/keyboard handlers (buttons carry data-a="action").
 // =====================================================================
+import { barAction, mainAction } from './actionbar';
 import { audio, startMusicOnGesture, toggleMusic } from './audio';
 import {
   BENCH_COST, CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, MARKET, MAX_HEAT, MODES, MODE_TEXT,
@@ -159,7 +160,7 @@ function chipText(): string {
   return queueText + (landlordDue ? ' +ПЛАТЁЖ' : '');
 }
 
-/** Speech bubble, queue chip, "call next" button and the log ticker. */
+/** Speech bubble, queue chip and the log ticker ("call next" lives in the action bar since V1.5). */
 export function renderSceneOverlay(): void {
   const customer = state.cust;
   const atCounter = actor.phase === 'idle' && customer;
@@ -176,9 +177,6 @@ export function renderSceneOverlay(): void {
     }
   }
   byId('chip').textContent = chipText();
-  const canCall = state.phase === 'shop' && actor.phase === 'empty' && !customer && !state.over
-    && (state.slot < CUSTOMERS_PER_DAY || isLandlordDue());
-  byId('callBtn').hidden = !canCall;
   byId('ticker').innerHTML = `<b>›</b> ${state.log[0] || ''}`;
   const heat = byId('heatText');
   if (heat.textContent !== heatText()) {
@@ -236,9 +234,9 @@ function junkyardPane(): string {
   const pileButtons = (state.junk?.piles ?? [])
     .map((pile, i) => `<button class="btn" data-a="dig" data-v="${i}" ${disabledIf(pile.dug || state.hours < 1)}>Куча ${i + 1}</button>`)
     .join('');
+  // "Вернуться домой" is the main action: it sits in the action bar
   return `<div class="hint">Нажмите на кучу хлама на сцене или выберите номер. Осталось часов: <b>${state.hours}</b>.</div>
-      <div class="piles">${pileButtons}</div>
-      <button class="btn pri" data-a="home" style="width:100%">Вернуться домой</button>`;
+      <div class="piles">${pileButtons}</div>`;
 }
 
 function eveningPane(): string {
@@ -246,8 +244,8 @@ function eveningPane(): string {
     <div class="opts">
       ${option('junk', state.hours < 2, 'Свалка «Кольцо Б»', 'Дорога 1 ч, каждая куча 1 ч. Запчасти, сломанные вещи, редкие находки. Иногда сторожевые дроны.', '→')}
       ${option('market', !canVisitMarket(), 'Барахолка у шлюза', `${MARKET.hours} ч. ${MARKET.parts} запчастей за ${MARKET.price} кр. Раз за вечер.`, MARKET.price)}
-      ${option('sleep', false, 'Спать', 'Закончить день. Ночью: аренда, рейды, заражение склада.', '☾')}
-    </div>`;
+    </div>
+    <div class="hint note">«Спать» — кнопка внизу: закончить день. Ночью: платёж, рейды, заражение склада.</div>`;
 }
 
 function emptyCounterPane(): string {
@@ -261,7 +259,7 @@ function emptyCounterPane(): string {
     return '<div class="hint">Лавка опечатана.</div>';
   }
   if (state.slot >= CUSTOMERS_PER_DAY && !isLandlordDue()) {
-    return '<div class="hint" style="margin-bottom:8px">Очередь кончилась. Пора закрываться.</div><button class="btn pri" data-a="closeshop" style="width:100%">Закрыть лавку</button>';
+    return '<div class="hint">Очередь кончилась. Пора закрываться.</div>';
   }
   return '<div class="hint">Прилавок свободен. Зовите следующего, когда будете готовы. Пока можно разобрать склад.</div>';
 }
@@ -291,15 +289,23 @@ function rentPane(customer: RentCustomer): string {
       <span>К оплате</span><span class="price"><b>${state.owed} кр.</b>${state.deferred ? ' <span class="m-risk">с пеней</span>' : ''}</span>
       <span>${DEBT_UI.debtLeft}</span><span class="price">${state.debt} кр.</span>
       <span>У вас</span><span class="price ${canPay ? 'm-action' : 'm-risk'}">${state.credits} кр.</span></div></div>
-    <div class="opts" style="margin-top:8px">
-      ${option('rentpay', !canPay, 'Заплатить', payText, state.owed, ' class="price"')}
-      ${option('rentdefer', state.deferred, 'Попросить отсрочку', deferText, '⧗')}
-      ${option('rentitems', !(plan.ok && plan.items.length), 'Отдать деньги и товар', collateralDescription(plan), '⚖')}
-    </div>`;
-  if (!canPay && state.deferred && !plan.ok) {
-    html += '<button class="btn m-risk" data-a="evict" style="width:100%;margin-top:8px">Нечем платить</button>';
-  }
+    <div class="opts" style="margin-top:8px">${rentOptions([
+      ['rentpay', 'Заплатить', option('rentpay', !canPay, 'Заплатить', payText, state.owed, ' class="price"'), payText],
+      ['rentdefer', 'Попросить отсрочку', option('rentdefer', state.deferred, 'Попросить отсрочку', deferText, '⧗'), deferText],
+      ['rentitems', 'Отдать деньги и товар', option('rentitems', !(plan.ok && plan.items.length), 'Отдать деньги и товар', collateralDescription(plan), '⚖'), collateralDescription(plan)],
+    ])}</div>`;
   return html;
+}
+
+/**
+ * Grobov's options. The one the action bar shows (pay / defer / goods) leaves the list,
+ * its explanation stays as a line on top; "Нечем платить" is only in the bar.
+ */
+function rentOptions(options: [action: string, title: string, html: string, description: string][]): string {
+  const main = barAction('deal');
+  const chosen = options.find(([action]) => action === main);
+  const note = chosen ? `<div class="hint note">«${chosen[1]}» — кнопка внизу. ${chosen[3]}</div>` : '';
+  return note + options.filter(([action]) => action !== main).map(([, , html]) => html).join('');
 }
 
 function customerHeader(customer: SellerCustomer | BuyerCustomer): string {
@@ -327,8 +333,7 @@ function sellerPane(customer: SellerCustomer): string {
       <button class="btn" data-a="insp" data-v="flaw" ${disabledIf(customer.done.flaw)}>Диагностика</button></div>
     <div class="deal"><div class="ask">Просит: <b class="price">${customer.ask}</b> кр. · у вас ${state.credits}</div>
       ${priceRow(defaultOffer)}
-      <div class="acts"><button class="btn pri" data-a="offer">Предложить</button>
-      <button class="btn alt" data-a="accept" ${disabledIf(customer.ask > state.credits)}>За ${customer.ask}</button>
+      <div class="acts"><button class="btn alt" data-a="accept" ${disabledIf(customer.ask > state.credits)}>За ${customer.ask}</button>
       <button class="btn" data-a="refuse">Отпустить</button></div></div>`;
 }
 
@@ -336,7 +341,7 @@ function buyerPane(customer: BuyerCustomer): string {
   const matching = state.inv.filter(item => item.t === customer.want);
   let html = `<div class="ask" style="margin-bottom:6px">Нужно: <b>${itemName(customer.want)}</b></div>`;
   if (!matching.length) {
-    return html + '<div class="hint" style="margin-bottom:8px">На складе такого нет.</div><button class="btn" data-a="refuse" style="width:100%">Нет такого, до свидания</button>';
+    return html + '<div class="hint">На складе такого нет.</div>';
   }
   const tiles = matching.map(item => {
     const shown = customer.item && customer.item.uid === item.uid;
@@ -347,8 +352,7 @@ function buyerPane(customer: BuyerCustomer): string {
     return html + '<div class="hint" style="margin:8px 0">Выложите товар на прилавок.</div><button class="btn" data-a="refuse" style="width:100%">Отпустить</button>';
   }
   return html + `<div class="deal"><div class="ask">Предлагает: <b class="price">${customer.offer}</b> кр.</div>${priceRow(roundTo10(customer.offer * HAGGLE.buyerDefaultAskShare))}
-        <div class="acts"><button class="btn pri" data-a="ask">Назвать цену</button>
-        <button class="btn alt" data-a="take">За ${customer.offer}</button>
+        <div class="acts"><button class="btn alt" data-a="take">За ${customer.offer}</button>
         <button class="btn" data-a="refuse">Отпустить</button></div></div>`;
 }
 
@@ -428,8 +432,22 @@ export function renderPane(): void {
   const scrollTop = pane.scrollTop;
   pane.innerHTML = (PANES[ui.tab] || dealPane)();
   pane.scrollTop = scrollTop;
+  renderActionBar();
   paintIcons();
   updateChanceMeter();
+}
+
+/** The action bar above the HUD: the screen's one main button, a dim hint, or nothing after the end. */
+function renderActionBar(): void {
+  const bar = byId('actionbar');
+  const main = mainAction(ui.tab);
+  bar.hidden = main.kind === 'none';
+  if (main.kind === 'button') {
+    const value = main.value !== undefined ? ` data-v="${main.value}"` : '';
+    bar.innerHTML = `<button class="btn pri act-main ${main.tone === 'risk' ? 'act-risk' : ''}" data-a="${main.action}"${value}>${main.label}</button>`;
+  } else if (main.kind === 'hint') {
+    bar.innerHTML = `<div class="act-hint m-inactive">${main.text}</div>`;
+  }
 }
 
 export function render(): void {
@@ -466,14 +484,13 @@ function openModal(title: string, body: string, buttons: string, footer = ''): v
   byId('modal').hidden = false;
 }
 
-/** ☰ menu: a sheet over the HUD with the current mode on top, the debt, modes, music, save and new game (later: RU/EN). */
+/** ☰ menu: a sheet over the HUD with the current mode on top, the debt, modes (a new game starts there), music and save (later: RU/EN). */
 function openMenu(): void {
   byId('mbox').innerHTML = `<h2>${MODE_UI.names[state.mode]}</h2>
     <button class="btn menu-item" data-a="debt">${fill(DEBT_UI.menuDebt, { debt: state.debt })}</button>
     <button class="btn menu-item" data-a="modes">${MODE_UI.menuModes}</button>
     <button class="btn menu-item" data-a="music" aria-pressed="${audio.on}">${HUD.music}: ${audio.on ? HUD.on : HUD.off}</button>
     <button class="btn menu-item" data-a="savemenu">${HUD.save}</button>
-    <button class="btn menu-item" data-a="newgame">${HUD.newGame}</button>
     <div class="mbtns"><button class="btn" data-a="close">${HUD.close}</button></div>`;
   byId('modal').classList.add('sheet');
   byId('modal').hidden = false;
@@ -679,7 +696,7 @@ function modeCard(mode: Mode): string {
   return `<div class="mode-card"><div>${name}${current}</div>${about}${status}<div class="mode-btns">${buttons}</div></div>`;
 }
 
-/** Mode screen: on the first launch (no close button) and from ☰ ("Режимы", "Новая игра"). */
+/** Mode screen: on the first launch (no close button) and from ☰ "Режимы" (a new game starts there). */
 function openModes(): void {
   const close = persistence.enabled ? `<button class="btn" data-a="close">${MODE_UI.close}</button>` : '';
   openModal(MODE_UI.screenTitle, `<div class="modes">${MODES.map(modeCard).join('')}</div>`, close);
@@ -875,11 +892,6 @@ const ACTIONS: Record<string, ActionHandler> = {
     return NO_RENDER;
   },
   close: () => closeModal(),
-  // "Новая игра" in ☰ opens the mode screen ("Начать заново" there asks first)
-  newgame: () => {
-    openModes();
-    return NO_RENDER;
-  },
   // after an ending or a closed debt: a new game in the same mode, no questions
   'newgame-yes': () => {
     closeModal();

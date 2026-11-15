@@ -1,4 +1,4 @@
-/* Layout: one-screen app — pixel scene (shop / junkyard) → ticker → tabs → scrolling pane → HUD bar at the bottom. Single deliberate dark look. */
+/* Layout: one-screen app — pixel scene (shop / junkyard) → ticker → tabs → scrolling pane → action bar → HUD bar at the bottom. Single deliberate dark look. */
 
 /* ==================== Fonts ==================== */
 
@@ -60,6 +60,8 @@ img {
   --lab-title: 16px;
   /* HUD: one bottom row of 44 pt buttons plus air above and below (V1.4). */
   --hud-height: 52px;
+  /* Action bar (V1.5): one 44 pt main button with 6px of air above and below. */
+  --bar-height: 56px;
 }
 
 /* Desktop type profile: the :root above is the phone profile. A copy for now,
@@ -257,13 +259,24 @@ input:focus-visible {
   display: flex;
   justify-content: center;
   background: var(--scene-bg);
-  border: 1px solid var(--line);
+  /* the frame is drawn inside: on a phone the scene runs edge to edge */
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+/* Phone and tablet (V1.5): the scene takes the full screen width, past the body side padding.
+   Height follows from the width (160×100), capped at 40% of the screen. */
+@media (max-width: 899px) {
+  .scene {
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+  }
 }
 
 .stage {
   position: relative;
-  height: min(40vh, 58vw);
-  height: min(40svh, 58vw);
+  /* 62.5vw = 100vw × 100/160: the full width at the scene's own proportions */
+  height: min(40vh, 62.5vw);
+  height: min(40svh, 62.5vw);
   aspect-ratio: 160/100;
   max-width: 100%;
   line-height: 0;
@@ -315,22 +328,6 @@ input:focus-visible {
   background: var(--chip-bg);
   color: var(--cyan);
   padding: 4px 6px;
-}
-
-/* Main call to action in the scene. */
-.call {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  font-size: var(--fs-px-m);
-  line-height: 1;
-  background: var(--m-action);
-  color: var(--on-accent);
-  border: none;
-  padding: 11px 14px;
-  box-shadow: 4px 4px 0 var(--shadow);
-  white-space: nowrap;
 }
 
 .fx {
@@ -423,6 +420,45 @@ input:focus-visible {
   min-height: 0;
   overflow: auto;
   padding-block: 10px 14px;
+}
+
+/* ==================== Action bar (V1.5) ==================== */
+
+/* Between the pane and the HUD, always in the same place: the one main button of the
+   screen, full width (on a desktop no wider than the #app column), or a dim hint. */
+.actionbar {
+  flex: none;
+  height: var(--bar-height);
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--line);
+}
+
+/* With the on-screen keyboard open (price box) the bar hides together with the HUD;
+   Enter in the price box still makes the offer. */
+.kb-open .actionbar {
+  display: none;
+}
+
+.act-main {
+  width: 100%;
+  min-height: 44px;
+}
+
+/* Eviction ("Нечем платить") is the only main action in the risk color. */
+.act-main.act-risk {
+  background: var(--m-risk);
+  border-color: var(--m-risk);
+}
+
+.act-hint {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--line);
+  font-size: var(--fs-m);
 }
 
 /* ==================== Shared: text, cards, status colors, buttons ==================== */
@@ -653,7 +689,8 @@ input:focus-visible {
 
 .acts {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  /* "Предложить" / "Назвать цену" moved to the action bar (V1.5): the price and "Отпустить" stay */
+  grid-template-columns: 1fr 1fr;
   gap: 5px;
 }
 
@@ -1122,7 +1159,6 @@ input:focus-visible {
 
 .st b,
 .chip,
-.call,
 .fx,
 .rn,
 .opt b,
