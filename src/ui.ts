@@ -3,23 +3,23 @@
 //  plus all click/keyboard handlers (buttons carry data-a="action").
 // =====================================================================
 import { barAction, chipLines, mainAction } from './actionbar';
-import { audio, startMusicOnGesture, toggleMusic } from './audio';
+import { audio, playSfx, setJunkAmbience, startSoundOnGesture, toggleMusic, toggleSfx } from './audio';
 import {
-  BENCH_COST, CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, MARKET, MAX_HEAT, MODES, MODE_TEXT,
+  ACTION_TEXT, BENCH_COST, CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, JUNK_TEXT, MARKET, MAX_HEAT, MODES, MODE_TEXT,
   PLAYABLE_MODES, RECIPES, RENT, SUPPLIER,
 } from './data';
 import { byId, maybeById } from './dom';
 import { iconSvg } from './icons';
 import {
   askBuyer, availableOfType, buyFromSeller, buySeat, callNextCustomer, canBuySeat, canCraft, hasShuttle, isDebtClosed, canVisitMarket, closeShop,
-  collateralHeatRelief, craft, customerLeaves, deferredDebt, deferRent, digPile, estimatedValue, evict, feedback,
-  goHome, goToJunkyard, hunchVerdict, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer, itemName,
+  collateralHeatRelief, craft, customerLeaves, deferredDebt, deferRent, dig, digsPerVisit, estimatedValue, evict, feedback,
+  canGoToJunkyard, goHome, goToJunkyard, hunchVerdict, junkVisitHours, noiseLevel, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer, itemName,
   nextRent, offerToSeller, orderParts, payEarly, payRent, payWithCollateral, perceivedChance, planCollateral, presentItem,
   recipeNeeds, scrapValue, seatPrice, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
 } from './economy';
 import type { CollateralPlan } from './economy';
 import { isPlayable, loadProfile, recordEnding, saveProfile } from './profile';
-import { onSceneClick, paintIcons, pileAt } from './scene';
+import { isOnHeap, onSceneClick, paintIcons, playDigFx } from './scene';
 import {
   actor, actorAtCounter, actorReset, addLog, exportSave, findItem, importSave, newGame, persistence, readSlot, saveGame, setState, state, ui,
 } from './state';
@@ -230,19 +230,39 @@ function option(action: string, disabled: boolean, title: string, description: s
   return `<button class="opt" data-a="${action}" ${disabledIf(disabled)}><div><b>${title}</b><br><span>${description}</span></div><span${sideClass}>${side}</span></button>`;
 }
 
+/** Junkyard words (v2): the noise scale, the panel, the messages. */
+const JUNK_UI = JUNK_TEXT.ru;
+const ACTION_UI = ACTION_TEXT.ru;
+/** Cells of the noise scale: 10 cells for 0…100. */
+const NOISE_CELLS = 10;
+
+/** Noise as a scale plus a word, like the hunch verdict: тихо / слышно / громко / дрон рядом. From "громко" on it reads as risk. */
+function noiseMeter(noise: number): string {
+  const level = noiseLevel(noise);
+  const word = JUNK_UI.levels[level];
+  const filled = Math.round(noise / 100 * NOISE_CELLS);
+  return `<div class="noise${level >= 2 ? ' loud' : ''}"><span>${JUNK_UI.noise}</span><div class="nbar">${meterCells(NOISE_CELLS, filled)}</div><b class="nword${level >= 2 ? ' m-risk' : ''}">${word}</b></div>`;
+}
+
 function junkyardPane(): string {
-  const pileButtons = (state.junk?.piles ?? [])
-    .map((pile, i) => `<button class="btn" data-a="dig" data-v="${i}" ${disabledIf(pile.dug || state.hours < 1)}>Куча ${i + 1}</button>`)
-    .join('');
-  // "Вернуться домой" is the main action: it sits in the action bar
-  return `<div class="hint">Нажмите на кучу хлама на сцене или выберите номер. Осталось часов: <b>${state.hours}</b>.</div>
-      <div class="piles">${pileButtons}</div>`;
+  const visit = state.junk;
+  if (!visit) {
+    return '';
+  }
+  const total = visit.dp + visit.d;
+  // "Копать" is the main action (the action bar), "Вернуться домой" is here until the digs run out — then it goes to the bar
+  const homeButton = visit.d > 0 ? `<button class="btn" data-a="home">${ACTION_UI.home}</button>` : '';
+  const homeHint = visit.d > 0 ? `<div class="hint">${JUNK_UI.homeHint}</div>` : '';
+  return `<div class="junk-stats"><span>${JUNK_UI.digsLeft}: <b class="rn">${visit.d}</b> ${HUD.of} ${total}</span><span>${JUNK_UI.depth} <b class="rn">${visit.dp}</b></span></div>
+      ${noiseMeter(visit.n)}
+      ${homeHint}
+      ${homeButton}`;
 }
 
 function eveningPane(): string {
   return `<div class="hint" style="margin-bottom:8px">Лавка закрыта. Осталось часов: <b>${state.hours}</b>. Верстак и сборка работают бесплатно.</div>
     <div class="opts">
-      ${option('junk', state.hours < 2, 'Свалка «Кольцо Б»', 'Дорога 1 ч, каждая куча 1 ч. Запчасти, сломанные вещи, редкие находки. Иногда сторожевые дроны.', '→')}
+      ${option('junk', !canGoToJunkyard(), JUNK_UI.title, fill(JUNK_UI.about, { hours: junkVisitHours(), digs: digsPerVisit() }), '→')}
       ${option('market', !canVisitMarket(), 'Барахолка у шлюза', `${MARKET.hours} ч. ${MARKET.parts} запчастей за ${MARKET.price} кр. Раз за вечер.`, MARKET.price)}
     </div>
     <div class="hint note">«Спать» — кнопка внизу: закончить день. Ночью: платёж, рейды, заражение склада.</div>`;
@@ -457,6 +477,8 @@ export function render(): void {
   renderSceneOverlay();
   renderTabs();
   renderPane();
+  // junkyard ambience follows the state: ticks from "громко" on, silent at home or after the drone
+  setJunkAmbience(state.where === 'junk' && state.junk && !state.junk.run ? noiseLevel(state.junk.n) : 0);
   saveGame();
   noteProgress();
 }
@@ -486,12 +508,13 @@ function openModal(title: string, body: string, buttons: string, footer = ''): v
   byId('modal').hidden = false;
 }
 
-/** ☰ menu: a sheet over the HUD with the current mode on top, the debt, modes (a new game starts there), music and save (later: RU/EN). */
+/** ☰ menu: a sheet over the HUD with the current mode on top, the debt, modes (a new game starts there), music, sounds and save (later: RU/EN). */
 function openMenu(): void {
   byId('mbox').innerHTML = `<h2>${MODE_UI.names[state.mode]}</h2>
     <button class="btn menu-item" data-a="debt">${fill(DEBT_UI.menuDebt, { debt: state.debt })}</button>
     <button class="btn menu-item" data-a="modes">${MODE_UI.menuModes}</button>
     <button class="btn menu-item" data-a="music" aria-pressed="${audio.on}">${HUD.music}: ${audio.on ? HUD.on : HUD.off}</button>
+    <button class="btn menu-item" data-a="sounds" aria-pressed="${audio.sfx}">${HUD.sounds}: ${audio.sfx ? HUD.on : HUD.off}</button>
     <button class="btn menu-item" data-a="savemenu">${HUD.save}</button>
     <div class="mbtns"><button class="btn" data-a="close">${HUD.close}</button></div>`;
   byId('modal').classList.add('sheet');
@@ -866,14 +889,21 @@ const ACTIONS: Record<string, ActionHandler> = {
     goToJunkyard();
     ui.tab = 'deal';
   },
-  dig: value => digPile(Number(value)),
-  home: () => goHome(),
+  dig: () => digAndShow(),
+  home: () => {
+    goHome();
+    playSfx('home');
+  },
   market: () => visitMarket(),
   sleep: () => showMorningReport(sleepUntilMorning()),
   // header & modals
   music: () => {
     toggleMusic();
     // the item lives in the menu: show the new state, keep the menu open
+    openMenu();
+  },
+  sounds: () => {
+    toggleSfx();
     openMenu();
   },
   menu: () => {
@@ -948,16 +978,25 @@ function onClick(event: MouseEvent): void {
   render();
 }
 
-function onSceneCanvasClick(event: MouseEvent): void {
-  if (state.where !== 'junk' || !state.junk) {
+/** "Копать" (the bar or a tap on the heap): one dig, its sound, the shovel and the ambience of the new noise. */
+function digAndShow(): void {
+  const result = dig();
+  if (!result) {
     return;
   }
-  const index = pileAt(event.clientX, event.clientY);
-  if (index >= 0) {
-    digPile(index);
-    flushFeedback();
-    render();
+  playSfx('dig');
+  playSfx(result.kind);
+  playDigFx(result.kind);
+}
+
+/** A tap on the junk heap digs, like "Копать" in the action bar. */
+function onSceneCanvasClick(event: MouseEvent): void {
+  if (state.where !== 'junk' || !state.junk || !isOnHeap(event.clientX, event.clientY)) {
+    return;
   }
+  digAndShow();
+  flushFeedback();
+  render();
 }
 
 /** Enter in the price box submits the offer / ask. */
@@ -979,19 +1018,19 @@ export function bindEvents(): void {
   });
   document.addEventListener('keydown', onKeyDown);
   onSceneClick(onSceneCanvasClick);
-  startMusicOnFirstTouch();
+  startSoundOnFirstTouch();
   trackKeyboard();
 }
 
 /**
- * Music is on by default, but browsers start sound only from a user gesture.
+ * Music and sounds are on by default, but browsers start sound only from a user gesture.
  * Listen to the first touches / key presses (pointerdown for a mouse,
- * touchend for iOS Safari) until the music runs or the player turned it off.
+ * touchend for iOS Safari) until the sound runs or the player turned both off.
  */
-function startMusicOnFirstTouch(): void {
+function startSoundOnFirstTouch(): void {
   const events = ['pointerdown', 'touchend', 'keydown'] as const;
   const onGesture = (): void => {
-    if (startMusicOnGesture()) {
+    if (startSoundOnGesture()) {
       events.forEach(type => document.removeEventListener(type, onGesture, true));
     }
   };

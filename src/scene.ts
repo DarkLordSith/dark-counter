@@ -5,12 +5,14 @@
 //  anchor point.
 // =====================================================================
 import { appearanceFor, seededRandom } from './appearance';
-import { CUSTOMERS_PER_DAY, JUNK_PILES, MAX_HEAT, SHOP_SIGN } from './data';
+import { CUSTOMERS_PER_DAY, MAX_HEAT, SHOP_SIGN } from './data';
+import { noiseLevel } from './economy';
+import type { DigResult } from './economy';
 import { heatMeterRects } from './heatmeter';
 import { CHARACTER, COLOR, GLOW, ITEM_COLORS, JUNKYARD, SHADE, SHOP } from './palette';
 import { byId } from './dom';
 import { actor, COUNTER_X, DOOR_X, state } from './state';
-import type { Appearance, CustomerLook, ItemType, LandlordLook } from './types';
+import type { Appearance, CustomerLook, ItemType, JunkVisit, LandlordLook } from './types';
 
 /** A filled rectangle relative to a sprite's anchor: [x, y, width, height, color]. */
 type Rect = [number, number, number, number, string];
@@ -619,28 +621,45 @@ function drawHeatMeter(now: number): void {
 
 /* ---------- junkyard ---------- */
 
-function drawPile(index: number, now: number): void {
-  const pile = JUNK_PILES[index];
-  const pileState = state.junk!.piles[index];
-  const random = seededRandom(pileState.seed);
-  const height = pileState.dug ? 5 : pile.h;
-  const half = pile.w / 2;
+/** The one junk heap (v2): centre, base line, width and its height by stage (it thins with each dig). */
+const HEAP = { x: 80, y: 94, w: 116, heights: [30, 24, 18, 12] };
+const DIG_FX_MS = 450;
+
+/** Last dig, for the shovel and the falling debris. */
+const digFx = { at: -Infinity, kind: 'empty' as DigResult['kind'] };
+
+/** Called by ui.ts after "Копать": starts the shovel / debris animation. */
+export function playDigFx(kind: DigResult['kind']): void {
+  digFx.at = performance.now();
+  digFx.kind = kind;
+}
+
+/** Heap stage 0…3 by the share of the visit already dug. */
+function heapStage(visit: JunkVisit): number {
+  const total = visit.dp + visit.d;
+  return total ? Math.min(HEAP.heights.length - 1, Math.floor(visit.dp / total * HEAP.heights.length)) : 0;
+}
+
+function drawHeap(visit: JunkVisit, now: number): void {
+  const random = seededRandom(visit.s);
+  const height = HEAP.heights[heapStage(visit)];
+  const half = HEAP.w / 2;
   // mound silhouette
   for (let dx = -half; dx < half; dx += 2) {
     const k = dx / half;
     const columnHeight = Math.max(1, Math.round(height * (1 - k * k) + random() * 3));
-    const color = pileState.dug ? JUNKYARD.pileDug : ((dx / 2) % 2 ? JUNKYARD.pileLight : JUNKYARD.pileDark);
-    fillRect(pile.x + dx, pile.y - columnHeight, 2, columnHeight, color);
+    fillRect(HEAP.x + dx, HEAP.y - columnHeight, 2, columnHeight, (dx / 2) % 2 ? JUNKYARD.pileLight : JUNKYARD.pileDark);
   }
-  if (pileState.dug) {
-    fillRect(pile.x - 3, pile.y - 6, 1, 1, JUNKYARD.pileSpeck);
-    fillRect(pile.x + 2, pile.y - 5, 1, 1, JUNKYARD.pileSpeck);
-    return;
+  // dug-out hollow on top: wider with depth
+  if (visit.dp > 0) {
+    const hollow = 6 + visit.dp * 4;
+    fillRect(HEAP.x - hollow / 2, HEAP.y - height + 1, hollow, 3, JUNKYARD.pileDug);
   }
-  // scattered junk
-  for (let j = 0; j < 5; j++) {
-    const px = pile.x - half * 0.6 + random() * pile.w * 0.6;
-    const py = pile.y - height * 0.7 + random() * height * 0.5;
+  // scattered junk: fewer pieces as the heap thins
+  const pieces = 14 - heapStage(visit) * 3;
+  for (let j = 0; j < pieces; j++) {
+    const px = Math.round(HEAP.x - half * 0.7 + random() * HEAP.w * 0.7);
+    const py = Math.round(HEAP.y - height * 0.8 + random() * height * 0.65);
     const kind = Math.floor(random() * 4);
     if (kind === 0) {
       fillRect(px, py, 4, 3, SHOP.panelEdge);
@@ -659,12 +678,64 @@ function drawPile(index: number, now: number): void {
     }
   }
   // occasional glint
-  if (((now / 1000 + index * 0.7) % 3.2) < 0.15) {
-    fillRect(pile.x - 4 + (pileState.seed % 9), pile.y - height + 2, 1, 1, JUNKYARD.glint);
+  if ((now / 1000 % 3.2) < 0.15) {
+    fillRect(HEAP.x - 10 + (visit.s % 21), HEAP.y - height + 4, 1, 1, JUNKYARD.glint);
   }
 }
 
-function drawJunkyard(now: number): void {
+/** Shovel swing and debris sliding down the heap for DIG_FX_MS after a dig. */
+function drawDigFx(visit: JunkVisit, now: number): void {
+  const t = (now - digFx.at) / DIG_FX_MS;
+  if (t < 0 || t > 1) {
+    return;
+  }
+  const top = HEAP.y - HEAP.heights[heapStage(visit)];
+  // shovel: rises out of the heap and tips to the right
+  const lift = Math.round(Math.sin(t * Math.PI) * 8);
+  const tip = Math.round(t * 6);
+  fillRect(HEAP.x - 1 + tip, top - 10 - lift, 1, 9, JUNKYARD.rustLight);
+  fillRect(HEAP.x - 2 + tip, top - 2 - lift, 3, 3, COLOR.steel);
+  // debris: specks falling down both slopes
+  for (let i = 0; i < 6; i++) {
+    const side = i % 2 ? 1 : -1;
+    const dx = side * (4 + i * 3 + t * 14);
+    const dy = t * t * 18 + i;
+    fillRect(Math.round(HEAP.x + dx), Math.round(top + dy), 1, 1, i % 3 ? JUNKYARD.pileSpeck : JUNKYARD.rustLight);
+  }
+  if (digFx.kind === 'rare' || digFx.kind === 'broken' || digFx.kind === 'parts') {
+    fillRect(HEAP.x + tip, top - 14 - lift, 1, 1, JUNKYARD.glint); // a glint of the find
+  }
+}
+
+/**
+ * Guard drone: off-screen while quiet; at "громко" it patrols far away,
+ * at "дрон рядом" it hangs close with its searchlight; after the catch it is over the heap.
+ */
+function drawGuardDrone(visit: JunkVisit, now: number): void {
+  const level = noiseLevel(visit.n);
+  if (!visit.run && level < 2) {
+    return;
+  }
+  const seconds = now / 1000;
+  const near = visit.run || level === 3;
+  const x = Math.round(visit.run ? HEAP.x - 4 : near ? 104 + Math.sin(seconds * 1.3) * 6 : 128 + Math.sin(seconds * 0.8) * 10);
+  const y = Math.round((visit.run ? 40 : near ? 30 : 22) + Math.sin(seconds * 3) * 1.5);
+  const blink = (seconds * (near ? 4 : 2) | 0) % 2;
+  if (near) {
+    const reach = HEAP.y - 4;
+    const aim = visit.run ? x + 4 : HEAP.x + 10;
+    fillPolygon(GLOW.droneBeam(blink ? 1 : 0.7), [[x + 3, y + 4], [x + 5, y + 4], [aim + 16, reach], [aim - 16, reach]]);
+  }
+  // rotors, body, red eye
+  const scale = near ? 1 : 0;
+  fillRect(x - 2 - scale, y, 3 + scale, 1, COLOR.dim);
+  fillRect(x + 6, y, 3 + scale, 1, COLOR.dim);
+  fillRect(x, y + 1, 8, 3 + scale, COLOR.steel);
+  fillRect(x + 1, y + 2, 6, 1, COLOR.ink);
+  fillRect(x + 3, y + 2, 2, 1, blink ? COLOR.red : JUNKYARD.guardLedOff);
+}
+
+function drawJunkyard(visit: JunkVisit, now: number): void {
   const seconds = now / 1000;
   fillRect(0, 0, SCENE_W, SCENE_H, JUNKYARD.sky);
   for (let i = 0; i < 20; i++) {
@@ -693,16 +764,18 @@ function drawJunkyard(now: number): void {
   fillRect(146, 40, 10, 20, JUNKYARD.guardPost);
   fillRect(147, 42, 8, 3, COLOR.ink);
   fillRect(148, 43, 2, 1, (seconds | 0) % 2 ? COLOR.red : JUNKYARD.guardLedOff);
-  JUNK_PILES.forEach((_, index) => drawPile(index, now));
+  drawHeap(visit, now);
+  drawDigFx(visit, now);
+  drawGuardDrone(visit, now);
   drawHeatMeter(now);
 }
 
-/** Index of the junk pile under a click, or -1. */
-export function pileAt(clientX: number, clientY: number): number {
+/** True when a click lands on the junk heap (a tap there digs, like "Копать"). */
+export function isOnHeap(clientX: number, clientY: number): boolean {
   const rect = sceneCanvas.getBoundingClientRect();
   const x = (clientX - rect.left) / rect.width * SCENE_W;
   const y = (clientY - rect.top) / rect.height * SCENE_H;
-  return JUNK_PILES.findIndex(pile => Math.abs(x - pile.x) < pile.w / 2 && y > pile.y - pile.h - 6 && y < pile.y + 3);
+  return Math.abs(x - HEAP.x) < HEAP.w / 2 && y > HEAP.y - HEAP.heights[0] - 8 && y < HEAP.y + 4;
 }
 
 export function onSceneClick(handler: (event: MouseEvent) => void): void {
@@ -745,7 +818,7 @@ function frame(now: number): void {
   }
   stepDoor(dt);
   if (state.where === 'junk' && state.junk) {
-    drawJunkyard(now);
+    drawJunkyard(state.junk, now);
   } else {
     drawShop(now);
   }

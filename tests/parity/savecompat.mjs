@@ -3,6 +3,10 @@
 //  2) old localStorage (dark-counter-v3) → page load of new
 //  3) code exported from new → loads in old (downgrade still works)
 // Usage: node savecompat.mjs <oldUrl> <newUrl>
+// PARITY_NEW_BEHAVIOR=1 (the game plays differently on purpose, e.g. junkyard v2): old saves must
+// still load with the same day, credits and stock and keep playing without errors, but the
+// continuation is not compared with the old version, and the downgrade (3) is only reported:
+// an old build may not know the new save fields.
 import { clickMenuItem, deterministicInit, launch, passModeScreen, rng, storySave } from './common.mjs';
 
 const [, , OLD, NEW] = process.argv;
@@ -77,7 +81,14 @@ const importCode = async (page, code) => {
   }, code);
 };
 
+const NEW_BEHAVIOR = process.env.PARITY_NEW_BEHAVIOR === '1';
+
 async function compareContinuation(label, a, b, seed) {
+  if (NEW_BEHAVIOR) {
+    // only the new version keeps playing: no comparison, errors are counted below
+    await botSteps(b, 60, seed);
+    return true;
+  }
   const sa = await snap(a), sb = await snap(b);
   let ok = sa === sb;
   for (let i = 0; ok && i < 60; i++) {
@@ -110,11 +121,12 @@ for (const seed of [11, 222, 3333, 44444, 555555]) {
   // 3) code from new → old
   const codeNew = await exportCode(newA);
   const back = await open(browser, OLD, seed + 3);
-  const rb = await importCode(back, codeNew);
-  const ok3 = !rb.modalOpen;
-  const errs = [old, refA, newA, refB, newB, back].flatMap(p => p.errors);
-  console.log(`seed ${seed}: day ${st.day}, ${st.credits} кр, ${st.inv.length} items, phase ${st.phase}${st.cust ? ', customer ' + st.cust.kind : ''} | old code→new: ${ok1 ? 'OK' : 'FAIL'} | old localStorage→new: ${ok2 ? 'OK' : 'FAIL'} | new code→old: ${ok3 ? 'OK' : 'FAIL'} | errors ${errs.length}`);
-  if (!ok1 || !ok2 || !ok3 || errs.length) { failures++; console.log(errs.slice(0, 3), ra, na); }
+  const rb = await importCode(back, codeNew).catch(error => ({ modalOpen: true, msg: String(error).split('\n')[0] }));
+  const ok3 = !rb.modalOpen && !back.errors.length;
+  const errs = [old, refA, newA, refB, newB].flatMap(p => p.errors);
+  const downgrade = ok3 ? 'OK' : NEW_BEHAVIOR ? `skipped (${rb.msg || back.errors[0] || 'error'})` : 'FAIL';
+  console.log(`seed ${seed}: day ${st.day}, ${st.credits} кр, ${st.inv.length} items, phase ${st.phase}${st.cust ? ', customer ' + st.cust.kind : ''} | old code→new: ${ok1 ? 'OK' : 'FAIL'} | old localStorage→new: ${ok2 ? 'OK' : 'FAIL'} | new code→old: ${downgrade} | errors ${errs.length}`);
+  if (!ok1 || !ok2 || (!ok3 && !NEW_BEHAVIOR) || errs.length) { failures++; console.log(errs.slice(0, 3), back.errors.slice(0, 1), ra, na); }
   for (const p of [old, refA, newA, refB, newB, back]) await p.browserContext().close();
 }
 await browser.close();

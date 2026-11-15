@@ -1045,11 +1045,55 @@ input:focus-visible {
 
 /* ==================== Junkyard ==================== */
 
-.piles {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
-  margin: 8px 0;
+/* Digs left and depth (v2): numbers in the pixel font. */
+.junk-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--fs-m);
+  margin-bottom: 8px;
+}
+
+/* Noise: a scale plus a word, like the hunch verdict. The scale leads to the drone (wanted level), so it fills with risk. */
+.noise {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-s);
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+
+.nbar {
+  flex: 1;
+  display: flex;
+  gap: 2px;
+}
+
+.nbar i {
+  flex: 1;
+  height: 6px;
+  background: var(--line);
+}
+
+.nbar i.on {
+  background: var(--m-risk);
+}
+
+.nword {
+  font-size: var(--fs-px-m);
+  font-weight: normal;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.nword.m-risk {
+  color: var(--m-risk);
+}
+
+.junk-stats + .noise + .hint + .btn {
+  width: 100%;
+  margin-top: 8px;
 }
 
 /* ==================== Modal ==================== */
@@ -1279,6 +1323,7 @@ input:focus-visible {
 .price,
 .pr input,
 .verdict,
+.nword,
 .mbox h2,
 .mode-name,
 .diag h2 {

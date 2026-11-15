@@ -6,13 +6,14 @@
 //  Also the queue chip on the scene (chipLines): the other bit of
 //  "where am I in the day" text drawn over the scene.
 // =====================================================================
-import { ACTION_TEXT, CUSTOMERS_PER_DAY } from './data';
+import { ACTION_TEXT, CUSTOMERS_PER_DAY, JUNK_TEXT } from './data';
 import { isLandlordDue, isPresentedBuyer, planCollateral } from './economy';
 import { actor, state } from './state';
 import type { Tab } from './types';
 import { fill } from './util';
 
 const TEXT = ACTION_TEXT.ru;
+const JUNK_WORDS = JUNK_TEXT.ru;
 
 export type MainAction =
   /** One button: data-a / data-v as in the pane; tone 'risk' only for eviction. */
@@ -59,7 +60,11 @@ export function mainAction(tab: Tab): MainAction {
     if (tab !== 'deal') {
       return hint(state.where === 'junk' ? TEXT.toJunkyard : TEXT.toEvening);
     }
-    return state.where === 'junk' ? button('home', TEXT.home) : button('sleep', TEXT.sleep);
+    if (state.where === 'junk') {
+      // "Копать" while digs are left; then (or after the drone) "Вернуться домой" takes the bar
+      return state.junk && state.junk.d > 0 ? button('dig', JUNK_WORDS.dig) : button('home', TEXT.home);
+    }
+    return button('sleep', TEXT.sleep);
   }
   if (canCallNext()) {
     return button('call', TEXT.call);

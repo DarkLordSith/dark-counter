@@ -106,6 +106,8 @@ export const GLOW = {
   counterHazard: withAlpha(COLOR.amber, 0.35),
   shopLamp: withAlpha(COLOR.amber, 0.06),
   junkLamp: (brightness: number): string => withAlpha(COLOR.amber, 0.07 * brightness),
+  /** Guard drone searchlight over the junk heap (v2). */
+  droneBeam: (brightness: number): string => withAlpha(COLOR.red, 0.12 * brightness),
 };
 
 /* =====================================================================

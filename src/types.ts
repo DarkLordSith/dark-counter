@@ -111,10 +111,27 @@ export type Customer = SellerCustomer | BuyerCustomer | RentCustomer;
 
 /* ---------- game state (= save format) ---------- */
 
+/** Old junkyard (before v2, 15.11.2026): six piles, one dig each. Only migrate() reads it. */
 export interface JunkPile {
   dug: boolean;
   /** Seed of the pile's shape. */
   seed: number;
+}
+
+/** A junkyard visit (v2): one heap, "Копать" until the digs run out or the drone comes. */
+export interface JunkVisit {
+  /** Digs left this visit ("digs"). */
+  d: number;
+  /** Noise 0…100: each dig adds JUNK.noisePerDig ± spread, the drone chance grows with it. */
+  n: number;
+  /** Digs done this visit ("depth"): raises the rare chance, thins the heap on the scene. */
+  dp: number;
+  /** Item uids found this visit ("found"): the drone takes one of them. */
+  f: number[];
+  /** Seed of the heap's shape. */
+  s: number;
+  /** The drone came: the visit is over, only "home" is left. */
+  run?: boolean;
 }
 
 export interface GameState {
@@ -142,7 +159,7 @@ export interface GameState {
   /** Evening hours left. */
   hours: number;
   where: 'home' | 'junk';
-  junk: { piles: JunkPile[] } | null;
+  junk: JunkVisit | null;
   /** Junkyard message in the speech bubble. */
   jmsg: string;
   /** Flea market visited this evening. */
@@ -196,11 +213,12 @@ type DebtFields = 'debt' | 'seat' | 'shuttleDay' | 'ending' | 'mode';
 
 /**
  * Any save the game has ever written: older ones lack the rent or debt fields,
- * and saves before the debt update have `won` (shop bought out), which migrate() turns into the 'left' ending.
+ * saves before the debt update have `won` (shop bought out), which migrate() turns into the 'left' ending,
+ * and saves before junkyard v2 may hold a visit with six piles.
  */
-export type SavedGame = Omit<GameState, RentFields | DebtFields>
+export type SavedGame = Omit<GameState, RentFields | DebtFields | 'junk'>
   & Partial<Pick<GameState, RentFields | DebtFields>>
-  & { won?: boolean };
+  & { won?: boolean; junk: GameState['junk'] | { piles: JunkPile[] } };
 
 /* ---------- screen state (not saved) ---------- */
 

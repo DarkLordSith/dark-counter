@@ -20,7 +20,7 @@
 - **vite-plugin-pwa** (Workbox) для манифеста и service worker. Ручной `sw.js` не пишем.
 - Деплой: GitHub Actions → GitHub Pages. `base: '/dark-counter/'` в `vite.config.ts`.
 - Графика: canvas 160×100 логических пикселей, рисуем прямоугольниками: `fillRect(x,y,w,h,color)`, спрайты — списки `[x, y, w, h, color]` для `fillRects()`. Спрайты-картинки только после отдельного решения (тогда, возможно, Phaser для сцены).
-- Звук: Web Audio API, генеративный лофи. По умолчанию включён и стартует на первом касании игрока (браузеры не дают звуку стартовать без жеста). «Выкл» в меню запоминается в `localStorage` (`dark-counter-music`), не в сейве.
+- Звук: Web Audio API, генеративный лофи. По умолчанию включён и стартует на первом касании игрока (браузеры не дают звуку стартовать без жеста). «Выкл» в меню запоминается в `localStorage` (`dark-counter-music`), не в сейве. Звуки свалки (раскопка, находки, шум, дрон, «домой») — тоже генеративные, со своим пунктом меню «Звуки: вкл/выкл» (`dark-counter-sfx`), тише музыки.
 - Шрифты: **Public Pixel** (CC0) — локальный файл в `public/fonts/`, в прекэше PWA; **IBM Plex Mono** — Google Fonts, офлайн из кэша Workbox `google-fonts` (кириллица 400/500/600 подгружается при старте в `main.ts`). Фолбэки только моноширинные.
 
 ## Команды
@@ -34,17 +34,17 @@
 - `index.html` — разметка, подключает `src/main.ts`.
 - `src/main.ts` — инициализация: загрузка сейва, связка модулей, рендер, цикл анимации.
 - `src/types.ts` — `GameState`, `Item`, `ItemType`, `Customer` (размеченное объединение по `kind`: `'sell' | 'buy' | 'rent'`). Короткие поля сейва описаны с комментариями.
-- `src/data.ts` — товары (`ITEM_TYPES`), рецепты (`RECIPES`), имена, реплики, все балансовые числа (`DEBT`, `RENT`, `HAGGLE`, `DIG_ODDS`…), режимы и ключи слотов (`MODES`, `SAVE_KEYS`, `PROFILE_KEY`), строки RU/EN: HUD и меню (`HUD_TEXT`), режимы (`MODE_TEXT`), долг и шаттл (`DEBT_TEXT`), концовки (`ENDING_TEXT`). Плейсхолдеры `{name}` в строках заполняет `fill()` из `util.ts`. Новый контент добавляется здесь.
+- `src/data.ts` — товары (`ITEM_TYPES`), рецепты (`RECIPES`), имена, реплики, все балансовые числа (`DEBT`, `RENT`, `HAGGLE`, свалка `JUNK` и `DIG_ODDS`…), режимы и ключи слотов (`MODES`, `SAVE_KEYS`, `PROFILE_KEY`), строки RU/EN: HUD и меню (`HUD_TEXT`), режимы (`MODE_TEXT`), долг и шаттл (`DEBT_TEXT`), концовки (`ENDING_TEXT`), свалка (`JUNK_TEXT`). Плейсхолдеры `{name}` в строках заполняет `fill()` из `util.ts`. Новый контент добавляется здесь.
 - `src/state.ts` — `state` (сейв), `ui` и `actor` (состояние экрана, не сохраняются), `newGame(mode)`, `createItem`, слоты режимов (`saveGame`, `loadGame(mode)`, `readSlot`, `persistence`), `migrate`, `exportSave`, `importSave`.
 - `src/profile.ts` — профиль игрока (`dark-counter-profile`): виденные концовки по режимам, открытые режимы, последний режим. Не сейв: «Новая игра» и коды его не трогают. Чистые функции над `KeyValueStore`.
-- `src/economy.ts` — торг (`sellerAcceptChance`/`buyerAcceptChance`, `perceivedChance`), долг: еженедельный платёж и залог (`payRent`, `planCollateral`), досрочный взнос (`payEarly`), место на шаттле (`seatPrice`, `buySeat`), концовки (`endGame`), свалка (`digPile`), верстак (`useWorkbench`), сборка (`craft`), ночь (`sleepUntilMorning`). **Чистые функции без DOM.**
+- `src/economy.ts` — торг (`sellerAcceptChance`/`buyerAcceptChance`, `perceivedChance`), долг: еженедельный платёж и залог (`payRent`, `planCollateral`), досрочный взнос (`payEarly`), место на шаттле (`seatPrice`, `buySeat`), концовки (`endGame`), свалка v2 (`goToJunkyard`, `dig` → `DigResult`, шум `noiseLevel`, `droneChance`, глубина `rareChance`, `digBonus` — точка расширения),  верстак (`useWorkbench`), сборка (`craft`), ночь (`sleepUntilMorning`). **Чистые функции без DOM.**
 - `src/appearance.ts` — внешность клиента по сиду (`appearanceFor`). Чистая функция: её используют и `economy` (имя человека или робота), и `scene` (отрисовка).
-- `src/scene.ts` — canvas: лавка, свалка, спрайты клиентов и товаров (`ITEM_SPRITES`), анимации, `startScene`.
-- `src/ui.ts` — HUD, вкладки, панели, модалки, нижняя строка статов, меню ☰ (шторка снизу: сверху название режима, «Долг», «Режимы», «Музыка: вкл/выкл», «Сохранение», «Новая игра» → экран режимов), экран режимов и запуск (`startGame`), таблица обработчиков `ACTIONS` (кнопки несут `data-a`).
+- `src/scene.ts` — canvas: лавка, свалка (одна куча `HEAP` худеет по стадиям, лопата `playDigFx`, сторожевой дрон от шума), спрайты клиентов и товаров (`ITEM_SPRITES`), анимации, `startScene`.
+- `src/ui.ts` — HUD, вкладки, панели, модалки, нижняя строка статов, меню ☰ (шторка снизу: сверху название режима, «Долг», «Режимы», «Музыка: вкл/выкл», «Звуки: вкл/выкл», «Сохранение», «Новая игра» → экран режимов), экран режимов и запуск (`startGame`), таблица обработчиков `ACTIONS` (кнопки несут `data-a`).
 - `src/actionbar.ts` — полоса действий (V1.5): `mainAction(tab)` выбирает одну главную кнопку экрана (позвать, предложить, заплатить, спать…) или блёклую подсказку; `chipLines()` — строки чипа очереди на сцене. Чистые правила; `ui.ts` рисует полосу и убирает это действие из панели.
 - `src/heatmeter.ts` — шкала розыска на левой стене сцены (и на свалке): сирена сверху, 10 делений (пустые — контур `line`, заполненные — `risk`), с 8 мигают сирена и верхнее деление. Чистая функция, рисует `scene`.
 - `src/icons.ts` — пиксельные иконки интерфейса (☰ и замок закрытого режима): inline SVG из прямоугольников на сетке, рисуются 2×, цвет — `currentColor` из CSS. Не эмодзи и не символы шрифта.
-- `src/audio.ts` — лофи; `musicWanted`/`rememberMusic` — выбор игрока, `startMusicOnGesture` — старт на первом касании.
+- `src/audio.ts` — лофи и звуки свалки; `musicWanted`/`rememberMusic` и `sfxWanted`/`rememberSfx` — выбор игрока, `startSoundOnGesture` — старт на первом касании, `playSfx(name)` — эффект (молчит при «Звуки: выкл»), `setJunkAmbience(level)` — тиканье при «громко». Играет `ui.ts` по результату логики.
 - `src/util.ts` — random и math-хелперы без игровой логики и без DOM.
 - `src/palette.ts` — **все цвета игры**, единственное место с цветовыми литералами: общие `COLOR`, группы по месту использования (`SHOP`, `JUNKYARD`, `CHARACTER`, `CUSTOMER_TONES`, `ITEM_COLORS`), полупрозрачные `SHADE`/`GLOW` через `withAlpha()`, `MEANING` — цветовой словарь поверх базовых цветов, `CSS_TOKENS` для CSS (включая `--m-*`). Имена базовых цветов — по месту в сцене или интерфейсе, смыслы (риск, польза) — только в `MEANING`. Чистые данные: импортируют и canvas, и Vitest, и `vite.config.ts`.
 - `src/dom.ts` — `byId` и другие DOM-хелперы для `ui` и `scene`; `markIosPwa()` ставит класс `ios-pwa` на `<html>` в установленной iOS-PWA (полоса «потолок станции»).
@@ -67,7 +67,7 @@
 3. Если товар должен попадаться как редкая находка, добавить ключ в `RARE_FINDS`. Порядок в этом списке влияет на случайный выбор, поэтому вывести его из каталога пока нельзя.
 
 ## Сохранения: не ломать
-- Ключи localStorage: `dark-counter-v3` — слот режима `story` (старые сейвы лежат здесь), `dark-counter-calm-v3` — слот `calm`, `dark-counter-profile` — профиль. Не менять без миграции.
+- Ключи localStorage: `dark-counter-v3` — слот режима `story` (старые сейвы лежат здесь), `dark-counter-calm-v3` — слот `calm`, `dark-counter-profile` — профиль. Не менять без миграции. Настройки не в сейве: `dark-counter-music`, `dark-counter-sfx`.
 - Поле `mode` в сейве выбирает слот; сейв или код без него — `story`. Импорт кода кладёт игру в слот её режима и переключает на него.
 - Код сейва: `DC1:` + base64(JSON). Старые коды должны загружаться всегда.
 - Поля `GameState` (`day`, `inv`, `cust`, `llAt`, у предметов `t`, `k` и т.д.) — это формат сейва. Короткие имена не переименовываем ради красоты, а описываем в `types.ts`.
