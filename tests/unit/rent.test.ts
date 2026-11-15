@@ -1,6 +1,6 @@
-// Weekly rent (hotfix 13.11.2026): the landlord comes on day 7, then every 7 days.
+// Weekly payment of the father's debt: Grobov comes on day 7, then every 7 days (400, 650, 900…).
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { LANDLORD_SEED, RENT } from '../../src/data';
+import { DEBT, LANDLORD_SEED } from '../../src/data';
 import { callNextCustomer, closeShop, customerLeaves, isLandlordDue, payRent, sleepUntilMorning } from '../../src/economy';
 import { actorReset, newGame, state } from '../../src/state';
 import { daysRu, pluralRu } from '../../src/util';
@@ -33,32 +33,32 @@ afterEach(() => {
   actorReset();
 });
 
-describe('rent schedule', () => {
+describe('payment schedule', () => {
   it('uses the weekly numbers', () => {
-    expect(RENT).toMatchObject({ start: 750, periodDays: 7, increase: 250 });
+    expect(DEBT).toMatchObject({ firstPayment: 400, paymentStep: 250, periodDays: 7 });
   });
 
-  it('new game → the first payment is due on day 7', () => {
+  it('new game → the first payment of 400 is due on day 7', () => {
     seedRandom(3);
     newGame();
-    expect(state).toMatchObject({ day: 1, rent: 750, owed: 750, nextDue: 7 });
+    expect(state).toMatchObject({ day: 1, rent: 400, owed: 400, nextDue: 7, debt: 25000 });
     expect(state.log.at(-1)).toContain('раз в 7 дней');
     while (state.day < 7) {
       expect(isLandlordDue()).toBe(false);
       const events = skipDay();
-      expect(events.some(event => event.includes('арендодатель'))).toBe(state.day === 7);
+      expect(events.some(event => event.includes('за платежом'))).toBe(state.day === 7);
     }
     expect(isLandlordDue()).toBe(true);
     waitForLandlord();
     expect(state.cust).toMatchObject({ kind: 'rent', seed: LANDLORD_SEED });
   });
 
-  it('after paying, the next visit is 7 days later and the rent grows by 250', () => {
-    makeState({ day: 7, nextDue: 7, rent: 750, owed: 750, credits: 1000 });
+  it('after paying, the next visit is 7 days later and the payment grows by 250', () => {
+    makeState({ day: 7, nextDue: 7, rent: 400, owed: 400, credits: 1000 });
     state.cust = { kind: 'rent', name: 'Гробов', seed: LANDLORD_SEED, msg: '', pat: 0, max: 0, done: {} };
     payRent();
-    expect(state).toMatchObject({ credits: 250, rent: 1000, owed: 1000, nextDue: 14, llDone: true });
-    expect(state.log.at(-1)).toContain('1000 кр. на день 14');
+    expect(state).toMatchObject({ credits: 600, rent: 650, owed: 650, nextDue: 14, llDone: true });
+    expect(state.log[0]).toContain('650 кр. на день 14');
   });
 });
 

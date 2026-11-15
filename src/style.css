@@ -189,9 +189,8 @@ input:focus-visible {
   color: var(--dim);
 }
 
-/* Urgent rent / the buy-out button: the label takes the meaning color too. */
-.st.m-risk small,
-.st-btn small {
+/* Urgent payment: the label takes the meaning color too. */
+.st.m-risk small {
   color: inherit;
 }
 
@@ -200,13 +199,22 @@ input:focus-visible {
   line-height: 1;
 }
 
-/* Credits turn into the "buy out" button when the goal is reached. */
+/* The payment stat is a button (opens the debt window): looks like the other stats,
+   a dotted underline under the label says it can be tapped; 44 pt tall. */
 .st-btn {
   justify-content: center;
   min-height: 44px;
-  padding: 0 2px;
-  background: var(--panel2);
-  border: 1px solid var(--m-action);
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.st-btn small {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
 }
 
 /* Icon button (☰): 44×44 pt touch target, 16×16 pixel icon drawn 2×, no tile behind it. */
@@ -922,6 +930,35 @@ input:focus-visible {
   width: 100%;
   min-height: 44px;
   text-align: left;
+}
+
+/* Debt window: tight sections (rows, early payments, the shuttle seat). */
+.debt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.debt h3 {
+  margin: 8px 0 0;
+  font-size: var(--fs-s);
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.debt p {
+  margin: 0;
+}
+
+/* Debt window: early payment steps in one row. */
+.early {
+  display: grid;
+  grid-template-columns: 1fr 1fr 2fr;
+  gap: 6px;
+}
+
+.early .btn {
+  min-height: 44px;
 }
 
 .mbox {

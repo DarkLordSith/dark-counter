@@ -44,3 +44,8 @@ export const daysRu = (count: number): string => `${count} ${pluralRu(count, 'д
 export function roundTo10(value: number): number {
   return Math.round(value / 10) * 10;
 }
+
+/** Fills {name} placeholders: fill('Долг {debt} кр.', { debt: 900 }) → 'Долг 900 кр.'. Unknown names stay as they are. */
+export function fill(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (match, name: string) => Object.hasOwn(values, name) ? String(values[name]) : match);
+}

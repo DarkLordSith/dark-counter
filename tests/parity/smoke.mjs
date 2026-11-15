@@ -56,8 +56,9 @@ for (const file of fs.existsSync(fixturesDir) ? fs.readdirSync(fixturesDir).filt
     document.querySelector('[data-a="loadsave"]').click();
     return { modalOpen: !document.getElementById('modal').hidden, hud: document.getElementById('hud').innerText };
   }, code);
-  // "ДЕНЬ" then the number: one line before V1.3 ("1 ·смена"), separate elements later, no phase word since V1.4
-  const ok = !result.modalOpen && new RegExp(`день\\s*${day}(\\D|$)`, 'i').test(result.hud);
+  // "ДЕНЬ" then the number: one line before V1.3 ("1 ·смена"), separate elements later, no phase word since V1.4,
+  // the shuttle day in the label since the debt update ("ДЕНЬ/60" over the number)
+  const ok = !result.modalOpen && new RegExp(`день(/\\d+)?\\s*${day}(\\D|$)`, 'i').test(result.hud);
   fixturesOk &&= ok;
   console.log(`fixture ${file}: day ${day} → ${ok ? 'loaded' : 'FAILED'}`);
 }

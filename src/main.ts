@@ -9,7 +9,7 @@ import './style.css';
 import { markIosPwa } from './dom';
 import { actorAtCounter, loadGame, migrate, newGame, setState, state } from './state';
 import { startScene } from './scene';
-import { bindEvents, render, renderPane, renderSceneOverlay } from './ui';
+import { bindEvents, render, renderPane, renderSceneOverlay, showEnding } from './ui';
 import { bindDiagnostics } from './diag';
 import { applyStoredFontLab } from './fontlab';
 
@@ -29,6 +29,8 @@ if (saved) {
 }
 
 render();
+// a finished game (or an old evicted / bought-out save) opens on its final window
+showEnding();
 startScene(() => {
   renderSceneOverlay();
   renderPane();

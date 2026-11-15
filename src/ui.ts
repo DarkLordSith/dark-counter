@@ -3,15 +3,15 @@
 //  plus all click/keyboard handlers (buttons carry data-a="action").
 // =====================================================================
 import { audio, startMusicOnGesture, toggleMusic } from './audio';
-import { BENCH_COST, BUYOUT_GOAL, CUSTOMERS_PER_DAY, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, MARKET, MAX_HEAT, RECIPES, RENT, SUPPLIER } from './data';
+import { BENCH_COST, CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, MARKET, MAX_HEAT, RECIPES, RENT, SUPPLIER } from './data';
 import { byId, maybeById } from './dom';
 import { iconSvg } from './icons';
 import {
-  askBuyer, availableOfType, buyFromSeller, buyOutShop, callNextCustomer, canCraft, canVisitMarket, closeShop,
+  askBuyer, availableOfType, buyFromSeller, buySeat, callNextCustomer, canBuySeat, canCraft, canVisitMarket, closeShop,
   collateralHeatRelief, craft, customerLeaves, deferredDebt, deferRent, digPile, estimatedValue, evict, feedback,
   goHome, goToJunkyard, hunchVerdict, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer, itemName,
-  nextRent, offerToSeller, orderParts, payRent, payWithCollateral, perceivedChance, planCollateral, presentItem,
-  recipeNeeds, scrapValue, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
+  nextRent, offerToSeller, orderParts, payEarly, payRent, payWithCollateral, perceivedChance, planCollateral, presentItem,
+  recipeNeeds, scrapValue, seatPrice, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
 } from './economy';
 import type { CollateralPlan } from './economy';
 import { onSceneClick, paintIcons, pileAt } from './scene';
@@ -19,7 +19,7 @@ import {
   actor, actorAtCounter, actorReset, addLog, exportSave, findItem, importSave, newGame, saveGame, setState, state, ui,
 } from './state';
 import type { BuyerCustomer, Item, ItemType, Recipe, RentCustomer, SellerCustomer, Tab } from './types';
-import { daysRu, roundTo10 } from './util';
+import { daysRu, fill, roundTo10 } from './util';
 import { VERSION_LABEL } from './version';
 
 /* =====================================================================
@@ -29,7 +29,6 @@ import { VERSION_LABEL } from './version';
 // Colors carry meaning only through the m-* classes (style.css → --m-* → MEANING in palette.ts).
 const UNKNOWN = '<span class="m-unknown">?</span>';
 const CLOSE_BUTTON = '<button class="btn pri" data-a="close">Закрыть</button>';
-const NEW_GAME_BUTTON = '<button class="btn pri" data-a="newgame-yes">Новая игра</button>';
 const FLOATING_TEXT_LIFETIME_MS = 1300;
 /** Viewport shrink that means an on-screen keyboard, not a browser bar. */
 const KEYBOARD_MIN_PX = 150;
@@ -111,33 +110,31 @@ const HUD = HUD_TEXT.ru;
 const hudStat = (label: string, valueHtml: string, cssClass = ''): string =>
   `<span class="st ${cssClass}"><small>${label}</small>${valueHtml}</span>`;
 
-/** Rent: days left go into the label ("аренда·3д"), so the number column stays narrow. */
-function rentStat(): string {
-  if (state.won) {
-    return hudStat(HUD.rent, '<b>—</b>');
-  }
+/** Debt strings in the interface language. */
+const DEBT_UI = DEBT_TEXT.ru;
+
+/**
+ * Weekly payment: days left go into the label ("платёж·3д"), so the number column stays narrow.
+ * The stat is a button: it opens the debt window (early payments, the shuttle seat).
+ */
+function paymentStat(): string {
   const daysLeft = state.nextDue - state.day;
-  const urgent = state.credits < state.owed && daysLeft <= 1 || state.deferred;
-  // due today = "0д": same width as "6д" (the scene chip says "+АРЕНДА" on that day)
-  const when = Math.max(0, daysLeft) + HUD.daysShort;
-  return hudStat(`${state.deferred ? HUD.debt : HUD.rent}·${when}`, `<b>${state.owed}</b>`, urgent ? 'm-risk' : '');
+  const paying = state.debt > 0 && !state.over;
+  const urgent = paying && (state.credits < state.owed && daysLeft <= 1 || state.deferred);
+  // due today = "0д": same width as "6д" (the scene chip says "+ПЛАТЁЖ" on that day)
+  const when = paying ? `·${Math.max(0, daysLeft)}${HUD.daysShort}` : '';
+  const value = paying ? state.owed : '—';
+  return `<button class="st st-btn ${urgent ? 'm-risk' : ''}" data-a="debt" aria-haspopup="dialog"><small>${HUD.payment}${when}</small><b>${value}</b></button>`;
 }
 
-/** Credits; once the shop can be bought out, the stat itself is the "buy out" button. */
-function creditsStat(): string {
-  if (state.credits >= BUYOUT_GOAL && !state.won) {
-    return `<button class="st st-btn m-action" data-a="buyout"><small>${HUD.buyout}</small><b>${state.credits}</b></button>`;
-  }
-  return hudStat(HUD.credits, `<b>${state.credits}</b>`);
-}
-
-/** Bottom bar: кр · день · аренда · зап, then ☰. The wanted level is on the scene wall, music in the menu. */
+/** Bottom bar: кр · день/60 · платёж · зап, then ☰. The wanted level is on the scene wall, music in the menu. */
 function renderHud(): void {
   const menu = `<button class="ib" data-a="menu" aria-haspopup="dialog" aria-label="${HUD.menu}">${iconSvg('menu')}</button>`;
   byId('hud').innerHTML = `<div class="stats">${[
-    creditsStat(),
-    hudStat(HUD.day, `<b>${state.day}</b>`),
-    rentStat(),
+    hudStat(HUD.credits, `<b>${state.credits}</b>`),
+    // the shuttle day goes into the label ("день/60"): the number column keeps two digits
+    hudStat(`${HUD.day}/${state.shuttleDay}`, `<b>${state.day}</b>`),
+    paymentStat(),
     hudStat(HUD.parts, `<b>${state.parts}</b>`),
   ].join('')}</div>${menu}`;
 }
@@ -155,7 +152,7 @@ function chipText(): string {
   const queue = CUSTOMERS_PER_DAY - state.slot - (state.cust ? 1 : 0);
   const landlordDue = isLandlordDue();
   const queueText = queue > 0 ? `ОЧЕРЕДЬ: ${queue}` : landlordDue ? 'ОЧЕРЕДЬ: 0' : 'СМЕНА ОКОНЧЕНА';
-  return queueText + (landlordDue ? ' +АРЕНДА' : '');
+  return queueText + (landlordDue ? ' +ПЛАТЁЖ' : '');
 }
 
 /** Speech bubble, queue chip, "call next" button and the log ticker. */
@@ -277,13 +274,21 @@ function collateralDescription(plan: CollateralPlan): string {
 function rentPane(customer: RentCustomer): string {
   const plan = planCollateral();
   const canPay = state.credits >= state.owed;
-  const deferText = state.deferred ? 'Вторую отсрочку Гробов не даст.' : `Придёт через ${daysRu(RENT.deferDays)}, долг +20%: ${deferredDebt()} кр.`;
-  let html = `<div class="thead"><div><span class="cname">${customer.name}</span><span class="kind m-risk">за арендой</span></div></div>
+  const deferText = state.deferred
+    ? 'Вторую отсрочку Гробов не даст.'
+    : fill(DEBT_UI.deferOption, { days: daysRu(RENT.deferDays), amount: deferredDebt() });
+  const payText = fill(DEBT_UI.paymentOption, {
+    debt: state.debt - state.owed,
+    next: Math.min(nextRent(), Math.max(0, state.debt - state.owed)),
+    period: daysRu(DEBT.periodDays),
+  });
+  let html = `<div class="thead"><div><span class="cname">${customer.name}</span><span class="kind m-risk">за платежом</span></div></div>
     <div class="card" style="flex-direction:column;gap:2px"><div class="rows">
       <span>К оплате</span><span class="price"><b>${state.owed} кр.</b>${state.deferred ? ' <span class="m-risk">с пеней</span>' : ''}</span>
+      <span>${DEBT_UI.debtLeft}</span><span class="price">${state.debt} кр.</span>
       <span>У вас</span><span class="price ${canPay ? 'm-action' : 'm-risk'}">${state.credits} кр.</span></div></div>
     <div class="opts" style="margin-top:8px">
-      ${option('rentpay', !canPay, 'Заплатить', `Следующая аренда ${nextRent()} кр. через ${daysRu(RENT.periodDays)}.`, state.owed, ' class="price"')}
+      ${option('rentpay', !canPay, 'Заплатить', payText, state.owed, ' class="price"')}
       ${option('rentdefer', state.deferred, 'Попросить отсрочку', deferText, '⧗')}
       ${option('rentitems', !(plan.ok && plan.items.length), 'Отдать деньги и товар', collateralDescription(plan), '⚖')}
     </div>`;
@@ -456,9 +461,10 @@ function openModal(title: string, body: string, buttons: string, footer = ''): v
   byId('modal').hidden = false;
 }
 
-/** ☰ menu: a sheet under the HUD with the game title, save and new game (later: RU/EN). */
+/** ☰ menu: a sheet over the HUD with the game title, the debt, music, save and new game (later: RU/EN). */
 function openMenu(): void {
   byId('mbox').innerHTML = `<h2>${HUD.gameTitle}</h2>
+    <button class="btn menu-item" data-a="debt">${fill(DEBT_UI.menuDebt, { debt: state.debt })}</button>
     <button class="btn menu-item" data-a="music" aria-pressed="${audio.on}">${HUD.music}: ${audio.on ? HUD.on : HUD.off}</button>
     <button class="btn menu-item" data-a="savemenu">${HUD.save}</button>
     <button class="btn menu-item" data-a="newgame">${HUD.newGame}</button>
@@ -471,23 +477,63 @@ function closeModal(): void {
   byId('modal').hidden = true;
 }
 
-function showEviction(): void {
-  openModal('Выселение', `<p>${state.over}</p>`, NEW_GAME_BUTTON);
+/** The final window: the ending's title and line, the totals; after it only a new game. */
+export function showEnding(): void {
+  if (!state.over) {
+    return;
+  }
+  const ending = ENDING_TEXT.ru[state.ending ?? 'evicted'];
+  const totals = fill(DEBT_UI.totals, { day: state.day, credits: state.credits, debt: state.debt });
+  openModal(ending.title, `<p>${ending.line}</p><p class="hint">${totals}</p>`,
+    `<button class="btn pri" data-a="newgame-yes">${DEBT_UI.newGame}</button>`);
 }
 
 function showMorningReport(events: string[]): void {
-  const title = state.over ? 'Выселение' : `Утро. День ${state.day}`;
+  if (state.over) {
+    showEnding();
+    return;
+  }
   const body = `<ul>${events.map(event => `<li>${event}</li>`).join('')}</ul>`;
-  const buttons = state.over ? NEW_GAME_BUTTON : '<button class="btn pri" data-a="close">Открыть лавку</button>';
-  openModal(title, body, buttons);
+  openModal(`Утро. День ${state.day}`, body, '<button class="btn pri" data-a="close">Открыть лавку</button>');
 }
 
-function showBuyout(): void {
-  openModal(
-    'Лавка ваша',
-    `<p>Выкуплено на ${state.day}-й день. Можно торговать дальше без аренды или начать заново.</p>`,
-    '<button class="btn pri" data-a="close">Продолжить</button><button class="btn" data-a="newgame-yes">Новая лавка</button>',
-  );
+/** Early payment buttons: the fixed steps and "everything you have" (up to the debt). */
+function earlyButtons(): string {
+  const all = Math.min(state.credits, state.debt);
+  const steps = DEBT.earlySteps
+    .map(step => `<button class="btn" data-a="early" data-v="${step}" ${disabledIf(state.over || state.debt === 0 || state.credits < Math.min(step, state.debt))}>+${step}</button>`)
+    .join('');
+  return `${steps}<button class="btn" data-a="early" data-v="all" ${disabledIf(state.over || all <= 0)}>${DEBT_UI.everything} · ${all}</button>`;
+}
+
+function seatBlock(): string {
+  if (state.seat) {
+    return `<p class="m-ok">${fill(DEBT_UI.seatOwned, { shuttle: state.shuttleDay })}</p>`;
+  }
+  const price = seatPrice();
+  const note = state.debt > 0 ? `<p class="hint m-inactive">${DEBT_UI.seatNeedsZero}</p>` : '';
+  return `<p class="hint">${fill(DEBT_UI.seatPrice, { price, perDay: DEBT.seatPerDay, shuttle: state.shuttleDay })}</p>${note}
+    <button class="btn pri" data-a="seat" style="width:100%" ${disabledIf(!canBuySeat())}>${DEBT_UI.seatBuy} · ${price} кр.</button>`;
+}
+
+/** Debt window (HUD payment stat or ☰): the debt left, the next payment, early payments, the shuttle seat. */
+function openDebt(): void {
+  const payment = state.debt > 0
+    ? `<span>${DEBT_UI.nextPayment}</span><span class="price">${state.owed} кр.</span>
+      <span>${DEBT_UI.when}</span><span>${fill(DEBT_UI.paymentDay, { day: state.nextDue, days: daysRu(Math.max(0, state.nextDue - state.day)) })}</span>`
+    : `<span>${DEBT_UI.nextPayment}</span><span>${DEBT_UI.noPayments}</span>`;
+  openModal(DEBT_UI.windowTitle, `<div class="debt"><div class="rows">
+      <span>${DEBT_UI.debtLeft}</span><span class="price"><b>${state.debt} кр.</b></span>
+      ${payment}
+      <span>${DEBT_UI.youHave}</span><span class="price">${state.credits} кр.</span></div>
+    ${state.debt > 0 ? `<h3>${DEBT_UI.early}</h3><p class="hint">${DEBT_UI.earlyHint}</p><div class="early">${earlyButtons()}</div>` : ''}
+    <h3>${DEBT_UI.seatTitle}</h3>${seatBlock()}</div>`, CLOSE_BUTTON);
+}
+
+/** Buying the seat cannot be undone: ask first. */
+function confirmSeat(): void {
+  openModal(DEBT_UI.seatConfirmTitle, `<p>${fill(DEBT_UI.seatConfirmText, { price: seatPrice() })}</p>`,
+    `<button class="btn pri" data-a="seat-yes">${DEBT_UI.seatConfirmYes}</button><button class="btn" data-a="debt">${DEBT_UI.seatConfirmNo}</button>`);
 }
 
 function openSaveMenu(): void {
@@ -591,11 +637,21 @@ const ACTIONS: Record<string, ActionHandler> = {
   rentitems: () => payWithCollateral(),
   evict: () => {
     evict();
-    showEviction();
+    showEnding();
   },
-  buyout: () => {
-    buyOutShop();
-    showBuyout();
+  // debt window: early payments (no confirmation, the rest is shown at once) and the shuttle seat
+  debt: () => openDebt(),
+  early: value => {
+    payEarly(value === 'all' ? state.credits : Number(value));
+    openDebt();
+  },
+  seat: () => {
+    confirmSeat();
+    return NO_RENDER;
+  },
+  'seat-yes': () => {
+    buySeat();
+    openDebt();
   },
   // tabs, inventory, crafting
   tab: value => {

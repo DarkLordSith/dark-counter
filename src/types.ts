@@ -5,7 +5,7 @@
 //  DC1: codes). Short field names are kept on purpose: renaming them
 //  would break old saves. When a field changes, upgrade it in migrate().
 // =====================================================================
-import type { ITEM_TYPES } from './data';
+import type { ENDING_TEXT, ITEM_TYPES } from './data';
 
 /* ---------- goods ---------- */
 
@@ -102,7 +102,7 @@ export interface BuyerCustomer extends CustomerBase {
 /** A buyer who has been shown an item and named a price. */
 export type PresentedBuyer = BuyerCustomer & { item: Item; max2: number; offer: number };
 
-/** The landlord collecting rent. */
+/** Grobov collecting the weekly payment of the father's debt (kind 'rent' is kept: it is in saves). */
 export interface RentCustomer extends CustomerBase {
   kind: 'rent';
 }
@@ -126,7 +126,7 @@ export interface GameState {
   parts: number;
   /** Wanted level 0…MAX_HEAT. */
   heat: number;
-  /** Base rent of the next period. */
+  /** Size of the current weekly payment (grows by DEBT.paymentStep; "rent" from the rent days). */
   rent: number;
   /** Last issued item uid. */
   uid: number;
@@ -136,10 +136,8 @@ export interface GameState {
   log: string[];
   /** Customer at the counter. */
   cust: Customer | null;
-  /** Game-over text, null while playing. */
+  /** Game-over text (the ending's line), null while playing. */
   over: string | null;
-  /** Shop bought out. */
-  won: boolean;
   phase: 'shop' | 'evening';
   /** Evening hours left. */
   hours: number;
@@ -159,13 +157,32 @@ export interface GameState {
   llAt: number;
   /** Landlord already visited today ("landlord done"). */
   llDone: boolean;
+  /** Father's debt to Grobov left; weekly and early payments reduce it, deferral fines add to it. */
+  debt: number;
+  /** A shuttle seat is bought. */
+  seat: boolean;
+  /** Day the last shuttle leaves; that morning the game ends. */
+  shuttleDay: number;
+  /** How the game ended, null while playing. */
+  ending: Ending | null;
 }
+
+/** Endings: left, stayed, evicted; betray and takeover are stubs for Patch C. */
+export type Ending = keyof typeof ENDING_TEXT.ru;
 
 /** Fields added by the landlord update; saves made before it lack them. */
 type RentFields = 'nextDue' | 'owed' | 'deferred' | 'llAt' | 'llDone';
 
-/** Any save the game has ever written (older ones lack the rent fields). */
-export type SavedGame = Omit<GameState, RentFields> & Partial<Pick<GameState, RentFields>>;
+/** Fields added by the debt update (concept skeleton); saves made before it lack them. */
+type DebtFields = 'debt' | 'seat' | 'shuttleDay' | 'ending';
+
+/**
+ * Any save the game has ever written: older ones lack the rent or debt fields,
+ * and saves before the debt update have `won` (shop bought out), which migrate() turns into the 'left' ending.
+ */
+export type SavedGame = Omit<GameState, RentFields | DebtFields>
+  & Partial<Pick<GameState, RentFields | DebtFields>>
+  & { won?: boolean };
 
 /* ---------- screen state (not saved) ---------- */
 

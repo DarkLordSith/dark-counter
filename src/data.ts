@@ -40,7 +40,7 @@ export const RECIPES: Recipe[] = [
 // ---------- characters & lines ----------
 export const HUMAN_NAMES = ['Рыжий Вик', 'Тётя Ома', 'Борн', 'Лиса из шлюза', 'Механик Ду', 'Стас «Провод»', 'Мира Кейн', 'Тихий Йоэль', 'Нана Рокет', 'Гарри Шов', 'Курт Дымов', 'Пак'];
 export const ROBOT_NAMES = ['Кси-9', 'Офелия-3', 'ТР-404', 'Болт', 'Юнит-7', 'Мама-Кран', 'Р-Скрип', 'Ось'];
-export const LANDLORD_NAME = 'Арендодатель Гробов';
+export const LANDLORD_NAME = 'Ростовщик Гробов';
 
 export const SELLER_LINES = ['Глянь, почти новая штука. Почти.', 'Нашёл на нижнем ярусе. Честно нашёл.', 'Срочно нужны кредиты, не торгуйся долго.', 'Отдаю, потому что съезжаю со станции.', 'Не спрашивай, откуда. Спроси, сколько.'];
 export const SELLER_STOLEN_LINE = 'Быстро. Кредиты вперёд, вопросы потом.';
@@ -52,18 +52,36 @@ export const BUYER_COUNTER_LINES = ['Дорого. Могу', 'Ладно, по�
 
 // ---------- day & economy ----------
 export const CUSTOMERS_PER_DAY = 6;
-export const BUYOUT_GOAL = 5000;
 export const EVENING_HOURS = 4;
 export const MAX_HEAT = 10;
 export const LOG_LIMIT = 50;
 export const START = { credits: 400, parts: 4 };
 
-// Hotfix 13.11.2026 after the day-34 playtest: weekly rent instead of every 3 days
-// (was start 300, every 3 days, +150). Numbers are a proposal, tune after playtests.
-export const RENT = {
-  start: 750,
+// Concept skeleton (14.11.2026, after the playtest where 5000 cr. took 16 days):
+// the father's debt to Grobov instead of rent and buyout, 60 days to the last shuttle.
+// Numbers are a proposal, tune after playtests.
+export const DEBT = {
+  /** Debt at the start of a new game. */
+  start: 25000,
+  /** Weekly payment: the first one, then + step every week (400, 650, 900…). */
+  firstPayment: 400,
+  paymentStep: 250,
   periodDays: 7,
-  increase: 250,
+  /** The last shuttle leaves on this day; the game ends that morning. */
+  shuttleDay: 60,
+  /** Old saves get at least this many days before the shuttle. */
+  legacyDaysLeft: 21,
+  /** Seat price = seatBase + seatPerDay × day (grows towards the evacuation). */
+  seatBase: 2000,
+  seatPerDay: 100,
+  /** Early payment buttons (plus "everything you have"). */
+  earlySteps: [100, 500],
+  /** Morning reminders: this many days before the shuttle. */
+  shuttleReminders: [14, 7, 1],
+} as const;
+
+// The landlord's visit: deferral and when in the day he comes.
+export const RENT = {
   deferDays: 2,
   deferPenalty: 1.2,
   landlordSlotMin: 1, // landlord shows up after this many…
@@ -131,18 +149,16 @@ export const HUNCH_VERDICT_TEXT = {
   en: { unlikely: 'unlikely', maybe: 'maybe', likely: 'likely', deal: 'deal' },
 } as const;
 
-/** HUD (V1.4): stat labels, icon-button labels for screen readers, the menu and the new-game confirmation. */
+/** HUD (V1.4): stat labels (day shows "день/60": the shuttle day in the label), icon-button labels for screen readers, the menu and the new-game confirmation. */
 export const HUD_TEXT = {
   ru: {
     credits: 'кр',
     day: 'день',
-    rent: 'аренда',
-    debt: 'долг',
+    payment: 'платёж',
     daysShort: 'д',
     parts: 'зап',
     heat: 'розыск',
     of: 'из',
-    buyout: 'выкуп',
     music: 'Музыка',
     on: 'вкл',
     off: 'выкл',
@@ -159,13 +175,11 @@ export const HUD_TEXT = {
   en: {
     credits: 'cr',
     day: 'day',
-    rent: 'rent',
-    debt: 'debt',
+    payment: 'payment',
     daysShort: 'd',
     parts: 'parts',
     heat: 'wanted',
     of: 'of',
-    buyout: 'buy out',
     music: 'Music',
     on: 'on',
     off: 'off',
@@ -178,6 +192,104 @@ export const HUD_TEXT = {
     confirmText: 'The current game will be lost, save the code.',
     confirmYes: 'Start',
     confirmNo: 'Cancel',
+  },
+} as const;
+
+/**
+ * The father's debt, the shuttle seat and the endings; one object per language
+ * (like HUD_TEXT). {name} placeholders are filled by fill() from util.ts.
+ */
+export const DEBT_TEXT = {
+  ru: {
+    start: 'День 1. Лавка 7-Б, нижний ярус. Долг отца Гробову: {debt} кр. Платёж раз в {period}, последний шаттл — день {shuttle}.',
+    windowTitle: 'Долг Гробову',
+    debtLeft: 'Долг',
+    nextPayment: 'Платёж',
+    when: 'Когда',
+    paymentDay: 'день {day}, через {days}',
+    noPayments: 'платежей нет',
+    youHave: 'У вас',
+    early: 'Внести досрочно',
+    earlyHint: 'Сверх платежа, в любой день. Остаток виден сразу.',
+    everything: 'Всё',
+    paidEarly: 'Внесено досрочно {amount} кр. Долг: {debt} кр.',
+    seatTitle: 'Место на шаттле',
+    seatPrice: 'Цена {price} кр. сегодня, дорожает на {perDay} кр. в день. Шаттл — день {shuttle}.',
+    seatNeedsZero: 'Гробов продаёт место только без долга.',
+    seatBuy: 'Купить место',
+    seatOwned: 'Место куплено. Шаттл — день {shuttle}.',
+    seatConfirmTitle: 'Купить место?',
+    seatConfirmText: 'Место на шаттле за {price} кр. Вернуть нельзя.',
+    seatConfirmYes: 'Купить',
+    seatConfirmNo: 'Отмена',
+    seatBought: 'Куплено место на шаттле за {price} кр.',
+    debtPaid: 'Долг отца выплачен.',
+    paymentPaid: 'Платёж внесён: {amount} кр. Долг: {debt} кр.',
+    paymentNext: 'Следующий: {amount} кр. на день {day}.',
+    paymentOption: 'Долг станет {debt} кр. Следующий платёж {next} кр. через {period}.',
+    deferOption: 'Придёт через {days}, платёж +20%: {amount} кр. Пеня ляжет в долг.',
+    deferred: 'Отсрочка до дня {day}. Платёж {amount} кр., долг {debt} кр.',
+    landlordToday: 'Сегодня зайдёт Гробов за платежом: {amount} кр.',
+    shuttleSoon: 'До последнего шаттла {days}.',
+    menuDebt: 'Долг: {debt} кр.',
+    totals: 'День {day} · {credits} кр. · долг {debt} кр.',
+    newGame: 'Новая игра',
+  },
+  en: {
+    start: 'Day 1. Shop 7-B, lower tier. Father\'s debt to Grobov: {debt} cr. A payment every {period}, the last shuttle on day {shuttle}.',
+    windowTitle: 'Debt to Grobov',
+    debtLeft: 'Debt',
+    nextPayment: 'Payment',
+    when: 'When',
+    paymentDay: 'day {day}, in {days}',
+    noPayments: 'no payments',
+    youHave: 'You have',
+    early: 'Pay early',
+    earlyHint: 'On top of the payment, any day. You see the rest at once.',
+    everything: 'All',
+    paidEarly: 'Paid early {amount} cr. Debt: {debt} cr.',
+    seatTitle: 'Shuttle seat',
+    seatPrice: 'Costs {price} cr. today, {perDay} cr. more every day. Shuttle on day {shuttle}.',
+    seatNeedsZero: 'Grobov sells a seat only once the debt is paid.',
+    seatBuy: 'Buy a seat',
+    seatOwned: 'Seat bought. Shuttle on day {shuttle}.',
+    seatConfirmTitle: 'Buy a seat?',
+    seatConfirmText: 'A shuttle seat for {price} cr. No refunds.',
+    seatConfirmYes: 'Buy',
+    seatConfirmNo: 'Cancel',
+    seatBought: 'Bought a shuttle seat for {price} cr.',
+    debtPaid: 'Father\'s debt is paid off.',
+    paymentPaid: 'Payment made: {amount} cr. Debt: {debt} cr.',
+    paymentNext: 'Next: {amount} cr. on day {day}.',
+    paymentOption: 'The debt becomes {debt} cr. Next payment {next} cr. in {period}.',
+    deferOption: 'Comes back in {days}, payment +20%: {amount} cr. The fine goes onto the debt.',
+    deferred: 'Deferred to day {day}. Payment {amount} cr., debt {debt} cr.',
+    landlordToday: 'Grobov comes for the payment today: {amount} cr.',
+    shuttleSoon: 'The last shuttle leaves in {days}.',
+    menuDebt: 'Debt: {debt} cr.',
+    totals: 'Day {day} · {credits} cr. · debt {debt} cr.',
+    newGame: 'New game',
+  },
+} as const;
+
+/**
+ * Endings: a title and one line each. betray and takeover cannot be reached yet
+ * (stubs for Patch C: "turn Grobov in", "take his place").
+ */
+export const ENDING_TEXT = {
+  ru: {
+    left: { title: 'Улетел', line: 'Последний шаттл ушёл, и вы на борту.' },
+    stayed: { title: 'Остался на станции', line: 'Последний шаттл ушёл без вас.' },
+    evicted: { title: 'Выселение', line: 'Платёж нечем покрыть. Гробов опечатал лавку.' },
+    betray: { title: 'Сдал Гробова', line: 'Гробова увели патрульные.' },
+    takeover: { title: 'Занял его место', line: 'Теперь долги собираете вы.' },
+  },
+  en: {
+    left: { title: 'Left', line: 'The last shuttle has gone, and you are on board.' },
+    stayed: { title: 'Stayed on the station', line: 'The last shuttle has gone without you.' },
+    evicted: { title: 'Evicted', line: 'Nothing to cover the payment with. Grobov sealed the shop.' },
+    betray: { title: 'Turned Grobov in', line: 'The patrol took Grobov away.' },
+    takeover: { title: 'Took his place', line: 'Now you collect the debts.' },
   },
 } as const;
 
