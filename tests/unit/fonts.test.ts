@@ -76,7 +76,7 @@ describe('the approximation sign (bug B2)', () => {
     expect(code).toContain('const approx = (value: string | number): string => `<span class="approx">~</span>${value}`;');
     const approxRule = RULES.find(([sel]) => sel === '.approx')?.[1] ?? '';
     expect(approxRule).toContain('font-family: var(--mono)');
-    // the price estimate in the deal is pixel-font text
-    expect(uiTs).toContain('<span class="price">${approx(estimatedValue(item))} кр.</span>');
+    // the estimate in the deal goes through approx() too (V1.6: in the "Просит … · оценка ~N" line)
+    expect(uiTs).toContain('оценка ${approx(estimatedValue(item))}');
   });
 });

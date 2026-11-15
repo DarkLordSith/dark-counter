@@ -3,6 +3,8 @@
 //  the current screen shows above the HUD, or a dim hint when there is
 //  no obvious main action. Pure rules, no DOM: ui.ts draws the result
 //  and leaves that action out of the pane, Vitest checks the table.
+//  Also the queue chip on the scene (chipLines): the other bit of
+//  "where am I in the day" text drawn over the scene.
 // =====================================================================
 import { ACTION_TEXT, CUSTOMERS_PER_DAY } from './data';
 import { isLandlordDue, isPresentedBuyer, planCollateral } from './economy';
@@ -88,6 +90,23 @@ export function mainAction(tab: Tab): MainAction {
     return button('refuse', TEXT.noItem);
   }
   return isPresentedBuyer(customer) ? button('ask', TEXT.ask) : hint(TEXT.showItem);
+}
+
+/**
+ * Queue chip in the scene corner, one or two lines (V1.6): "+ПЛАТЁЖ" goes on a second line,
+ * so the chip stays clear of the "ЛАВКА 7Б" sign on a 375 pt screen.
+ */
+export function chipLines(): string[] {
+  if (state.over) {
+    return ['ЗАКРЫТО'];
+  }
+  if (state.phase === 'evening') {
+    return [`${state.where === 'junk' ? 'СВАЛКА' : 'ВЕЧЕР'} · ${state.hours} Ч`];
+  }
+  const queue = CUSTOMERS_PER_DAY - state.slot - (state.cust ? 1 : 0);
+  const landlordDue = isLandlordDue();
+  const queueText = queue > 0 ? `ОЧЕРЕДЬ: ${queue}` : landlordDue ? 'ОЧЕРЕДЬ: 0' : 'СМЕНА ОКОНЧЕНА';
+  return landlordDue ? [queueText, '+ПЛАТЁЖ'] : [queueText];
 }
 
 /** The action the bar took from the pane on this screen, if any (the pane leaves it out). */

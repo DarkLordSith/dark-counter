@@ -150,9 +150,13 @@ describe('the bar in the layout', () => {
     }
   });
 
-  it('hides with the HUD while the on-screen keyboard is open', () => {
-    expect(rule('.kb-open .actionbar')).toContain('display: none');
+  it('stays above the on-screen keyboard; only the HUD hides (V1.6)', () => {
+    expect(RULES.some(([selector]) => selector === '.kb-open .actionbar')).toBe(false);
     expect(rule('.kb-open .hud')).toContain('display: none');
+    // the page shrinks to the visible part, so the bar sits right above the keyboard
+    expect(rule('.kb-open #app')).toContain('var(--kb-height');
+    expect(uiTs).toMatch(/function trackKeyboard\(\)[\s\S]*?'--kb-height', `\$\{viewport\.height\}px`/);
+    expect(uiTs).toMatch(/function trackKeyboard\(\)[\s\S]*?scrollIntoView\(\{ block: 'nearest' \}\)/);
   });
 
   it('the scene call button is gone; the scene runs edge to edge on a phone', () => {

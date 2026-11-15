@@ -290,39 +290,58 @@ input:focus-visible {
   display: block;
 }
 
+/* Speech bubble (V1.6): dark with a 1px turquoise frame. It starts below the "ЛАВКА 7Б" sign
+   (SHOP_SIGN: scene y 3–14 of 100) and ends left of it and of the speaker's head; long lines wrap. */
 .bubble {
   position: absolute;
   /* clear of the wanted-level plate on the left wall (scene x 0–5 of 160 = 3.75%) */
   left: 5%;
-  top: 5%;
-  max-width: 44%;
+  top: 16%;
+  max-width: 40%;
   line-height: 1.3;
-  background: var(--fg);
-  color: var(--scene-bg);
+  background: var(--panel);
+  border: 1px solid var(--m-action);
+  color: var(--fg);
   font-size: var(--fs-s);
   padding: 6px 8px;
   font-weight: 500;
   box-shadow: 3px 3px 0 var(--shadow-soft);
 }
 
+/* The tail towards the speaker: a turquoise triangle with a dark one inside it. */
+.bubble::before,
 .bubble::after {
   content: "";
   position: absolute;
-  right: -8px;
   top: 10px;
   border: 5px solid transparent;
-  border-left: 8px solid var(--fg);
   border-right: 0;
 }
 
+.bubble::before {
+  right: -9px;
+  border-left: 8px solid var(--m-action);
+}
+
+.bubble::after {
+  right: -7px;
+  border-left: 8px solid var(--panel);
+}
+
+.bubble.free::before,
 .bubble.free::after {
   display: none;
 }
 
+/* Queue chip: one or two short lines ("+ПЛАТЁЖ" below), right-aligned, clear of the sign (V1.6). */
 .chip {
   position: absolute;
   right: 2%;
   top: 4%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
   font-size: var(--fs-px-s);
   line-height: 1;
   background: var(--chip-bg);
@@ -387,6 +406,20 @@ input:focus-visible {
   text-overflow: ellipsis;
 }
 
+/* A new log line flashes the ticker once (V1.6): two equal junkyard finds in a row
+   ("Нашлись запчасти: +2.") looked like a ticker that did not update. */
+@media (prefers-reduced-motion: no-preference) {
+  .ticker.fresh {
+    animation: ticker-fresh .6s ease-out;
+  }
+
+  @keyframes ticker-fresh {
+    from {
+      background-color: var(--panel2);
+    }
+  }
+}
+
 .ticker b {
   color: var(--cyan);
   font-weight: 500;
@@ -419,7 +452,7 @@ input:focus-visible {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding-block: 10px 14px;
+  padding-block: 8px 10px;
 }
 
 /* ==================== Action bar (V1.5) ==================== */
@@ -434,10 +467,12 @@ input:focus-visible {
   border-top: 1px solid var(--line);
 }
 
-/* With the on-screen keyboard open (price box) the bar hides together with the HUD;
-   Enter in the price box still makes the offer. */
-.kb-open .actionbar {
-  display: none;
+/* With the on-screen keyboard open (price box) only the HUD hides (V1.6): the bar stays above the
+   keyboard, "Предложить" at hand. The game shrinks to the visible part of the screen; trackKeyboard()
+   in ui.ts sets the visual viewport height and offset. */
+.kb-open #app {
+  height: calc(var(--kb-height, 100%) - env(safe-area-inset-top, 0px));
+  transform: translateY(var(--kb-top, 0px));
 }
 
 .act-main {
@@ -477,7 +512,7 @@ input:focus-visible {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .cname {
@@ -514,6 +549,79 @@ input:focus-visible {
   background: var(--panel);
   border: 1px solid var(--line);
   padding: 8px;
+}
+
+/* Deal (V1.6): the seller's item in one compact card — a smaller icon, the name, three
+   inspection facts in a row (a fact is its own inspect button until checked).
+   Budget: the price, the gut feeling and the buttons fit a 375×667 screen without scrolling. */
+.deal-item {
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+}
+
+.midico {
+  width: 56px;
+  height: 32px;
+  flex: none;
+  image-rendering: pixelated;
+  background: var(--panel2);
+}
+
+.di-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.deal-item .rn {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.fact {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  font-size: var(--fs-s);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.btn.fact {
+  padding: 2px 4px;
+  font-size: var(--fs-s);
+}
+
+.ask.want {
+  margin-bottom: 6px;
+}
+
+/* Buyer (V1.6): items to show as compact row tiles — icon, condition and estimate in one line. */
+.shelf.pick {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+
+.shelf.pick .tile {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 6px;
+  min-height: 44px;
+  padding: 4px 6px;
+  text-align: left;
 }
 
 .bigico {
@@ -585,8 +693,12 @@ input:focus-visible {
   font-size: var(--fs-m);
 }
 
-.btn:hover:not(:disabled) {
-  border-color: var(--m-action);
+/* Hover only with a real pointer: on a touch screen iOS keeps :hover on the tapped button,
+   and "Куча N" stayed highlighted after digging (V1.6). */
+@media (hover: hover) {
+  .btn:hover:not(:disabled) {
+    border-color: var(--m-action);
+  }
 }
 
 .btn:disabled {
@@ -619,10 +731,10 @@ input:focus-visible {
 }
 
 .deal {
-  margin-top: 8px;
+  margin-top: 6px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .pr {
@@ -912,8 +1024,10 @@ input:focus-visible {
   padding: 10px;
 }
 
-.opt:hover:not(:disabled) {
-  border-color: var(--m-action);
+@media (hover: hover) {
+  .opt:hover:not(:disabled) {
+    border-color: var(--m-action);
+  }
 }
 
 .opt:disabled {
@@ -1180,6 +1294,9 @@ input:focus-visible {
 .approx {
   font-family: var(--mono);
   -webkit-font-smoothing: auto;
+  /* mono "~" sat on the bottom edge of the pixel digits: 2px up puts it mid-line (V1.6) */
+  position: relative;
+  top: -2px;
 }
 
 /* ==================== Font lab (src/fontlab.ts, debug) ====================

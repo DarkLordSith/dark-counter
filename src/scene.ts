@@ -5,7 +5,7 @@
 //  anchor point.
 // =====================================================================
 import { appearanceFor, seededRandom } from './appearance';
-import { CUSTOMERS_PER_DAY, JUNK_PILES, MAX_HEAT } from './data';
+import { CUSTOMERS_PER_DAY, JUNK_PILES, MAX_HEAT, SHOP_SIGN } from './data';
 import { heatMeterRects } from './heatmeter';
 import { CHARACTER, COLOR, GLOW, ITEM_COLORS, JUNKYARD, SHADE, SHOP } from './palette';
 import { byId } from './dom';
@@ -506,8 +506,8 @@ function drawDoorway(): void {
 /** Neon "ЛАВКА 7Б" sign and the ceiling lamp. Off at night, flickers by day. */
 function drawSignAndLamp(night: boolean): void {
   const brightness = night ? 0 : (Math.random() < SIGN_FLICKER_CHANCE ? 0.3 : 1);
-  fillRect(59, 3, 42, 11, COLOR.ink);
-  fillRect(60, 4, 40, 9, GLOW.sign(brightness));
+  fillRect(SHOP_SIGN.x, SHOP_SIGN.y, SHOP_SIGN.w, SHOP_SIGN.h, COLOR.ink);
+  fillRect(SHOP_SIGN.x + 1, SHOP_SIGN.y + 1, SHOP_SIGN.w - 2, SHOP_SIGN.h - 2, GLOW.sign(brightness));
   drawPixelText('ЛАВКА 7Б', 65, 6, night ? SHOP.signOff : brightness < 1 ? SHOP.signDim : COLOR.cyan);
   fillRect(77, 0, 6, 2, COLOR.line);
   if (!night) {
