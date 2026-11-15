@@ -83,8 +83,8 @@ export function formatHour(hour: number): string {
 }
 
 /**
- * What the station clock shows. The shift (opening → 20:00) is split evenly between today's
- * customers, each one served moves the clock by a share; the evening is 20:00 → 24:00 by the
+ * What the station clock shows. The shift (opening → 19:00) is split evenly between today's
+ * customers, each one served moves the clock by a share; the evening is 19:00 → 24:00 by the
  * hours spent, and each dig past midnight adds its hour after 24:00.
  */
 export function clockOf(game: DayView): Clock {

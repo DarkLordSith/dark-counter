@@ -85,7 +85,7 @@ describe('queue chip', () => {
   }
 
   it('"+ПЛАТЁЖ" goes on its own line', () => {
-    expect(allChips()).toContainEqual(['10:00', 'ОЧЕРЕДЬ: 5', '+ПЛАТЁЖ']);
+    expect(allChips()).toContainEqual(['09:50', 'ОЧЕРЕДЬ: 5', '+ПЛАТЁЖ']);
     expect(allChips().flat().every(line => !line.includes(' +ПЛАТЁЖ'))).toBe(true);
   });
 
