@@ -7,7 +7,7 @@ Columns: 4
  27  31  40	panel
  39  44  54	wall
  58  64  76	line
-125 131 146	dim
+132 138 153	dim
 207 202 189	fg
  61  42  33	rustDark
 122  74  50	rust
