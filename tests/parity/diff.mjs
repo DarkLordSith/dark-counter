@@ -24,7 +24,7 @@ fs.mkdirSync(OUT, { recursive: true });
 
 const WEIGHTS = { call: 8, offer: 6, ask: 6, accept: 4, take: 4, show: 5, insp: 4, adj: 3, refuse: 2, closeshop: 6, sleep: 4,
   junk: 5, dig: 6, market: 3, home: 1, close: 6, rentpay: 6, rentdefer: 3, rentitems: 3, evict: 3, sel: 3, bench: 4, craft: 4,
-  parts: 2, tab: 1, log: 0.5, savemenu: 1.5, newgame: 0.3, 'newgame-yes': 1, buyout: 5, loadsave: 2 };
+  parts: 2, tab: 1, log: 0.5, savemenu: 1.5, newgame: 0.3, 'newgame-yes': 1, debt: 1, early: 3, seat: 3, 'seat-yes': 3, loadsave: 2 };
 const SKIP = new Set(['music', 'copysave']);
 
 /**
@@ -64,14 +64,14 @@ async function act(page, c, r) {
     }, x, y);
   }
   if (c.a === 'loadsave') { // paste current save code (or garbage) into the loader
-    const mode = Math.floor(r() * 6); // 0 garbage, 1 as-is, 2 rich, 3 rent due today, 4 broke + rent due, 5 legacy save w/o nextDue
+    const mode = Math.floor(r() * 6); // 0 garbage, 1 as-is, 2 rich (debt almost paid), 3 rent due today, 4 broke + rent due, 5 legacy save w/o nextDue
     await page.evaluate(mode => {
       const code = document.getElementById('savecode').value;
       let out = code;
       if (mode === 0) out = 'nonsense';
       if (mode >= 2) {
         const d = JSON.parse(decodeURIComponent(escape(atob(code.slice(4)))));
-        if (mode === 2) d.credits += 5200;
+        if (mode === 2) { d.credits += 5200; if ('debt' in d) d.debt = Math.min(d.debt, 300); }
         if (mode === 3) { d.nextDue = d.day; d.llAt = 1; }
         if (mode === 4) { d.nextDue = d.day; d.credits = 5; d.deferred = true; d.llAt = 1; }
         if (mode === 5) { delete d.nextDue; }
@@ -177,7 +177,7 @@ for (let run = 0; run < +RUNS; run++) {
   }
   A.snaps.forEach(s => { const a = JSON.parse(s.action.split(' of ')[0]).a; actionsSeen[a] = (actionsSeen[a] || 0) + 1; });
   const last = JSON.parse(A.snaps.at(-1).save || '{}');
-  console.log(`run ${run} seed ${seed} ${shots ? '[screenshots]' : ''} ${viewport.width}px: ${diverged ? 'DIVERGED' : 'identical'} | day ${last.day}, credits ${last.credits}, won ${last.won}, over ${!!last.over} | errors A=${A.errors.length} B=${B.errors.length}`);
+  console.log(`run ${run} seed ${seed} ${shots ? '[screenshots]' : ''} ${viewport.width}px: ${diverged ? 'DIVERGED' : 'identical'} | day ${last.day}, credits ${last.credits}, won ${last.won ?? "-"}, ending ${last.ending ?? "-"}, over ${!!last.over} | errors A=${A.errors.length} B=${B.errors.length}`);
   if (A.errors.length || B.errors.length) console.log('  errors', A.errors.slice(0, 3), B.errors.slice(0, 3));
   if (diverged) {
     fail++;

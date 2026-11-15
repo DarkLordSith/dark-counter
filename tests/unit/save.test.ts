@@ -1,6 +1,6 @@
 // Save compatibility: migrate(), DC1 export/import and real saves of past versions.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { LANDLORD_SEED, LEGACY_RENT_PERIOD, RENT, SAVE_CODE_PREFIX } from '../../src/data';
+import { DEBT, LANDLORD_SEED, LEGACY_RENT_PERIOD, SAVE_CODE_PREFIX } from '../../src/data';
 import { callNextCustomer, closeShop, customerLeaves, payRent, sleepUntilMorning } from '../../src/economy';
 import { actor, actorReset, exportSave, importSave, migrate, newGame, setState, state } from '../../src/state';
 import type { SavedGame } from '../../src/types';
@@ -24,9 +24,9 @@ afterEach(() => {
 
 describe('migrate', () => {
   function legacySave(day: number): SavedGame {
-    const { nextDue, owed, deferred, llAt, llDone, ...legacy } = makeState({ day, rent: 450 });
-    void [nextDue, owed, deferred, llAt, llDone];
-    return legacy;
+    const { nextDue, owed, deferred, llAt, llDone, debt, seat, shuttleDay, ending, ...legacy } = makeState({ day, rent: 450 });
+    void [nextDue, owed, deferred, llAt, llDone, debt, seat, shuttleDay, ending];
+    return { ...legacy, won: false };
   }
 
   it('returns null for no save', () => {
@@ -46,6 +46,25 @@ describe('migrate', () => {
     expect(migrate(legacySave(1))?.nextDue).toBe(3);
     expect(migrate(legacySave(3))?.nextDue).toBe(3);
     expect(migrate(legacySave(5))?.nextDue).toBe(6);
+  });
+
+  it('adds the debt fields to a save made before the debt update', () => {
+    const migrated = migrate({ ...legacySave(4), nextDue: 7, owed: 1000, rent: 1000 });
+    expect(migrated).toMatchObject({ debt: DEBT.start, seat: false, shuttleDay: DEBT.shuttleDay, ending: null, over: null, rent: 1000, owed: 1000 });
+    expect(migrated).not.toHaveProperty('won');
+  });
+
+  it('keeps at least three weeks to the shuttle on a late save', () => {
+    expect(migrate(legacySave(50))?.shuttleDay).toBe(71);
+    expect(migrate(legacySave(39))?.shuttleDay).toBe(60);
+  });
+
+  it('a bought-out shop becomes the "left" ending, an evicted one "evicted"', () => {
+    const boughtOut = migrate({ ...legacySave(20), won: true });
+    expect(boughtOut).toMatchObject({ ending: 'left' });
+    expect(boughtOut?.over).toBeTruthy();
+    const evicted = migrate({ ...legacySave(20), over: 'Долг 900 кр. нечем покрыть. Гробов опечатал лавку.' });
+    expect(evicted).toMatchObject({ ending: 'evicted', over: 'Долг 900 кр. нечем покрыть. Гробов опечатал лавку.' });
   });
 
   it('leaves a current save untouched', () => {
@@ -111,12 +130,23 @@ describe('saves of past versions (tests/fixtures)', () => {
       expect(loaded?.inv).toBeInstanceOf(Array);
     });
 
-    it('exports back to the very same code', () => {
-      setState(importSave(code)!);
-      expect(exportSave()).toBe(code);
+    // Fixtures predate the debt update, so migrate() adds fields; after that the code round-trips.
+    it('exports and imports back unchanged after migration', () => {
+      const loaded = importSave(code)!;
+      setState(loaded);
+      expect(importSave(exportSave())).toEqual(loaded);
     });
 
-    it('keeps its rent, debt and due day: the weekly period starts from the next payment', () => {
+    it('gets the father\'s debt and at least three weeks to the shuttle', () => {
+      const original: SavedGame = JSON.parse(decodeURIComponent(escape(atob(code.replace(SAVE_CODE_PREFIX, '')))));
+      const loaded = importSave(code)!;
+      expect(loaded).toMatchObject({ debt: DEBT.start, seat: false, ending: original.over ? 'evicted' : null });
+      expect(loaded.shuttleDay).toBe(Math.max(DEBT.shuttleDay, original.day + DEBT.legacyDaysLeft));
+      expect(loaded.shuttleDay - loaded.day).toBeGreaterThanOrEqual(DEBT.legacyDaysLeft);
+      expect(loaded).not.toHaveProperty('won');
+    });
+
+    it('keeps its rent, payment and due day: the current rent is the next payment', () => {
       const original: SavedGame = JSON.parse(decodeURIComponent(escape(atob(code.replace(SAVE_CODE_PREFIX, '')))));
       const loaded = importSave(code)!;
       expect({ rent: loaded.rent, owed: loaded.owed, nextDue: loaded.nextDue })
@@ -126,8 +156,9 @@ describe('saves of past versions (tests/fixtures)', () => {
       state.credits = state.owed;
       state.cust = { kind: 'rent', name: 'Гробов', seed: LANDLORD_SEED, msg: '', pat: 0, max: 0, done: {} };
       payRent();
-      expect(state.nextDue).toBe(state.day + RENT.periodDays);
-      expect(state.rent).toBe((original.rent ?? 0) + RENT.increase);
+      expect(state.nextDue).toBe(state.day + DEBT.periodDays);
+      expect(state.rent).toBe((original.rent ?? 0) + DEBT.paymentStep);
+      expect(state.debt).toBe(DEBT.start - (original.owed ?? 0));
     });
 
     it('can be played on: the next day starts and customers come', () => {

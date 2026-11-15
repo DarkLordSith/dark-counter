@@ -30,7 +30,6 @@ export function makeState(overrides: Partial<GameState> = {}): GameState {
     log: [],
     cust: null,
     over: null,
-    won: false,
     phase: 'shop',
     hours: 0,
     where: 'home',
@@ -42,6 +41,10 @@ export function makeState(overrides: Partial<GameState> = {}): GameState {
     deferred: false,
     llAt: 2,
     llDone: false,
+    debt: 25000,
+    seat: false,
+    shuttleDay: 60,
+    ending: null,
     ...overrides,
   };
   setState(state);

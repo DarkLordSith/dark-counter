@@ -1,12 +1,13 @@
 // =====================================================================
-//  economy.ts — game rules: item value, customers and haggling, rent,
+//  economy.ts — game rules: item value, customers and haggling, the debt
+//  (weekly payment, early payments, shuttle seat, endings),
 //  evening (junkyard, flea market), night events, workbench, crafting.
 //  No DOM here: rules change `state` and return results; floating
 //  numbers are queued in `feedback` and shown by ui.ts.
 // =====================================================================
 import {
-  ACCEPT, HUNCH_VERDICT, HUNCH_VERDICT_TEXT, BENCH_COST, BUYER_COUNTER_LINES, BUYER_INSULTED_LINES, BUYER_LINES, BUYOUT_GOAL, COLLATERAL,
-  CRAFT_CONDITION_BONUS, CUSTOMER, CUSTOMERS_PER_DAY, DIG_LOOT, DIG_ODDS, EVENING_HOURS, HAGGLE, HUMAN_NAMES,
+  ACCEPT, HUNCH_VERDICT, HUNCH_VERDICT_TEXT, BENCH_COST, BUYER_COUNTER_LINES, BUYER_INSULTED_LINES, BUYER_LINES, COLLATERAL,
+  CRAFT_CONDITION_BONUS, CUSTOMER, CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, DIG_LOOT, DIG_ODDS, EVENING_HOURS, HAGGLE, HUMAN_NAMES,
   INSPECT, ITEM_TYPES, JUNK, JUNK_PILES, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
   RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SELLER_COUNTER_LINES, SELLER_INSULTED_LINES, SELLER_LINES,
   SELLER_STOLEN_LINE, SUPPLIER, VALUE,
@@ -17,9 +18,11 @@ import {
   actor, actorEnter, addLog, createItem, findItem, fullKnowledge, randomLandlordSlot, state, ui,
 } from './state';
 import type {
-  BuyerCustomer, InspectCheck, Item, ItemType, PresentedBuyer, Recipe, SellerCustomer,
+  BuyerCustomer, Ending, InspectCheck, Item, ItemType, PresentedBuyer, Recipe, SellerCustomer,
 } from './types';
-import { clamp, pickRandom, randomBetween, randomInt, randomSeed, roundTo10 } from './util';
+import { clamp, daysRu, fill, pickRandom, randomBetween, randomInt, randomSeed, roundTo10 } from './util';
+
+const TEXT = DEBT_TEXT.ru;
 
 /* =====================================================================
    Feedback for the UI: floating numbers to show after the action.
@@ -132,7 +135,7 @@ function createCustomer(forceSeller: boolean): void {
 }
 
 export function isLandlordDue(): boolean {
-  return !state.won && !state.over && state.phase === 'shop' && state.day >= state.nextDue && !state.llDone;
+  return state.debt > 0 && !state.over && state.phase === 'shop' && state.day >= state.nextDue && !state.llDone;
 }
 
 export function callNextCustomer(): void {
@@ -157,9 +160,9 @@ function landlordGreeting(): string {
     return `Отсрочка кончилась. С тебя ${state.owed} кр., сегодня.`;
   }
   if (state.credits >= state.owed) {
-    return `Аренда. ${state.owed} кр., как договаривались.`;
+    return `Платёж. ${state.owed} кр., как договаривались.`;
   }
-  return `Аренда, ${state.owed} кр. Не хватает? Могу подождать пару дней. Под процент.`;
+  return `Платёж, ${state.owed} кр. Не хватает? Могу подождать пару дней. Под процент.`;
 }
 
 function spawnLandlord(): void {
@@ -207,11 +210,32 @@ export function closeShop(): void {
 }
 
 /* =====================================================================
-   Rent
+   Debt: weekly payment (the landlord's visit), early payments, shuttle seat
    ===================================================================== */
 
-export const nextRent = (): number => state.rent + RENT.increase;
+/** Size of the payment after this one (before capping by the debt left). */
+export const nextRent = (): number => state.rent + DEBT.paymentStep;
+/** The payment after a deferral (+20%). */
 export const deferredDebt = (): number => roundTo10(state.owed * RENT.deferPenalty);
+/** Shuttle seat price on a given day: grows towards the evacuation. */
+export const seatPrice = (day: number = state.day): number => DEBT.seatBase + DEBT.seatPerDay * day;
+
+/** A weekly payment never asks for more than the debt left. */
+function capPaymentByDebt(): void {
+  state.owed = Math.min(state.owed, state.debt);
+}
+
+/** Pays `amount` off the debt; the floating number and the log line are the caller's. */
+function reduceDebt(amount: number): void {
+  state.debt = Math.max(0, state.debt - amount);
+}
+
+/** Last line of a payment: the debt is gone. */
+function logIfDebtPaid(): void {
+  if (state.debt === 0) {
+    addLog(TEXT.debtPaid);
+  }
+}
 
 const collateralValue = (item: Item): number =>
   Math.max(COLLATERAL.minValue, Math.round(trueValue(item) * (item.stolen ? COLLATERAL.stolenRate : COLLATERAL.cleanRate)));
@@ -264,12 +288,16 @@ export function planCollateral(): CollateralPlan {
 
 export const collateralHeatRelief = (plan: CollateralPlan): number => Math.min(state.heat, plan.hot * COLLATERAL.heatReliefPerStolen);
 
+/** The weekly payment is made (cash or goods): it comes off the debt, the next one is a week later and bigger. */
 function settleRent(): void {
+  const paid = state.owed;
   state.deferred = false;
-  state.rent += RENT.increase;
-  state.nextDue = state.day + RENT.periodDays;
+  state.rent += DEBT.paymentStep;
+  state.nextDue = state.day + DEBT.periodDays;
   state.owed = state.rent;
   state.llDone = true;
+  reduceDebt(paid);
+  capPaymentByDebt();
 }
 
 export function payRent(): void {
@@ -278,10 +306,11 @@ export function payRent(): void {
   }
   const amount = state.owed;
   state.credits -= amount;
-  floatText(`−${amount}`, MEANING.risk); // rent to the landlord
-  addLog(`Аренда оплачена: ${amount} кр. Следующая: ${nextRent()} кр. на день ${state.day + RENT.periodDays}.`);
+  floatText(`−${amount}`, MEANING.risk); // payment to the landlord
   state.cust.msg = 'Приятно иметь дело.';
   settleRent();
+  addLog(fill(TEXT.paymentPaid, { amount, debt: state.debt }) + (state.debt > 0 ? ' ' + fill(TEXT.paymentNext, { amount: state.owed, day: state.nextDue }) : ''));
+  logIfDebtPaid();
   finishCustomer();
 }
 
@@ -289,11 +318,14 @@ export function deferRent(): void {
   if (state.deferred) {
     return;
   }
-  state.owed = deferredDebt();
+  const owed = deferredDebt();
+  // the fine is not a separate bill: it goes onto the father's debt
+  state.debt += owed - state.owed;
+  state.owed = owed;
   state.nextDue = state.day + RENT.deferDays;
   state.deferred = true;
   state.llDone = true;
-  addLog(`Отсрочка до дня ${state.nextDue}. Долг вырос до ${state.owed} кр.`);
+  addLog(fill(TEXT.deferred, { day: state.nextDue, amount: state.owed, debt: state.debt }));
   finishCustomer();
 }
 
@@ -317,20 +349,51 @@ export function payWithCollateral(): void {
   const hotNote = plan.hot ? ` Краденое (${plan.hot}) ушло по его каналам, розыск −${relief}.` : '';
   addLog(`Гробов забрал ${plan.cash} кр. и товар: ${taken}.${overNote}${hotNote}`);
   settleRent();
+  logIfDebtPaid();
   finishCustomer();
 }
 
 export function evict(): void {
-  state.over = `Долг ${state.owed} кр. нечем покрыть. Гробов опечатал лавку.`;
-  addLog(state.over);
+  endGame('evicted');
   finishCustomer();
 }
 
-export function buyOutShop(): void {
-  state.credits -= BUYOUT_GOAL;
-  state.won = true;
-  state.rent = 0;
-  addLog('Лавка выкуплена. Аренды больше нет.');
+/** Early payment, any day: as much of `amount` as the credits and the debt allow. Returns what was paid. */
+export function payEarly(amount: number): number {
+  const paid = Math.max(0, Math.min(Math.floor(amount), state.credits, state.debt));
+  if (!paid || state.over) {
+    return 0;
+  }
+  state.credits -= paid;
+  floatText(`−${paid}`, MEANING.risk);
+  addLog(fill(TEXT.paidEarly, { amount: paid, debt: state.debt - paid }));
+  reduceDebt(paid);
+  capPaymentByDebt();
+  logIfDebtPaid();
+  return paid;
+}
+
+/** Grobov sells a seat only with the debt at zero, before the shuttle leaves. */
+export const canBuySeat = (): boolean =>
+  !state.over && !state.seat && state.debt === 0 && state.day < state.shuttleDay && state.credits >= seatPrice();
+
+export function buySeat(): boolean {
+  if (!canBuySeat()) {
+    return false;
+  }
+  const price = seatPrice();
+  state.credits -= price;
+  state.seat = true;
+  floatText(`−${price}`, MEANING.risk);
+  addLog(fill(TEXT.seatBought, { price }));
+  return true;
+}
+
+/** Ends the game: the ending's line becomes the game-over text. */
+export function endGame(ending: Ending): void {
+  state.ending = ending;
+  state.over = ENDING_TEXT.ru[ending].line;
+  addLog(state.over);
 }
 
 /* =====================================================================
@@ -709,8 +772,18 @@ export function sleepUntilMorning(): string[] {
   const events: string[] = [];
   spreadInfection(events);
   startNewDay();
-  if (!state.won && state.day >= state.nextDue) {
-    events.push(`Сегодня зайдёт арендодатель: ${state.owed} кр.${state.deferred ? ' Отсрочки больше не будет.' : ''}`);
+  if (state.day >= state.shuttleDay) {
+    // the last shuttle leaves this morning: the game ends, no raid and no landlord
+    endGame(state.seat ? 'left' : 'stayed');
+    events.push(state.over ?? '');
+    return events;
+  }
+  const daysToShuttle = state.shuttleDay - state.day;
+  if ((DEBT.shuttleReminders as readonly number[]).includes(daysToShuttle)) {
+    events.push(fill(TEXT.shuttleSoon, { days: daysRu(daysToShuttle) }));
+  }
+  if (state.debt > 0 && state.day >= state.nextDue) {
+    events.push(fill(TEXT.landlordToday, { amount: state.owed }) + (state.deferred ? ' Отсрочки больше не будет.' : ''));
   }
   coolDownAndMaybeRaid(events);
   if (!events.length) {

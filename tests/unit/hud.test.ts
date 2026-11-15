@@ -2,7 +2,7 @@
 // music in the menu (on by default), new game only through the menu.
 import { describe, expect, it } from 'vitest';
 import { MUSIC_KEY, musicWanted, rememberMusic, type PrefStorage } from '../../src/audio';
-import { HUD_TEXT, MAX_HEAT, SAVE_KEY } from '../../src/data';
+import { DEBT, HUD_TEXT, MAX_HEAT, SAVE_KEY } from '../../src/data';
 import { blinkLit, HEAT_METER, heatMeterCells, heatMeterHeight, heatMeterRects, sirenLit } from '../../src/heatmeter';
 import { ICONS, iconSvg, ICON_SCALE } from '../../src/icons';
 import { COLOR, MEANING, SHOP } from '../../src/palette';
@@ -74,11 +74,10 @@ describe('bottom bar', () => {
     const digit = rootPx('--fs-px-m'); // Public Pixel: 1em per glyph
     const label = (text: string): number => text.length * rootPx('--fs-xs') * 0.6; // IBM Plex Mono: 0.6em
     const gap = 16;
-    const buyoutBorderAndPadding = 2 * 2 + 2;
     const stats = [
-      Math.max(label(HUD_TEXT.ru.buyout), 4 * digit) + buyoutBorderAndPadding, // 9999 кр
-      Math.max(label(HUD_TEXT.ru.day), 2 * digit), // day 99
-      Math.max(label(`${HUD_TEXT.ru.rent}·0${HUD_TEXT.ru.daysShort}`), 4 * digit), // rent 2250, due today
+      Math.max(label(HUD_TEXT.ru.credits), 5 * digit), // 99999 кр
+      Math.max(label(`${HUD_TEXT.ru.day}/${DEBT.shuttleDay}`), 2 * digit), // day 59 of 60
+      Math.max(label(`${HUD_TEXT.ru.payment}·0${HUD_TEXT.ru.daysShort}`), 4 * digit), // payment 2400, due today
       Math.max(label(HUD_TEXT.ru.parts), 2 * digit), // 99 parts
     ];
     const width = stats.reduce((sum, w) => sum + w, 0) + gap * (stats.length - 1) + 8 + 44;

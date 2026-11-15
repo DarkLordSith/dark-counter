@@ -7,9 +7,9 @@
 //  Do not rename fields; when a field is added or changed, upgrade old
 //  saves in migrate().
 // =====================================================================
-import { ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, RENT, SAVE_CODE_PREFIX, SAVE_KEY, START } from './data';
+import { DEBT, DEBT_TEXT, ENDING_TEXT, ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, RENT, SAVE_CODE_PREFIX, SAVE_KEY, START } from './data';
 import type { Actor, GameState, Item, ItemKnowledge, ItemType, SavedGame, UiState } from './types';
-import { daysRu, randomInt } from './util';
+import { daysRu, fill, randomInt } from './util';
 
 /* ---------- state ---------- */
 
@@ -40,28 +40,31 @@ export function newGame(): void {
     credits: START.credits,
     parts: START.parts,
     heat: 0,
-    rent: RENT.start,
+    rent: DEBT.firstPayment,
     uid: 0,
     inv: [],
     log: [],
     cust: null,
     over: null,
-    won: false,
     phase: 'shop',
     hours: 0,
     where: 'home',
     junk: null,
     jmsg: '',
     market: false,
-    nextDue: RENT.periodDays,
-    owed: RENT.start,
+    nextDue: DEBT.periodDays,
+    owed: DEBT.firstPayment,
     deferred: false,
     llAt: randomLandlordSlot(),
     llDone: false,
+    debt: DEBT.start,
+    seat: false,
+    shuttleDay: DEBT.shuttleDay,
+    ending: null,
   };
   state.inv.push(createItem('battery', { cond: 70, stolen: false, defect: false, infected: false, known: true }));
   state.inv.push(createItem('comm', { cond: 55, stolen: false, defect: false, infected: false, known: true }));
-  addLog(`День 1. Лавка 7-Б, нижний ярус. Аренда раз в ${daysRu(RENT.periodDays)}, и она растёт.`);
+  addLog(fill(DEBT_TEXT.ru.start, { debt: DEBT.start, period: daysRu(DEBT.periodDays), shuttle: DEBT.shuttleDay }));
   actorReset();
   ui.tab = 'deal';
 }
@@ -170,7 +173,7 @@ export function migrate(data: SavedGame | null): GameState | null {
     return null;
   }
   // v1/v2: rent was due every 3rd day and there was no landlord visit.
-  // Uses the legacy period, not RENT.periodDays: the weekly rent applies from the next payment.
+  // Uses the legacy period, not DEBT.periodDays: the weekly payment applies from the next payment.
   if (data.nextDue == null) {
     data.nextDue = data.day + ((LEGACY_RENT_PERIOD - data.day % LEGACY_RENT_PERIOD) % LEGACY_RENT_PERIOD);
     data.owed = data.rent;
@@ -178,6 +181,19 @@ export function migrate(data: SavedGame | null): GameState | null {
     data.llAt = randomLandlordSlot();
     data.llDone = false;
   }
+  // Before the debt update the goal was buying the shop out. The current rent
+  // becomes the next payment (rent and owed stay as they are), the father's debt
+  // starts in full, and the shuttle is at least three weeks away.
+  if (data.debt == null) {
+    data.debt = DEBT.start;
+    data.seat = false;
+    data.shuttleDay = Math.max(DEBT.shuttleDay, data.day + DEBT.legacyDaysLeft);
+    data.ending = data.won ? 'left' : data.over ? 'evicted' : null;
+    if (data.won && !data.over) {
+      data.over = ENDING_TEXT.ru.left.line;
+    }
+  }
+  delete data.won;
   return data as GameState;
 }
 
