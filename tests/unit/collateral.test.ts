@@ -5,12 +5,13 @@
 //   battery (90, 100%, stolen) → 45, clean → 54
 import { describe, expect, it } from 'vitest';
 import { collateralHeatRelief, planCollateral } from '../../src/economy';
+import { state } from '../../src/state';
 import { makeItem, makeState } from './helpers';
 
 describe('planCollateral (collateralPlan)', () => {
   it('takes only cash when it covers the debt', () => {
     makeState({ credits: 500, owed: 300, inv: [makeItem('arm')] });
-    expect(planCollateral()).toEqual({ cash: 300, items: [], ok: true, over: 0, hot: 0 });
+    expect(planCollateral(state)).toEqual({ cash: 300, items: [], ok: true, over: 0, hot: 0 });
   });
 
   it('takes all cash first, then prefers stolen goods that cover the rest', () => {
@@ -18,7 +19,7 @@ describe('planCollateral (collateralPlan)', () => {
     const chip = makeItem('chip', { stolen: true });
     const battery = makeItem('battery', { stolen: true });
     makeState({ credits: 100, owed: 300, inv: [arm, chip, battery] });
-    const plan = planCollateral();
+    const plan = planCollateral(state);
     expect(plan.cash).toBe(100);
     expect(plan.items).toEqual([chip]); // cheapest stolen item that covers 200
     expect(plan.ok).toBe(true);
@@ -30,7 +31,7 @@ describe('planCollateral (collateralPlan)', () => {
     const arm = makeItem('arm');
     const battery = makeItem('battery', { stolen: true });
     makeState({ credits: 100, owed: 300, inv: [arm, battery] });
-    const plan = planCollateral();
+    const plan = planCollateral(state);
     expect(plan.items).toEqual([battery, arm]);
     expect(plan.ok).toBe(true);
     expect(plan.over).toBe(456 - 155);
@@ -39,7 +40,7 @@ describe('planCollateral (collateralPlan)', () => {
 
   it('reports that even the whole stock is not enough', () => {
     makeState({ credits: 0, owed: 300, inv: [makeItem('battery')] });
-    const plan = planCollateral();
+    const plan = planCollateral(state);
     expect(plan.ok).toBe(false);
     expect(plan.items).toHaveLength(1);
     expect(plan.over).toBe(0);
@@ -47,13 +48,13 @@ describe('planCollateral (collateralPlan)', () => {
 
   it('does not take anything from an empty stock', () => {
     makeState({ credits: 10, owed: 300, inv: [] });
-    expect(planCollateral()).toEqual({ cash: 10, items: [], ok: false, over: 0, hot: 0 });
+    expect(planCollateral(state)).toEqual({ cash: 10, items: [], ok: false, over: 0, hot: 0 });
   });
 
   it('stolen goods taken by the landlord lower the wanted level, but not below zero', () => {
     makeState({ credits: 0, owed: 300, heat: 1, inv: [makeItem('chip', { stolen: true }), makeItem('chip', { stolen: true })] });
-    const plan = planCollateral();
+    const plan = planCollateral(state);
     expect(plan.hot).toBe(2);
-    expect(collateralHeatRelief(plan)).toBe(1);
+    expect(collateralHeatRelief(state, plan)).toBe(1);
   });
 });

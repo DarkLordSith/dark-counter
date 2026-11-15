@@ -3,7 +3,7 @@
 //  a 4-chord pad loop, bass and random pentatonic plinks over vinyl crackle;
 //  plus the junkyard sound effects (v2), switched on and off apart from the music.
 // =====================================================================
-import { pickRandom } from './util';
+import { gameRng, pickRandom } from './rng';
 
 /* ---------- config ---------- */
 const TEMPO_BPM = 72;
@@ -264,7 +264,7 @@ function playStep(eng: Engine, time: number, step: number, chord: number[]): voi
     padAndBass(eng, time, chord);
   }
   if ((step === 6 || step === 14) && Math.random() < 0.35) {
-    tone(eng, time, midiToFrequency(pickRandom(MELODY_NOTES)), 'sine', 0.045, 0.01, 0.9);
+    tone(eng, time, midiToFrequency(pickRandom(gameRng, MELODY_NOTES)), 'sine', 0.045, 0.01, 0.9);
   }
 }
 

@@ -98,6 +98,12 @@ async function act(page, c, r) {
 
 async function snapshot(page, deep) {
   return page.evaluate((deep, ignore, skipScene) => {
+    // CSS animations and transitions (the ticker's flash of a new line, a modal fading in) are
+    // played to their end first: otherwise the snapshot catches them at a moment that depends on
+    // timing, and even a build compared with itself diverges in styles and screenshots.
+    for (const animation of document.getAnimations()) {
+      try { animation.finish(); } catch { /* an endless one has no end: left as it is */ }
+    }
     const canv = skipScene === 'all' ? [] : [...document.querySelectorAll('canvas')].filter(c => !(skipScene && c.id === 'scn')).map(c => c.toDataURL());
     const app = document.getElementById('app').cloneNode(true);
     app.querySelectorAll('.fx').forEach(n => n.remove());
