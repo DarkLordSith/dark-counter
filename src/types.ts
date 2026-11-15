@@ -5,7 +5,7 @@
 //  DC1: codes). Short field names are kept on purpose: renaming them
 //  would break old saves. When a field changes, upgrade it in migrate().
 // =====================================================================
-import type { ENDING_TEXT, ITEM_TYPES } from './data';
+import type { ENDING_TEXT, ITEM_TYPES, MODES } from './data';
 
 /* ---------- goods ---------- */
 
@@ -165,6 +165,24 @@ export interface GameState {
   shuttleDay: number;
   /** How the game ended, null while playing. */
   ending: Ending | null;
+  /** Game mode; also picks the localStorage slot (SAVE_KEYS). Saves before modes are 'story'. */
+  mode: Mode;
+}
+
+/** Game modes: story "Начало конца", calm "Без таймера", sandbox "Своя лавка" (locked stub). */
+export type Mode = (typeof MODES)[number];
+
+/** What the profile remembers per mode: story endings, and 'paid' when a calm game closed the debt. */
+export type ProfileEnding = Ending | 'paid';
+
+/** Player profile: lives under PROFILE_KEY, outside every save. */
+export interface Profile {
+  /** Endings seen, per mode. */
+  endings: Partial<Record<Mode, ProfileEnding[]>>;
+  /** Modes the player may start. */
+  unlocked: Mode[];
+  /** Mode played last: the game continues it on launch. */
+  last: Mode;
 }
 
 /** Endings: left, stayed, evicted; betray and takeover are stubs for Patch C. */
@@ -173,8 +191,8 @@ export type Ending = keyof typeof ENDING_TEXT.ru;
 /** Fields added by the landlord update; saves made before it lack them. */
 type RentFields = 'nextDue' | 'owed' | 'deferred' | 'llAt' | 'llDone';
 
-/** Fields added by the debt update (concept skeleton); saves made before it lack them. */
-type DebtFields = 'debt' | 'seat' | 'shuttleDay' | 'ending';
+/** Fields added by the debt update (concept skeleton) and the modes update; saves made before them lack them. */
+type DebtFields = 'debt' | 'seat' | 'shuttleDay' | 'ending' | 'mode';
 
 /**
  * Any save the game has ever written: older ones lack the rent or debt fields,
@@ -236,3 +254,11 @@ export interface LandlordLook {
 }
 
 export type Appearance = CustomerLook | LandlordLook;
+
+/* ---------- storage ---------- */
+
+/** The part of localStorage the game uses; tests pass a Map-backed one. */
+export interface KeyValueStore {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}

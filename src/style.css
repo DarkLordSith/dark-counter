@@ -932,6 +932,56 @@ input:focus-visible {
   text-align: left;
 }
 
+/* Mode screen: cards in a column (mobile first), buttons 44 pt. */
+.modes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+}
+
+.mode-card p {
+  margin: 0;
+}
+
+.mode-name {
+  font-size: var(--fs-px-m);
+}
+
+.mode-status {
+  font-size: var(--fs-m);
+}
+
+.mode-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.mode-btns .btn {
+  flex: 1;
+  min-height: 44px;
+}
+
+/* Locked mode: "откроется позже" with a pixel lock in the card's inactive color. */
+.mode-lock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mode-lock .ico {
+  width: 16px;
+  height: 16px;
+}
+
 /* Debt window: tight sections (rows, early payments, the shuttle seat). */
 .debt {
   display: flex;
@@ -1080,6 +1130,7 @@ input:focus-visible {
 .pr input,
 .verdict,
 .mbox h2,
+.mode-name,
 .diag h2 {
   font-family: var(--display);
   font-weight: 400;

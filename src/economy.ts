@@ -373,9 +373,15 @@ export function payEarly(amount: number): number {
   return paid;
 }
 
+/** Only the story mode has the last shuttle (calm "Без таймера" has no evacuation). */
+export const hasShuttle = (): boolean => state.mode === 'story';
+
+/** calm: the debt is paid, the shop goes on without payments (a sandbox until a new game). */
+export const isDebtClosed = (): boolean => state.mode === 'calm' && state.debt === 0;
+
 /** Grobov sells a seat only with the debt at zero, before the shuttle leaves. */
 export const canBuySeat = (): boolean =>
-  !state.over && !state.seat && state.debt === 0 && state.day < state.shuttleDay && state.credits >= seatPrice();
+  hasShuttle() && !state.over && !state.seat && state.debt === 0 && state.day < state.shuttleDay && state.credits >= seatPrice();
 
 export function buySeat(): boolean {
   if (!canBuySeat()) {
@@ -772,14 +778,14 @@ export function sleepUntilMorning(): string[] {
   const events: string[] = [];
   spreadInfection(events);
   startNewDay();
-  if (state.day >= state.shuttleDay) {
+  if (hasShuttle() && state.day >= state.shuttleDay) {
     // the last shuttle leaves this morning: the game ends, no raid and no landlord
     endGame(state.seat ? 'left' : 'stayed');
     events.push(state.over ?? '');
     return events;
   }
   const daysToShuttle = state.shuttleDay - state.day;
-  if ((DEBT.shuttleReminders as readonly number[]).includes(daysToShuttle)) {
+  if (hasShuttle() && (DEBT.shuttleReminders as readonly number[]).includes(daysToShuttle)) {
     events.push(fill(TEXT.shuttleSoon, { days: daysRu(daysToShuttle) }));
   }
   if (state.debt > 0 && state.day >= state.nextDue) {

@@ -90,7 +90,7 @@ describe('the wanted level is on the scene, not in the HUD', () => {
   it('the HUD has no wanted meter, eye or music button', () => {
     expect(renderHud).not.toMatch(/heat|meterCells|eye|music/);
     expect(styleCss).not.toMatch(/\.heat\b/);
-    expect(Object.keys(ICONS)).toEqual(['menu']);
+    expect(Object.keys(ICONS)).toEqual(['menu', 'lock']);
   });
 
   it('10 cells 4×4 with 1 px gaps on the left wall, clear of the window at x = 7', () => {
@@ -196,8 +196,10 @@ describe('music', () => {
 });
 
 describe('menu', () => {
-  it('holds the game title, music, save and new game; no emoji or font glyphs', () => {
-    expect(openMenu).toContain('HUD.gameTitle');
+  it('holds the current mode on top, the debt, modes, music, save and new game; no emoji or font glyphs', () => {
+    expect(openMenu).toContain('<h2>${MODE_UI.names[state.mode]}</h2>');
+    expect(openMenu).toContain('data-a="debt"');
+    expect(openMenu).toContain('data-a="modes"');
     expect(openMenu).toContain('data-a="savemenu"');
     expect(openMenu).toContain('data-a="newgame"');
     for (const code of [renderHud, openMenu]) {
@@ -206,11 +208,11 @@ describe('menu', () => {
     }
   });
 
-  it('new game is only in the menu, behind a confirmation', () => {
+  it('new game is only in the menu and opens the mode screen ("Начать заново" there asks first)', () => {
     expect(renderHud).not.toContain('newgame');
     expect(uiTs.match(/data-a="newgame"/g)).toHaveLength(1);
-    expect(uiTs).toMatch(/newgame: \(\) => \{\s*confirmNewGame\(\);/);
-    expect(HUD_TEXT.ru.confirmText).toBe('Текущая игра пропадёт, сохраните код.');
+    expect(uiTs).toMatch(/newgame: \(\) => \{\s*openModes\(\);/);
+    expect(uiTs).toMatch(/function askResetMode[\s\S]*?MODE_UI\.resetText/);
   });
 
   it('save opens the save window, which keeps the version label (long press → diagnostics)', () => {
