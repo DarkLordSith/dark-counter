@@ -37,7 +37,7 @@ const modeScreen = await page.evaluate(() => !document.getElementById('modal').h
 console.log('first launch shows the mode screen:', modeScreen);
 await passModeScreen(page);
 
-await page.click('#callBtn');
+await page.click('#actionbar [data-a="call"]');
 await wait(2500);
 const layout = await page.evaluate(() => ({
   scrollHeight: document.scrollingElement.scrollHeight,

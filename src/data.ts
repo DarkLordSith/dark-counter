@@ -179,7 +179,6 @@ export const HUD_TEXT = {
     off: 'выкл',
     menu: 'Меню',
     save: 'Сохранение',
-    newGame: 'Новая игра',
     close: 'Закрыть',
   },
   en: {
@@ -195,8 +194,56 @@ export const HUD_TEXT = {
     off: 'off',
     menu: 'Menu',
     save: 'Save',
-    newGame: 'New game',
     close: 'Close',
+  },
+} as const;
+
+/**
+ * Action bar (V1.5): the one main button of the current screen, or a dim hint when
+ * there is none. RU/EN; {name} placeholders are filled by fill().
+ */
+export const ACTION_TEXT = {
+  ru: {
+    call: 'Позвать следующего',
+    closeShop: 'Закрыть лавку',
+    offer: 'Предложить',
+    ask: 'Назвать цену',
+    noItem: 'Нет такого, до свидания',
+    pay: 'Заплатить {amount} кр.',
+    defer: 'Попросить отсрочку',
+    collateral: 'Отдать деньги и товар',
+    evict: 'Нечем платить',
+    sleep: 'Спать',
+    home: 'Вернуться домой',
+    approaching: 'Подходит к прилавку…',
+    leaving: 'Уходит…',
+    showItem: 'Выложите товар на прилавок',
+    toCounter: 'Клиент ждёт — вкладка «Прилавок»',
+    toEvening: 'Вечер — вкладка «Вечер»',
+    toJunkyard: 'Свалка — вкладка «Свалка»',
+    shiftOver: 'Смена окончена — вкладка «Прилавок»',
+    wait: 'Ждём…',
+  },
+  en: {
+    call: 'Call the next one',
+    closeShop: 'Close the shop',
+    offer: 'Make an offer',
+    ask: 'Name a price',
+    noItem: 'Don\'t have it, goodbye',
+    pay: 'Pay {amount} cr.',
+    defer: 'Ask for a delay',
+    collateral: 'Give money and goods',
+    evict: 'Nothing to pay with',
+    sleep: 'Sleep',
+    home: 'Go home',
+    approaching: 'Coming to the counter…',
+    leaving: 'Leaving…',
+    showItem: 'Put an item on the counter',
+    toCounter: 'A customer is waiting — "Counter" tab',
+    toEvening: 'Evening — "Evening" tab',
+    toJunkyard: 'Junkyard — "Junkyard" tab',
+    shiftOver: 'The shift is over — "Counter" tab',
+    wait: 'Waiting…',
   },
 } as const;
 

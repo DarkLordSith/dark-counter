@@ -33,7 +33,7 @@ describe('color literals', () => {
   it('the check itself catches every literal form', () => {
     const samples = ["'#fff'", "'#0f1220'", "'#0f1220cc'", 'rgba(0,0,0,.5)', 'rgb(1 2 3)', 'hsl(10 20% 30%)'];
     expect(samples.every(sample => sample.match(COLOR_LITERAL))).toBe(true);
-    expect('#app #hud #diag #callBtn'.match(COLOR_LITERAL)).toBeNull();
+    expect('#app #hud #diag #actionbar'.match(COLOR_LITERAL)).toBeNull();
   });
 });
 

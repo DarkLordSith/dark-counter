@@ -196,22 +196,22 @@ describe('music', () => {
 });
 
 describe('menu', () => {
-  it('holds the current mode on top, the debt, modes, music, save and new game; no emoji or font glyphs', () => {
+  it('holds the current mode on top, the debt, modes, music and save; no emoji or font glyphs', () => {
     expect(openMenu).toContain('<h2>${MODE_UI.names[state.mode]}</h2>');
     expect(openMenu).toContain('data-a="debt"');
     expect(openMenu).toContain('data-a="modes"');
     expect(openMenu).toContain('data-a="savemenu"');
-    expect(openMenu).toContain('data-a="newgame"');
     for (const code of [renderHud, openMenu]) {
       expect(code).not.toMatch(/[♪⟲☰⚙★☾]/u);
       expect(code).not.toMatch(/\p{Extended_Pictographic}/u);
     }
   });
 
-  it('new game is only in the menu and opens the mode screen ("Начать заново" there asks first)', () => {
-    expect(renderHud).not.toContain('newgame');
-    expect(uiTs.match(/data-a="newgame"/g)).toHaveLength(1);
-    expect(uiTs).toMatch(/newgame: \(\) => \{\s*openModes\(\);/);
+  it('one "Режимы" item: a new game starts on the mode screen ("Начать заново" asks first)', () => {
+    expect(openMenu.match(/data-a="modes"/g)).toHaveLength(1);
+    expect(uiTs).not.toContain('data-a="newgame"');
+    expect(uiTs).not.toMatch(/\bnewgame: \(\)/);
+    expect(HUD_TEXT.ru).not.toHaveProperty('newGame');
     expect(uiTs).toMatch(/function askResetMode[\s\S]*?MODE_UI\.resetText/);
   });
 
