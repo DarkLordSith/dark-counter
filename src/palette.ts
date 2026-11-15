@@ -37,7 +37,7 @@ export const BASE = {
   /** Borders, lines, tile edges, empty wanted cells. */
   line: '#3a404c',
   /** Secondary text, HUD labels, `unknown`; `inactive` is dim faded. */
-  dim: '#7d8392',
+  dim: '#848a99',
   /** Main text, HUD numbers. */
   fg: '#cfcabd',
   /** Dark rust: box shadows, dark hair. */
@@ -235,8 +235,10 @@ export const CHARACTER = {
  * Seeded customer looks. The order of every list is part of the look:
  * a seed picks by index, so reordering changes existing customers.
  * V1.7: clothes come from the base colors too (no generated hues). A seed picks
- * a jacket pair, a shirt and an accent trim, so customers stay different; the
- * jackets are lighter or warmer than the counter (panel) so they do not merge with it.
+ * a jacket pair, a shirt and an accent trim, so customers stay different.
+ * Task 19: the main jacket color stands out from the wall and the counter
+ * (contrast ≥ 1.6:1 to `wall` and `panel`, tested); dark `line`/`rustDark`
+ * jackets merged with them, so they are only the shadow side now.
  */
 export const CUSTOMER_TONES = {
   skins: [BASE.skin, CHARACTER.landlordSkin, BASE.rust, BASE.rust, BASE.skin],
@@ -244,8 +246,8 @@ export const CUSTOMER_TONES = {
   eyes: [BASE.action, BASE.risk, BASE.wear, BASE.ok, BASE.lamp],
   metals: [BASE.dim, BASE.skin, BASE.dim, BASE.fg, BASE.rust],
   darkMetals: [BASE.line, BASE.wall, BASE.rustDark],
-  /** Jacket and its shadow side, in pairs. */
-  jackets: [[BASE.line, BASE.wall], [BASE.rust, BASE.rustDark], [BASE.dim, BASE.line], [BASE.rustDark, BASE.ink]],
+  /** Jacket and its shadow side, in pairs: rust, steel, work orange, pale canvas, violet. */
+  jackets: [[BASE.rust, BASE.rustDark], [BASE.dim, BASE.line], [BASE.wear, BASE.rust], [BASE.fg, BASE.dim], [BASE.hunch, BASE.line]],
   shirts: [BASE.fg, BASE.lamp, BASE.dim],
   trims: [BASE.action, BASE.wear, BASE.risk, BASE.hunch, BASE.ok, BASE.lamp],
 } as const;

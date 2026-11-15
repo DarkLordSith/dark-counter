@@ -1,6 +1,6 @@
 // One source of colors: src/palette.ts. Fails on a color literal anywhere else.
 import { describe, expect, it } from 'vitest';
-import { BASE, COLOR, CSS_TOKENS, cssRootRule, THEME_COLOR, withAlpha } from '../../src/palette';
+import { BASE, COLOR, CSS_TOKENS, cssRootRule, CUSTOMER_TONES, THEME_COLOR, withAlpha } from '../../src/palette';
 import gpl from '../../src/dark-counter-palette-A.gpl?raw';
 
 /** Game sources as text, keyed like 'src/scene.ts'. Picked up automatically, new files included. */
@@ -82,7 +82,7 @@ describe('withAlpha', () => {
 // V1.7 palette A "Сталь и ржавчина": the owner's 16 colors, nothing else.
 describe('V1.7 palette A', () => {
   const APPROVED = {
-    ink: '#0b0d12', bg: '#12151c', panel: '#1b1f28', wall: '#272c36', line: '#3a404c', dim: '#7d8392', fg: '#cfcabd', rustDark: '#3d2a21',
+    ink: '#0b0d12', bg: '#12151c', panel: '#1b1f28', wall: '#272c36', line: '#3a404c', dim: '#848a99', fg: '#cfcabd', rustDark: '#3d2a21',
     rust: '#7a4a32', skin: '#c08a68', action: '#3fc1b0', wear: '#e0943a', risk: '#e0524a', hunch: '#8a6bd8', ok: '#74b86a', lamp: '#ecd9a0',
   };
 
@@ -117,6 +117,9 @@ describe('V1.7 palette A', () => {
   });
 });
 
+/** A jacket must stand out from the wall behind and the counter in front (task 19). */
+const JACKET_MIN_CONTRAST = 1.6;
+
 describe('contrast (WCAG)', () => {
   const luminance = (hex: string): number => {
     const channels = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
@@ -134,8 +137,19 @@ describe('contrast (WCAG)', () => {
     expect(contrast(BASE.dim, BASE.bg)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('dim on panel is 4.35:1 — just under 4.5 (reported to the owner, the hex stays as approved)', () => {
-    expect(contrast(BASE.dim, BASE.panel)).toBeCloseTo(4.35, 2);
+  it('dim (#848a99, task 19) reads as body text on bg, panel and wall', () => {
+    expect(contrast(BASE.dim, BASE.bg)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(BASE.dim, BASE.panel)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(BASE.dim, BASE.wall)).toBeGreaterThanOrEqual(4);
+  });
+
+  it('no customer jacket merges with the shop wall or the counter', () => {
+    expect(CUSTOMER_TONES.jackets.length).toBeGreaterThanOrEqual(4);
+    for (const [jacket] of CUSTOMER_TONES.jackets) {
+      expect(contrast(jacket, BASE.wall), `${jacket} on wall`).toBeGreaterThanOrEqual(JACKET_MIN_CONTRAST);
+      expect(contrast(jacket, BASE.panel), `${jacket} on panel`).toBeGreaterThanOrEqual(JACKET_MIN_CONTRAST);
+    }
+    expect(new Set(CUSTOMER_TONES.jackets.map(([jacket]) => jacket)).size).toBe(CUSTOMER_TONES.jackets.length);
   });
 
   it('the hunch verdict (16 px pixel font) passes the large-text 3:1 on panel', () => {

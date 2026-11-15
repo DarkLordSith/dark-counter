@@ -38,7 +38,8 @@ export function appearanceFor(seed: number): Appearance {
   const kindRoll = random();
   // one roll picks the outfit (it used to be a hue): jacket pair, shirt and trim from the base colors
   const outfit = Math.floor(random() * 360);
-  const [jacket, jdark] = CUSTOMER_TONES.jackets[outfit % CUSTOMER_TONES.jackets.length];
+  const { jackets, shirts, trims } = CUSTOMER_TONES;
+  const [jacket, jdark] = jackets[outfit % jackets.length];
   return {
     kind: kindRoll < 0.6 ? 'human' : kindRoll < 0.74 ? 'android' : kindRoll < 0.88 ? 'box' : 'dome',
     skin: pickSeeded(random, CUSTOMER_TONES.skins),
@@ -46,8 +47,8 @@ export function appearanceFor(seed: number): Appearance {
     style: Math.floor(random() * 6),
     jacket,
     jdark,
-    shirt: CUSTOMER_TONES.shirts[Math.floor(outfit / CUSTOMER_TONES.jackets.length) % CUSTOMER_TONES.shirts.length],
-    trim: CUSTOMER_TONES.trims[Math.floor(outfit / 12) % CUSTOMER_TONES.trims.length],
+    shirt: shirts[Math.floor(outfit / jackets.length) % shirts.length],
+    trim: trims[Math.floor(outfit / (jackets.length * shirts.length)) % trims.length],
     eye: pickSeeded(random, CUSTOMER_TONES.eyes),
     acc: Math.floor(random() * 5),
     pads: random() < 0.45,
