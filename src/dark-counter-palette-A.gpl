@@ -1,0 +1,20 @@
+GIMP Palette
+Name: dark-counter-palette-A
+Columns: 4
+# Тёмный прилавок — V1.7 палитра A «Сталь и ржавчина», 16 цветов (src/palette.ts, BASE).
+ 11  13  18	ink
+ 18  21  28	bg
+ 27  31  40	panel
+ 39  44  54	wall
+ 58  64  76	line
+125 131 146	dim
+207 202 189	fg
+ 61  42  33	rustDark
+122  74  50	rust
+192 138 104	skin
+ 63 193 176	action
+224 148  58	wear
+224  82  74	risk
+138 107 216	hunch
+116 184 106	ok
+236 217 160	lamp

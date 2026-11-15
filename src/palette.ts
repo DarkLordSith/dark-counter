@@ -6,8 +6,10 @@
 //  index.html as `:root { --bg: …; }`.
 //  Base names describe where a color is used. What a color MEANS in the
 //  interface (action, risk, wear…) is the MEANING layer on top (V1.2).
-//  Equal or near-equal values in different roles are kept apart on
-//  purpose: merging them changes the look and is decided in V1.7.
+//  V1.7 "Сталь и ржавчина": exactly 16 base colors (BASE) — the only hex
+//  literals here. Every role below points at a base color or at
+//  withAlpha() of one; role names stay, so the drawing code is unchanged.
+//  The same 16 colors are in dark-counter-palette-A.gpl (Piskel/Aseprite).
 //  Pure data: no DOM, safe to import from Vitest and vite.config.ts.
 // =====================================================================
 
@@ -20,32 +22,73 @@ export function withAlpha(hex: string, alpha: number): string {
 }
 
 /* =====================================================================
+   The 16 base colors (V1.7 palette A "Сталь и ржавчина")
+   ===================================================================== */
+
+export const BASE = {
+  /** Darkest: sky, doorways, text on action buttons. */
+  ink: '#0b0d12',
+  /** Page and scene background. */
+  bg: '#12151c',
+  /** Panels, cards, the counter, the speech bubble. */
+  panel: '#1b1f28',
+  /** Walls, seams, meter tracks. */
+  wall: '#272c36',
+  /** Borders, lines, tile edges, empty wanted cells. */
+  line: '#3a404c',
+  /** Secondary text, HUD labels, `unknown`; `inactive` is dim faded. */
+  dim: '#7d8392',
+  /** Main text, HUD numbers. */
+  fg: '#cfcabd',
+  /** Dark rust: box shadows, dark hair. */
+  rustDark: '#3d2a21',
+  /** Rust, wood, hair, dark skin. */
+  rust: '#7a4a32',
+  /** Light skin. */
+  skin: '#c08a68',
+  /** Teal: action, main button, the bubble frame, neon. */
+  action: '#3fc1b0',
+  /** Amber: time, wear, defect, patience, lamp light. */
+  wear: '#e0943a',
+  /** Stolen, AI, wanted, the siren. */
+  risk: '#e0524a',
+  /** Чуйка, the planet in the window. */
+  hunch: '#8a6bd8',
+  /** In stock, battery charge, indicator screens. */
+  ok: '#74b86a',
+  /** Glints, stars, lamp light. */
+  lamp: '#ecd9a0',
+} as const;
+
+/* =====================================================================
    Shared: interface (CSS) and scene accents
    ===================================================================== */
 
 export const COLOR = {
-  bg: '#0f1220',
-  panel: '#171b2d',
-  panel2: '#1f2440',
-  line: '#2d3455',
-  fg: '#dde1f3',
-  dim: '#8b92b5',
-  cyan: '#46d3c9',
-  amber: '#f0a33e',
-  red: '#ff6372',
-  green: '#7fd98e',
-  sceneBg: '#141829',
-  /** Text on cyan / amber buttons. */
-  onAccent: '#0b1620',
-  tileEdge: '#2a3152',
-  steel: '#5a6080',
+  bg: BASE.bg,
+  panel: BASE.panel,
+  panel2: BASE.wall,
+  line: BASE.line,
+  fg: BASE.fg,
+  dim: BASE.dim,
+  cyan: BASE.action,
+  amber: BASE.wear,
+  red: BASE.risk,
+  green: BASE.ok,
+  sceneBg: BASE.bg,
+  /** Text on teal / amber buttons. */
+  onAccent: BASE.ink,
+  tileEdge: BASE.line,
+  steel: BASE.line,
   /** Near-black: screens, chest panels, sign box. */
-  ink: '#0a0c18',
-  gold: '#f0c040',
-  /** Light violet in the hue of the planet in the shop window (263°); 5.8:1 on --panel. */
-  violet: '#a885e0',
-  black: '#000',
-  white: '#ffffff',
+  ink: BASE.ink,
+  gold: BASE.lamp,
+  /** The gut feeling and the planet in the shop window. */
+  violet: BASE.hunch,
+  /** Shadows: the darkest base color, never pure black. */
+  black: BASE.ink,
+  /** Highlights: the lamp light, never pure white. */
+  white: BASE.lamp,
 };
 
 /* =====================================================================
@@ -58,26 +101,26 @@ export const COLOR = {
  */
 export const MEANING = {
   /** Action, benefit: primary buttons, "clean", income. */
-  action: COLOR.cyan,
-  /** In stock, ready: recipe parts the player has (V1.3; green of the V1.7 palette). */
-  ok: COLOR.green,
+  action: BASE.action,
+  /** In stock, ready: recipe parts the player has. */
+  ok: BASE.ok,
   /** Risk: stolen goods, AI virus, wanted level, eviction. */
-  risk: COLOR.red,
-  /** Time and wear: defect, low condition, patience, broken find. */
-  wear: COLOR.amber,
+  risk: BASE.risk,
+  /** Time and wear: defect, low condition, patience, broken find, past midnight. */
+  wear: BASE.wear,
   /** Not checked yet; always paired with a "?" mark, not color alone. */
-  unknown: COLOR.dim,
+  unknown: BASE.dim,
   /** Not available / inactive: the unknown grey, faded. Never red. */
-  inactive: withAlpha(COLOR.dim, 0.4),
+  inactive: withAlpha(BASE.dim, 0.4),
   /** The gut feeling (Чуйка). */
-  hunch: COLOR.violet,
+  hunch: BASE.hunch,
 };
 
 /* =====================================================================
    Translucent overlays (base color + alpha)
    ===================================================================== */
 
-/** Shadows (black) and highlights (white) on sprites. */
+/** Shadows (ink) and highlights (lamp light) on sprites. */
 export const SHADE = {
   shadow13: withAlpha(COLOR.black, 0.13),
   shadow15: withAlpha(COLOR.black, 0.15),
@@ -96,18 +139,18 @@ export const SHADE = {
   shine40: withAlpha(COLOR.white, 0.4),
 };
 
-/** Light from neon (cyan) and lamps (amber). Functions: alpha follows the flicker. */
+/** Light from neon (teal) and lamps (amber). Functions: alpha follows the flicker. */
 export const GLOW = {
-  doorway: withAlpha(COLOR.cyan, 0.25),
-  scanLine: withAlpha(COLOR.cyan, 0.35),
-  scrapScreen: withAlpha(COLOR.cyan, 0.5),
-  sign: (brightness: number): string => withAlpha(COLOR.cyan, 0.10 * brightness),
-  planetRing: withAlpha(COLOR.amber, 0.55),
-  counterHazard: withAlpha(COLOR.amber, 0.35),
-  shopLamp: withAlpha(COLOR.amber, 0.06),
-  junkLamp: (brightness: number): string => withAlpha(COLOR.amber, 0.07 * brightness),
+  doorway: withAlpha(BASE.action, 0.25),
+  scanLine: withAlpha(BASE.action, 0.35),
+  scrapScreen: withAlpha(BASE.action, 0.5),
+  sign: (brightness: number): string => withAlpha(BASE.action, 0.10 * brightness),
+  planetRing: withAlpha(BASE.wear, 0.55),
+  counterHazard: withAlpha(BASE.wear, 0.35),
+  shopLamp: withAlpha(BASE.wear, 0.06),
+  junkLamp: (brightness: number): string => withAlpha(BASE.wear, 0.07 * brightness),
   /** Guard drone searchlight over the junk heap (v2). */
-  droneBeam: (brightness: number): string => withAlpha(COLOR.red, 0.12 * brightness),
+  droneBeam: (brightness: number): string => withAlpha(BASE.risk, 0.12 * brightness),
 };
 
 /* =====================================================================
@@ -115,34 +158,34 @@ export const GLOW = {
    ===================================================================== */
 
 export const SHOP = {
-  wallSeam: '#1b2034',
-  wallRivet: '#262c46',
+  wallSeam: BASE.panel,
+  wallRivet: BASE.wall,
   /** Window frame, doorway frame and door posts. */
-  wall: '#232a45',
-  space: '#05070f',
-  starDim: '#5b6288',
-  planetShadow: '#3a2a52',
-  planet: '#4e3a6e',
-  shelfBoxSlate: '#3c4466',
-  shelfBoxBrown: '#5a3f2e',
-  shelfBoxGreen: '#2f6a42',
-  shelfBoxPurple: '#4a2f55',
-  shelfLedGreenOff: '#244a2f',
-  shelfLedRedOff: '#4a1f26',
-  doorway: '#090b16',
-  doorPanel: '#2a3152',
+  wall: BASE.wall,
+  space: BASE.ink,
+  starDim: BASE.dim,
+  planetShadow: withAlpha(BASE.hunch, 0.3),
+  planet: withAlpha(BASE.hunch, 0.55),
+  shelfBoxSlate: BASE.line,
+  shelfBoxBrown: BASE.rust,
+  shelfBoxGreen: BASE.rustDark,
+  shelfBoxPurple: BASE.wall,
+  shelfLedGreenOff: withAlpha(BASE.ok, 0.3),
+  shelfLedRedOff: withAlpha(BASE.risk, 0.3),
+  doorway: BASE.ink,
+  doorPanel: BASE.wall,
   /** Door edges, counter top edge, scrap plates in the junkyard. */
-  panelEdge: '#3a4370',
-  signOff: '#1f3b3c',
-  signDim: '#2a7f79',
-  counter: '#1f2440',
-  counterHighlight: '#4f5d94',
-  counterPanel: '#1a1e36',
-  counterPanelEdge: '#262c4a',
-  counterBase: '#171b2d',
+  panelEdge: BASE.line,
+  signOff: withAlpha(BASE.action, 0.15),
+  signDim: withAlpha(BASE.action, 0.5),
+  counter: BASE.panel,
+  counterHighlight: BASE.dim,
+  counterPanel: BASE.bg,
+  counterPanelEdge: BASE.wall,
+  counterBase: BASE.ink,
   /** Terminal screen and the box robot's face. */
-  screenDark: '#06201f',
-  night: 'rgba(4, 5, 16, .5)',
+  screenDark: BASE.ink,
+  night: withAlpha(BASE.ink, 0.5),
 };
 
 /* =====================================================================
@@ -150,23 +193,23 @@ export const SHOP = {
    ===================================================================== */
 
 export const JUNKYARD = {
-  sky: '#0a0c17',
+  sky: BASE.bg,
   /** Past midnight (task 16): the sky goes darker, the stars show more. */
-  skyNight: '#040509',
-  starDim: '#3a3f62',
-  hills: '#121527',
-  ground: '#15182a',
-  groundEdge: '#1f2440',
-  guardPost: '#1c2035',
-  guardLedOff: '#4a1f26',
-  lampDim: '#7a5320',
-  pileDug: '#1c2035',
-  pileLight: '#2a2f4a',
-  pileDark: '#252a42',
-  pileSpeck: '#5b6288',
-  rust: '#4a2f2a',
-  rustLight: '#8a5f55',
-  glint: '#ffffff',
+  skyNight: BASE.ink,
+  starDim: BASE.line,
+  hills: BASE.panel,
+  ground: BASE.bg,
+  groundEdge: BASE.wall,
+  guardPost: BASE.wall,
+  guardLedOff: withAlpha(BASE.risk, 0.3),
+  lampDim: withAlpha(BASE.wear, 0.5),
+  pileDug: BASE.panel,
+  pileLight: BASE.line,
+  pileDark: BASE.wall,
+  pileSpeck: BASE.dim,
+  rust: BASE.rustDark,
+  rustLight: BASE.rust,
+  glint: BASE.lamp,
 };
 
 /* =====================================================================
@@ -174,36 +217,37 @@ export const JUNKYARD = {
    ===================================================================== */
 
 export const CHARACTER = {
-  landlordSkin: '#d9a07a',
-  landlordCoat: '#1d1a26',
-  landlordCoatDark: '#0e0c14',
-  landlordRed: '#8a1f2e',
-  landlordShirt: '#c9ccd8',
-  landlordLapel: '#2a2636',
-  landlordMoustache: '#3a2a2a',
-  landlordHat: '#0e0c14',
-  eyeWhite: '#e8e8f0',
-  pupil: '#14121c',
-  mouth: 'rgba(110, 40, 50, .7)',
-  botLedOff: '#1d4a47',
+  landlordSkin: BASE.skin,
+  landlordCoat: BASE.wall,
+  landlordCoatDark: BASE.ink,
+  landlordRed: BASE.risk,
+  landlordShirt: BASE.fg,
+  landlordLapel: BASE.line,
+  landlordMoustache: BASE.rustDark,
+  landlordHat: BASE.ink,
+  eyeWhite: BASE.fg,
+  pupil: BASE.ink,
+  mouth: withAlpha(BASE.rustDark, 0.7),
+  botLedOff: withAlpha(BASE.action, 0.25),
 };
 
 /**
  * Seeded customer looks. The order of every list is part of the look:
  * a seed picks by index, so reordering changes existing customers.
- * Colors shared with the rest of the game point at those tokens, so a new
- * palette (V1.7) recolors customers too.
+ * V1.7: clothes come from the base colors too (no generated hues). A seed picks
+ * a jacket pair, a shirt and an accent trim, so customers stay different; the
+ * jackets are lighter or warmer than the counter (panel) so they do not merge with it.
  */
 export const CUSTOMER_TONES = {
-  skins: ['#f1c7a3', CHARACTER.landlordSkin, '#a8714f', '#6e4a35', '#e3b48f'],
-  hairs: ['#2a2233', '#d94f8a', COLOR.cyan, COLOR.amber, CHARACTER.eyeWhite, '#5b3b2a', '#7a5cff'],
-  eyes: [COLOR.cyan, COLOR.red, COLOR.amber, COLOR.green, COLOR.white],
-  metals: [COLOR.dim, '#a8925a', '#6f7a8c', '#b5beca', JUNKYARD.rustLight],
-  darkMetals: [COLOR.steel, '#4a5266', '#6e5a3a'],
-  jacket: (hue: number): string => `hsl(${hue} 30% 34%)`,
-  jacketDark: (hue: number): string => `hsl(${hue} 30% 22%)`,
-  shirt: (hue: number): string => `hsl(${(hue + 40) % 360} 15% 70%)`,
-  trim: (hue: number): string => `hsl(${(hue + 150) % 360} 65% 60%)`,
+  skins: [BASE.skin, CHARACTER.landlordSkin, BASE.rust, BASE.rust, BASE.skin],
+  hairs: [BASE.rustDark, BASE.risk, BASE.action, BASE.wear, CHARACTER.eyeWhite, BASE.rust, BASE.hunch],
+  eyes: [BASE.action, BASE.risk, BASE.wear, BASE.ok, BASE.lamp],
+  metals: [BASE.dim, BASE.skin, BASE.dim, BASE.fg, BASE.rust],
+  darkMetals: [BASE.line, BASE.wall, BASE.rustDark],
+  /** Jacket and its shadow side, in pairs. */
+  jackets: [[BASE.line, BASE.wall], [BASE.rust, BASE.rustDark], [BASE.dim, BASE.line], [BASE.rustDark, BASE.ink]],
+  shirts: [BASE.fg, BASE.lamp, BASE.dim],
+  trims: [BASE.action, BASE.wear, BASE.risk, BASE.hunch, BASE.ok, BASE.lamp],
 } as const;
 
 /* =====================================================================
@@ -214,14 +258,14 @@ export const ITEM_COLORS = {
   /** Mid / light / dark metal of most items. */
   mid: COLOR.steel,
   light: COLOR.dim,
-  dark: COLOR.line,
-  commBody: '#2a2f4a',
-  glassShine: '#a5f0ea',
-  batteryBody: '#2f6a42',
-  batteryTerminal: '#c9ccd8',
-  cutterLedOff: '#ff9aa3',
-  chipBoard: '#1f6b4f',
-  chipDie: '#0d0f18',
+  dark: BASE.wall,
+  commBody: BASE.wall,
+  glassShine: BASE.lamp,
+  batteryBody: BASE.ok,
+  batteryTerminal: BASE.fg,
+  cutterLedOff: withAlpha(BASE.risk, 0.6),
+  chipBoard: withAlpha(BASE.ok, 0.5),
+  chipDie: BASE.ink,
 };
 
 /* =====================================================================
@@ -244,7 +288,7 @@ export const CSS_TOKENS: Readonly<Record<string, string>> = {
   '--on-accent': COLOR.onAccent,
   '--tile-edge': COLOR.tileEdge,
   '--chip-bg': withAlpha(COLOR.ink, 0.8),
-  '--backdrop': 'rgba(5, 7, 14, .8)',
+  '--backdrop': withAlpha(BASE.ink, 0.8),
   '--shadow': withAlpha(COLOR.black, 0.5),
   '--shadow-soft': withAlpha(COLOR.black, 0.45),
   '--black': COLOR.black,
@@ -260,7 +304,7 @@ export const CSS_TOKENS: Readonly<Record<string, string>> = {
   '--m-hunch': MEANING.hunch,
 };
 
-/** `:root { --bg: #0f1220; … }` for the <style> tag in index.html. */
+/** `:root { --bg: #12151c; … }` for the <style> tag in index.html. */
 export function cssRootRule(): string {
   const lines = Object.entries(CSS_TOKENS).map(([name, value]) => `  ${name}: ${value};`);
   return `:root {\n${lines.join('\n')}\n}`;

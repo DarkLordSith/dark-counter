@@ -1,6 +1,7 @@
 // One source of colors: src/palette.ts. Fails on a color literal anywhere else.
 import { describe, expect, it } from 'vitest';
-import { COLOR, CSS_TOKENS, cssRootRule, THEME_COLOR, withAlpha } from '../../src/palette';
+import { BASE, COLOR, CSS_TOKENS, cssRootRule, THEME_COLOR, withAlpha } from '../../src/palette';
+import gpl from '../../src/dark-counter-palette-A.gpl?raw';
 
 /** Game sources as text, keyed like 'src/scene.ts'. Picked up automatically, new files included. */
 const SOURCES: Record<string, string> = Object.fromEntries(Object.entries({
@@ -58,7 +59,7 @@ describe('CSS tokens', () => {
     const rule = cssRootRule();
     expect(rule.startsWith(':root {')).toBe(true);
     expect(rule).toContain(`--bg: ${COLOR.bg};`);
-    expect(rule).toContain('--neon-glow: rgba(70, 211, 201, 0.45);');
+    expect(rule).toContain('--neon-glow: rgba(63, 193, 176, 0.45);');
   });
 
   it('theme color is the page background', () => {
@@ -70,10 +71,74 @@ describe('withAlpha', () => {
   it('turns a hex color into rgba with the same channels', () => {
     expect(withAlpha('#46d3c9', 0.35)).toBe('rgba(70, 211, 201, 0.35)');
     expect(withAlpha('#000', 0.13)).toBe('rgba(0, 0, 0, 0.13)');
-    expect(withAlpha(COLOR.ink, 0.8)).toBe('rgba(10, 12, 24, 0.8)');
+    expect(withAlpha(COLOR.ink, 0.8)).toBe('rgba(11, 13, 18, 0.8)');
   });
 
   it('keeps the alpha as computed (flicker multiplies it)', () => {
     expect(withAlpha('#f0a33e', 0.07 * 0.3)).toBe(`rgba(240, 163, 62, ${0.07 * 0.3})`);
+  });
+});
+
+// V1.7 palette A "Сталь и ржавчина": the owner's 16 colors, nothing else.
+describe('V1.7 palette A', () => {
+  const APPROVED = {
+    ink: '#0b0d12', bg: '#12151c', panel: '#1b1f28', wall: '#272c36', line: '#3a404c', dim: '#7d8392', fg: '#cfcabd', rustDark: '#3d2a21',
+    rust: '#7a4a32', skin: '#c08a68', action: '#3fc1b0', wear: '#e0943a', risk: '#e0524a', hunch: '#8a6bd8', ok: '#74b86a', lamp: '#ecd9a0',
+  };
+
+  it('has exactly the 16 approved base colors', () => {
+    expect(BASE).toEqual(APPROVED);
+    expect(new Set(Object.values(BASE)).size).toBe(16);
+  });
+
+  it('src/palette.ts holds no other hex and no hsl(): every role is a base color or withAlpha() of one', () => {
+    const palette = read('src/palette.ts').split('\n').filter(line => !line.trim().startsWith('//') && !line.trim().startsWith('*') && !line.trim().startsWith('/**'));
+    const hexes = new Set(palette.flatMap(line => [...line.matchAll(/'(#[0-9a-f]{3,8})'/gi)].map(match => match[1].toLowerCase())));
+    expect([...hexes].sort()).toEqual(Object.values(APPROVED).sort());
+    expect(palette.join('\n')).not.toMatch(/hsla?\(/);
+    expect(palette.join('\n')).not.toMatch(/'rgba?\(/);
+  });
+
+  it('every CSS token is a base color or a translucent base color', () => {
+    const allowed = new Set<string>(Object.values(BASE));
+    const rgbOf = (hex: string): string => withAlpha(hex, 1).replace(/, 1\)$/, '');
+    const bases = Object.values(BASE).map(rgbOf);
+    for (const [name, value] of Object.entries(CSS_TOKENS)) {
+      const ok = allowed.has(value) || bases.some(prefix => value.startsWith(prefix + ', '));
+      expect(ok, `${name}: ${value}`).toBe(true);
+    }
+  });
+
+  it('the .gpl file for Piskel / Aseprite has the same 16 colors', () => {
+    const rows = gpl.split('\n').filter(line => /^\s*\d+\s+\d+\s+\d+/.test(line));
+    const hex = rows.map(row => '#' + row.trim().split(/\s+/).slice(0, 3).map(n => Number(n).toString(16).padStart(2, '0')).join(''));
+    expect(gpl.startsWith('GIMP Palette')).toBe(true);
+    expect(hex).toEqual(Object.values(APPROVED));
+  });
+});
+
+describe('contrast (WCAG)', () => {
+  const luminance = (hex: string): number => {
+    const channels = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map(c => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  };
+  const contrast = (a: string, b: string): number => {
+    const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (light + 0.05) / (dark + 0.05);
+  };
+
+  it('main text and the action button read well', () => {
+    expect(contrast(BASE.fg, BASE.panel)).toBeGreaterThanOrEqual(7);
+    expect(contrast(BASE.ink, BASE.action)).toBeGreaterThanOrEqual(7);
+    expect(contrast(BASE.dim, BASE.bg)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('dim on panel is 4.35:1 — just under 4.5 (reported to the owner, the hex stays as approved)', () => {
+    expect(contrast(BASE.dim, BASE.panel)).toBeCloseTo(4.35, 2);
+  });
+
+  it('the hunch verdict (16 px pixel font) passes the large-text 3:1 on panel', () => {
+    expect(contrast(BASE.hunch, BASE.panel)).toBeGreaterThanOrEqual(3);
   });
 });

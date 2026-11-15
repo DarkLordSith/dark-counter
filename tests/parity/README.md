@@ -71,6 +71,13 @@ DESKTOP_WIDTH=1280 RUNS=4 STEPS=150 tests/parity/run.sh
 PARITY_LOGIC_ONLY=1 PARITY_SKIP_SCENE=1 RUNS=4 STEPS=150 tests/parity/run.sh
 ```
 
+Если меняется палитра (V1.7), перекрашиваются и сцена, и иконки товаров. Тогда
+`PARITY_SKIP_ICONS=1` убирает из сравнения все canvas: остаются сейв и значения полей ввода.
+
+```bash
+PARITY_LOGIC_ONLY=1 PARITY_SKIP_SCENE=1 PARITY_SKIP_ICONS=1 RUNS=4 STEPS=150 tests/parity/run.sh
+```
+
 Если игра намеренно начинает играться по-другому (например, свалка v2: другие раскопки и другой
 формат визита в сейве), продолжение старого сейва уже не совпадёт с эталоном. Тогда
 `PARITY_NEW_BEHAVIOR=1`: `savecompat` проверяет, что старые сейвы (код и `localStorage`) грузятся с тем же
