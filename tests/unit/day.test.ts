@@ -80,19 +80,20 @@ describe('fewer customers', () => {
 });
 
 describe('the clock', () => {
-  it('runs the shift from 08:00 to 20:00 by the customers served', () => {
+  it('runs the shift from 08:00 to 19:00 by the customers served', () => {
     makeState({ phase: 'shop', slot: 0, cn: 6 });
     expect(clockOf(state).text).toBe('08:00');
     state.slot = 3;
-    expect(clockOf(state).text).toBe('14:00');
+    expect(clockOf(state).text).toBe('13:30');
     state.slot = 6;
-    expect(clockOf(state).text).toBe('20:00');
+    expect(clockOf(state).text).toBe('19:00');
     expect(CLOCK.shiftEnd + EVENING_HOURS).toBe(CLOCK.midnight);
+    expect(EVENING_HOURS).toBe(5);
   });
 
   it('runs faster on payday: 10 customers share the same shift', () => {
     makeState({ phase: 'shop', slot: 1, cn: 10 });
-    expect(clockOf(state).text).toBe('09:12');
+    expect(clockOf(state).text).toBe('09:06');
   });
 
   it('opens 2 h later for every dig past midnight', () => {
@@ -103,9 +104,9 @@ describe('the clock', () => {
     expect(clockOf(state).text).toBe('12:00');
   });
 
-  it('shows the evening from 20:00 and past midnight as night', () => {
+  it('shows the evening from 19:00 and past midnight as night', () => {
     makeState({ phase: 'evening', hours: EVENING_HOURS });
-    expect(clockOf(state)).toMatchObject({ text: '20:00', night: false });
+    expect(clockOf(state)).toMatchObject({ text: '19:00', night: false });
     state.hours = 1;
     expect(clockOf(state)).toMatchObject({ text: '23:00', night: false });
     state.hours = 0;
@@ -117,7 +118,7 @@ describe('the clock', () => {
 
   it('is the first thing in the scene chip, tinted `wear` past midnight', () => {
     makeState({ phase: 'shop', slot: 3, cn: 6, nextDue: 7 });
-    expect(chipLines()).toEqual(['14:00', 'ОЧЕРЕДЬ: 3']);
+    expect(chipLines()).toEqual(['13:30', 'ОЧЕРЕДЬ: 3']);
     makeState({ phase: 'evening', hours: 3 });
     expect(chipLines()).toEqual(['21:00 · ВЕЧЕР']);
     expect(chipIsNight()).toBe(false);
@@ -136,10 +137,11 @@ describe('digs past midnight', () => {
     goToJunkyard();
   };
 
-  it('the road takes an hour, three digs fit the evening, the fourth goes past midnight', () => {
+  it('the road takes an hour, four digs fit the evening, the fifth goes past midnight', () => {
     quiet();
     evening();
     expect(state.hours).toBe(EVENING_HOURS - JUNK.travelHours);
+    dig();
     dig();
     dig();
     expect(digIsLate()).toBe(false);
@@ -148,8 +150,7 @@ describe('digs past midnight', () => {
     expect(state.late).toBe(0);
     expect(digIsLate()).toBe(true);
     dig();
-    dig();
-    expect(state.late).toBe(2);
+    expect(state.late).toBe(1);
   });
 
   it('the shop opens later next morning and the queue is shorter', () => {
@@ -161,12 +162,12 @@ describe('digs past midnight', () => {
     goHome();
     const events = sleepUntilMorning();
     expect(state.day).toBe(4);
-    expect(state.cn).toBe(CUSTOMERS_PER_DAY - 2);
+    expect(state.cn).toBe(CUSTOMERS_PER_DAY - 1);
     // in the log (the ticker), not in the morning list: the window shows it as a reason
-    expect(state.log).toContain('Д4: Проспал после свалки: лавка открылась позже, клиентов на 2 меньше.');
-    expect(state.log).toContain('Д4: Лавка открылась в 12:00.');
+    expect(state.log).toContain('Д4: Проспал после свалки: лавка открылась позже, клиентов на 1 меньше.');
+    expect(state.log).toContain('Д4: Лавка открылась в 10:00.');
     expect(events.join(' ')).not.toContain('Проспал');
-    expect(chipLines()).toEqual(['12:00', 'ОЧЕРЕДЬ: 4']);
+    expect(chipLines()).toEqual(['10:00', 'ОЧЕРЕДЬ: 5']);
     // the late opening lasts the day; closing the shop starts a new evening count
     closeShop();
     expect(state.late).toBe(0);
@@ -202,7 +203,7 @@ describe('a day with fewer customers', () => {
       served++;
     }
     expect(served).toBe(4);
-    expect(chipLines()).toEqual(['20:00', 'СМЕНА ОКОНЧЕНА']);
+    expect(chipLines()).toEqual(['19:00', 'СМЕНА ОКОНЧЕНА']);
   });
 
   it('the morning sets today\'s customers by the morning wanted level (after the night cools it)', () => {
@@ -232,6 +233,24 @@ describe('old saves', () => {
     expect(migrated).toMatchObject({ cn: CUSTOMERS_PER_DAY, late: 0 });
     // the weekday comes from the day and the payment day, no new field
     expect(weekdayOf(migrated!)).toBe(4);
+  });
+});
+
+describe('the evening of 19:00–24:00 (task 17)', () => {
+  it('an old save in the middle of the evening keeps its hours, and its clock reads the same', () => {
+    // hours are "left until midnight": 2 h left was 22:00 in the 20:00 evening and is 22:00 now
+    const migrated = migrate({ ...makeState({ phase: 'evening', hours: 2 }) } as SavedGame);
+    expect(migrated?.hours).toBe(2);
+    expect(clockOf(migrated!).text).toBe('22:00');
+  });
+
+  it('the junkyard is open while the road and one dig fit before midnight', () => {
+    makeState({ phase: 'evening', hours: EVENING_HOURS });
+    expect(canGoToJunkyard()).toBe(true);
+    state.hours = JUNK.travelHours + JUNK.digHours;
+    expect(canGoToJunkyard()).toBe(true);
+    state.hours -= 1;
+    expect(canGoToJunkyard()).toBe(false);
   });
 });
 

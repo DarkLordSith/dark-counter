@@ -68,7 +68,6 @@ export const BUYER_COUNTER_LINES = ['Дорого. Могу', 'Ладно, по�
 // ---------- day & economy ----------
 /** Customers on an ordinary day; the station week and the reasons move it (customersToday). */
 export const CUSTOMERS_PER_DAY = 6;
-export const EVENING_HOURS = 4;
 
 // Task 16: the station week = the cycle of Grobov's payment, its 7th day is the payment day.
 // Sum 42 = 6 × 7, as before the week.
@@ -83,16 +82,19 @@ export const CUSTOMER_FLOW = {
   /** …and this many customers fewer. */
   heatLoss: 1,
 };
-/** Game clock, hours of the day: the shift, the evening (EVENING_HOURS = midnight − shiftEnd), the late opening. */
+/** Game clock, hours of the day: the shift, the evening, the late opening. */
 export const CLOCK = {
   shiftStart: 8,
-  shiftEnd: 20,
+  /** Task 17: the shift ends at 19:00, so the evening has 5 h — the road and 4 digs before midnight. */
+  shiftEnd: 19,
   midnight: 24,
-  /** The shop opens this much later for each dig past midnight (= the time of the customers lost). */
+  /** The shop opens this much later for each dig past midnight (≈ the time of the customers lost). */
   lateHoursPerDig: 2,
-  /** Never opens later than this. */
-  latestOpen: 18,
+  /** Never opens later than this: the minimum 2 customers still get an hour each. */
+  latestOpen: 17,
 };
+/** Evening hours after the shop closes: 19:00 → 24:00. */
+export const EVENING_HOURS = CLOCK.midnight - CLOCK.shiftEnd;
 export const MAX_HEAT = 10;
 export const LOG_LIMIT = 50;
 export const START = { credits: 400, parts: 4 };
