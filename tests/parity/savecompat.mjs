@@ -3,7 +3,7 @@
 //  2) old localStorage (dark-counter-v3) → page load of new
 //  3) code exported from new → loads in old (downgrade still works)
 // Usage: node savecompat.mjs <oldUrl> <newUrl>
-import { clickMenuItem, deterministicInit, launch, rng } from './common.mjs';
+import { clickMenuItem, deterministicInit, launch, passModeScreen, rng, storySave } from './common.mjs';
 
 const [, , OLD, NEW] = process.argv;
 const W = { call: 8, offer: 6, ask: 6, accept: 4, take: 4, show: 5, insp: 4, closeshop: 6, sleep: 4, junk: 5, dig: 6, market: 3, close: 6, rentpay: 6, rentdefer: 3, rentitems: 3, sel: 3, bench: 4, craft: 4, parts: 2, tab: 1, refuse: 2 };
@@ -17,6 +17,7 @@ async function open(browser, url, seed, preset) {
   page.on('pageerror', e => page.errors.push(String(e)));
   await page.evaluateOnNewDocument(deterministicInit(seed, preset));
   await page.goto(url, { waitUntil: 'load' });
+  await passModeScreen(page);
   return page;
 }
 
@@ -45,12 +46,16 @@ async function botSteps(page, n, seed) {
 const LOGIC_ONLY = process.env.PARITY_LOGIC_ONLY === '1';
 // PARITY_SKIP_SCENE=1: the scene drawing changed on purpose, compare the save only.
 const SKIP_SCENE = process.env.PARITY_SKIP_SCENE === '1';
-const snap = page => page.evaluate((logicOnly, skipScene) => JSON.stringify({
-  save: localStorage.getItem('dark-counter-v3'),
-  hud: logicOnly ? '' : document.getElementById('hud').innerHTML.replace(/\s+/g, ' '),
-  pane: logicOnly ? '' : document.getElementById('pane').innerHTML.replace(/\s+/g, ' '),
-  scene: skipScene ? '' : document.getElementById('scn').toDataURL(),
-}), LOGIC_ONLY, SKIP_SCENE);
+const snap = async page => {
+  const s = await page.evaluate((logicOnly, skipScene) => ({
+    save: localStorage.getItem('dark-counter-v3'),
+    hud: logicOnly ? '' : document.getElementById('hud').innerHTML.replace(/\s+/g, ' '),
+    pane: logicOnly ? '' : document.getElementById('pane').innerHTML.replace(/\s+/g, ' '),
+    scene: skipScene ? '' : document.getElementById('scn').toDataURL(),
+  }), LOGIC_ONLY, SKIP_SCENE);
+  s.save = storySave(s.save);
+  return JSON.stringify(s);
+};
 const exportCode = async page => {
   await page.evaluate(clickMenuItem, 'savemenu');
   return page.evaluate(() => {

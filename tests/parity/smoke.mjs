@@ -4,7 +4,7 @@
 // offline reload works from the SW cache. Saves out/mobile.png.
 // Usage: node smoke.mjs <url>
 import fs from 'node:fs';
-import { clickMenuItem, launch } from './common.mjs';
+import { clickMenuItem, launch, passModeScreen } from './common.mjs';
 
 const [, , TARGET_URL] = process.argv;
 const OUT = new URL('./out/', import.meta.url);
@@ -31,6 +31,11 @@ const cached = await page.evaluate(async () => {
 });
 console.log('caches:', cached.names.join(', '));
 console.log('cached files:', cached.files.join(' '));
+
+// first launch (no save): the mode screen; since the modes update it must be there
+const modeScreen = await page.evaluate(() => !document.getElementById('modal').hidden && !!document.querySelector('#modal [data-a="mode-go"]'));
+console.log('first launch shows the mode screen:', modeScreen);
+await passModeScreen(page);
 
 await page.click('#callBtn');
 await wait(2500);

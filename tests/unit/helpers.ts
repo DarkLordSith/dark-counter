@@ -45,6 +45,7 @@ export function makeState(overrides: Partial<GameState> = {}): GameState {
     seat: false,
     shuttleDay: 60,
     ending: null,
+    mode: 'story',
     ...overrides,
   };
   setState(state);

@@ -25,6 +25,11 @@ export const ICONS = {
     w: 16, h: 16,
     rects: [[2, 3, 12, 2], [2, 7, 12, 2], [2, 11, 12, 2]],
   },
+  /** Lock — a mode that opens later (16×16: shackle on a body with a keyhole). */
+  lock: {
+    w: 16, h: 16,
+    rects: [[5, 1, 6, 2], [3, 3, 2, 4], [11, 3, 2, 4], [2, 7, 12, 3], [2, 10, 5, 5], [9, 10, 5, 5], [7, 12, 2, 3]],
+  },
 } as const satisfies Record<string, Icon>;
 
 export type IconName = keyof typeof ICONS;

@@ -1,15 +1,14 @@
 // =====================================================================
 //  main.ts — entry point: restore the save, wire modules, start the loop.
 //  Module map (imports flow left to right, no cycles):
-//    types/data/util → appearance → state → economy → scene → ui → main
+//    types/data/util → appearance → profile → state → economy → scene → ui → main
 //    diag (debug overlay) depends only on dom/version and is wired here.
 //  The service worker is registered by vite-plugin-pwa (see vite.config.ts).
 // =====================================================================
 import './style.css';
 import { markIosPwa } from './dom';
-import { actorAtCounter, loadGame, migrate, newGame, setState, state } from './state';
 import { startScene } from './scene';
-import { bindEvents, render, renderPane, renderSceneOverlay, showEnding } from './ui';
+import { bindEvents, renderPane, renderSceneOverlay, startGame } from './ui';
 import { bindDiagnostics } from './diag';
 import { applyStoredFontLab } from './fontlab';
 
@@ -18,19 +17,8 @@ applyStoredFontLab();
 bindEvents();
 bindDiagnostics();
 
-const saved = migrate(loadGame());
-if (saved) {
-  setState(saved);
-  if (state.cust) {
-    actorAtCounter(state.cust.seed);
-  }
-} else {
-  newGame();
-}
-
-render();
-// a finished game (or an old evicted / bought-out save) opens on its final window
-showEnding();
+// continues the last played mode; the very first launch opens the mode screen
+startGame();
 startScene(() => {
   renderSceneOverlay();
   renderPane();

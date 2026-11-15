@@ -70,7 +70,34 @@ export function clickMenuItem(action) {
 }
 
 /** Actions that moved from the HUD into the ☰ menu (V1.4). */
-export const MENU_ACTIONS = ['savemenu', 'newgame'];
+// 'newgame' is left out since the modes update: the reference asks "Начать заново?",
+// the candidate opens the mode screen, so the bot would face different buttons.
+// A new game is still reached after an ending or an eviction ("newgame-yes").
+export const MENU_ACTIONS = ['savemenu'];
+
+/**
+ * Since the modes update the very first launch shows the mode screen; the bot
+ * plays the story mode ("Начало конца" = the behaviour before modes).
+ * Older versions have no such screen: nothing happens.
+ */
+export async function passModeScreen(page) {
+  await page.evaluate(() => {
+    const story = document.querySelector('#modal:not([hidden]) [data-a="mode-go"][data-v="story"]');
+    // no animation step here: the reference must stay on the same frame
+    story?.click();
+  });
+}
+
+/**
+ * Save JSON to compare: the story mode is what saves meant before modes,
+ * so mode: 'story' is dropped (the reference has no such field).
+ */
+export function storySave(raw) {
+  if (!raw) return raw;
+  const data = JSON.parse(raw);
+  if (data.mode === 'story') delete data.mode;
+  return JSON.stringify(data);
+}
 
 /**
  * Loads every font face up front. Otherwise a weight first used later
@@ -86,4 +113,15 @@ export function preloadFonts(page) {
     document.fonts.load('12px Silkscreen', text), // reference builds before V1.3
     document.fonts.load('16px "Public Pixel"', text),
   ]).then(() => document.fonts.ready).catch(() => {}), sample);
+}
+
+/** The same for save codes among input values: the "Сохранение" window (savecode) and a pasted code (loadcode). */
+export function storyValues(values) {
+  return values.replace(/DC1:([A-Za-z0-9+/=]+)/g, (whole, b64) => {
+    try {
+      return 'DC1:' + Buffer.from(storySave(Buffer.from(b64, 'base64').toString('utf8')), 'utf8').toString('base64');
+    } catch {
+      return whole;
+    }
+  });
 }

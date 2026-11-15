@@ -6,8 +6,23 @@
 import type { ItemType, ItemTypeInfo, Recipe } from './types';
 
 // ---------- persistence ----------
+/** Save slot of the "Начало конца" mode; old saves live here, so the key never changes. */
 export const SAVE_KEY = 'dark-counter-v3';
 export const SAVE_CODE_PREFIX = 'DC1:';
+
+// ---------- game modes ----------
+/** Modes in the order of the mode screen. sandbox is a stub: shown locked until Patch B1. */
+export const MODES = ['story', 'calm', 'sandbox'] as const;
+/** Modes that can be played now (the profile may unlock more later). */
+export const PLAYABLE_MODES = ['story', 'calm'] as const;
+/** One localStorage slot per mode: story keeps the old key, the others sit next to it. */
+export const SAVE_KEYS = {
+  story: SAVE_KEY,
+  calm: 'dark-counter-calm-v3',
+  sandbox: 'dark-counter-sandbox-v3',
+} as const;
+/** Player profile (seen endings, unlocked modes, last mode): not a save, "Новая игра" does not touch it. */
+export const PROFILE_KEY = 'dark-counter-profile';
 
 // ---------- goods catalog ----------
 // name — display name, basePrice — price at 100% condition,
@@ -149,7 +164,7 @@ export const HUNCH_VERDICT_TEXT = {
   en: { unlikely: 'unlikely', maybe: 'maybe', likely: 'likely', deal: 'deal' },
 } as const;
 
-/** HUD (V1.4): stat labels (day shows "день/60": the shuttle day in the label), icon-button labels for screen readers, the menu and the new-game confirmation. */
+/** HUD (V1.4): stat labels (day shows "день/60": the shuttle day in the label), icon-button labels for screen readers, the menu. */
 export const HUD_TEXT = {
   ru: {
     credits: 'кр',
@@ -163,14 +178,9 @@ export const HUD_TEXT = {
     on: 'вкл',
     off: 'выкл',
     menu: 'Меню',
-    gameTitle: 'Тёмный прилавок',
     save: 'Сохранение',
     newGame: 'Новая игра',
     close: 'Закрыть',
-    confirmTitle: 'Начать заново?',
-    confirmText: 'Текущая игра пропадёт, сохраните код.',
-    confirmYes: 'Начать',
-    confirmNo: 'Отмена',
   },
   en: {
     credits: 'cr',
@@ -184,14 +194,71 @@ export const HUD_TEXT = {
     on: 'on',
     off: 'off',
     menu: 'Menu',
-    gameTitle: 'Dark Counter',
     save: 'Save',
     newGame: 'New game',
     close: 'Close',
-    confirmTitle: 'Start over?',
-    confirmText: 'The current game will be lost, save the code.',
-    confirmYes: 'Start',
-    confirmNo: 'Cancel',
+  },
+} as const;
+
+/** Game modes: names, one-line descriptions, the mode screen, the "debt closed" window of calm. RU/EN. */
+export const MODE_TEXT = {
+  ru: {
+    names: { story: 'Начало конца', calm: 'Без таймера', sandbox: 'Своя лавка' },
+    about: {
+      story: 'Долг отца, платежи Гробову и последний шаттл на день 60.',
+      calm: 'Долг и платежи есть, шаттла нет. Цель — закрыть долг.',
+      sandbox: 'Без долга и таймера, для отдыха.',
+    },
+    screenTitle: 'Режим игры',
+    menuModes: 'Режимы',
+    current: 'сейчас',
+    progress: 'День {day} · долг {debt}',
+    finished: 'Финал: {ending} · день {day}',
+    paidOff: 'Долг закрыт · день {day}',
+    continue: 'Продолжить',
+    start: 'Начать',
+    restart: 'Начать заново',
+    locked: 'откроется позже',
+    resetTitle: 'Начать заново?',
+    resetText: 'Текущая игра в режиме «{mode}» пропадёт, сохраните код.',
+    resetYes: 'Начать',
+    resetNo: 'Отмена',
+    close: 'Закрыть',
+    startCalm: 'День 1. Лавка 7-Б, нижний ярус. Долг отца Гробову: {debt} кр. Платёж раз в {period}.',
+    paidTitle: 'Долг закрыт',
+    paidLine: 'Долг отца выплачен. Гробов больше не придёт.',
+    paidContinue: 'Продолжить',
+    paidNewGame: 'Новая игра',
+    saveCode: 'Код игры · {mode}, день {day}, {credits} кр.',
+  },
+  en: {
+    names: { story: 'Beginning of the End', calm: 'No Timer', sandbox: 'Your Own Shop' },
+    about: {
+      story: 'Father\'s debt, payments to Grobov and the last shuttle on day 60.',
+      calm: 'The debt and payments stay, no shuttle. The goal is to pay off the debt.',
+      sandbox: 'No debt and no timer, to relax.',
+    },
+    screenTitle: 'Game mode',
+    menuModes: 'Modes',
+    current: 'now',
+    progress: 'Day {day} · debt {debt}',
+    finished: 'Ending: {ending} · day {day}',
+    paidOff: 'Debt paid · day {day}',
+    continue: 'Continue',
+    start: 'Start',
+    restart: 'Start over',
+    locked: 'opens later',
+    resetTitle: 'Start over?',
+    resetText: 'The current "{mode}" game will be lost, save the code.',
+    resetYes: 'Start',
+    resetNo: 'Cancel',
+    close: 'Close',
+    startCalm: 'Day 1. Shop 7-B, lower tier. Father\'s debt to Grobov: {debt} cr. A payment every {period}.',
+    paidTitle: 'Debt paid',
+    paidLine: 'Father\'s debt is paid off. Grobov will not come again.',
+    paidContinue: 'Continue',
+    paidNewGame: 'New game',
+    saveCode: 'Game code · {mode}, day {day}, {credits} cr.',
   },
 } as const;
 

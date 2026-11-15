@@ -7,8 +7,11 @@
 //  Do not rename fields; when a field is added or changed, upgrade old
 //  saves in migrate().
 // =====================================================================
-import { DEBT, DEBT_TEXT, ENDING_TEXT, ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, RENT, SAVE_CODE_PREFIX, SAVE_KEY, START } from './data';
-import type { Actor, GameState, Item, ItemKnowledge, ItemType, SavedGame, UiState } from './types';
+import {
+  DEBT, DEBT_TEXT, ENDING_TEXT, ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, MODE_TEXT, PLAYABLE_MODES, RENT, SAVE_CODE_PREFIX, SAVE_KEYS, START,
+} from './data';
+import { browserStore } from './profile';
+import type { Actor, GameState, Item, ItemKnowledge, ItemType, KeyValueStore, Mode, SavedGame, UiState } from './types';
 import { daysRu, fill, randomInt } from './util';
 
 /* ---------- state ---------- */
@@ -29,11 +32,18 @@ export function setState(next: GameState): void {
   state = next;
 }
 
+/**
+ * Whether saveGame() writes. Off on the very first launch while the mode screen is open:
+ * the game behind it is provisional and must not show up as "День 1 · Продолжить".
+ */
+export const persistence = { enabled: true };
+
 export function randomLandlordSlot(): number {
   return randomInt(RENT.landlordSlotMin, RENT.landlordSlotMax);
 }
 
-export function newGame(): void {
+/** A new game in a mode; the mode also picks its save slot. */
+export function newGame(mode: Mode = 'story'): void {
   state = {
     day: 1,
     slot: 0,
@@ -61,10 +71,12 @@ export function newGame(): void {
     seat: false,
     shuttleDay: DEBT.shuttleDay,
     ending: null,
+    mode,
   };
   state.inv.push(createItem('battery', { cond: 70, stolen: false, defect: false, infected: false, known: true }));
   state.inv.push(createItem('comm', { cond: 55, stolen: false, defect: false, infected: false, known: true }));
-  addLog(fill(DEBT_TEXT.ru.start, { debt: DEBT.start, period: daysRu(DEBT.periodDays), shuttle: DEBT.shuttleDay }));
+  const start = mode === 'story' ? DEBT_TEXT.ru.start : MODE_TEXT.ru.startCalm;
+  addLog(fill(start, { debt: DEBT.start, period: daysRu(DEBT.periodDays), shuttle: DEBT.shuttleDay }));
   actorReset();
   ui.tab = 'deal';
 }
@@ -147,17 +159,22 @@ function isValidSaveCode(value: unknown): value is SavedGame {
 
 /* ---------- persistence ---------- */
 
-export function saveGame(): void {
+/** Writes the game into the slot of its mode (story = the old key dark-counter-v3). */
+export function saveGame(store: KeyValueStore | null = browserStore()): void {
+  if (!persistence.enabled) {
+    return;
+  }
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+    store?.setItem(SAVE_KEYS[state.mode], JSON.stringify(state));
   } catch {
-    // storage unavailable (private mode, quota, tests) — play without saving
+    // storage unavailable (private mode, quota) — play without saving
   }
 }
 
-export function loadGame(): SavedGame | null {
+/** The raw save in a mode's slot (story by default), or null. */
+export function loadGame(mode: Mode = 'story', store: KeyValueStore | null = browserStore()): SavedGame | null {
   try {
-    const data: unknown = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null');
+    const data: unknown = JSON.parse(store?.getItem(SAVE_KEYS[mode]) ?? 'null');
     if (looksLikeSave(data)) {
       return data;
     }
@@ -165,6 +182,15 @@ export function loadGame(): SavedGame | null {
     // corrupted save — start fresh
   }
   return null;
+}
+
+/** The game saved in a mode's slot, migrated; the slot decides the mode. */
+export function readSlot(mode: Mode, store: KeyValueStore | null = browserStore()): GameState | null {
+  const loaded = migrate(loadGame(mode, store));
+  if (loaded) {
+    loaded.mode = mode;
+  }
+  return loaded;
 }
 
 /** Upgrades saves from older versions in place. */
@@ -194,6 +220,10 @@ export function migrate(data: SavedGame | null): GameState | null {
     }
   }
   delete data.won;
+  // Before modes every save was the story; an unknown or locked mode is read as story too.
+  if (!(PLAYABLE_MODES as readonly unknown[]).includes(data.mode)) {
+    data.mode = 'story';
+  }
   return data as GameState;
 }
 

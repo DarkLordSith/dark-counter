@@ -2,7 +2,7 @@
 // compares the logs. AudioContext is replaced by a recording fake with a
 // controllable clock; the scheduler's setInterval(…, 25) is driven by hand.
 // Usage: node audiotest.mjs <urlA> <urlB>
-import { clickMenuItem, hash as h, launch } from './common.mjs';
+import { clickMenuItem, hash as h, launch, passModeScreen } from './common.mjs';
 
 const [, , OLD, NEW] = process.argv;
 const INIT = `(() => {
@@ -49,6 +49,7 @@ async function record(url) {
   // the music toggle: a HUD button before the V1.4 fix, an item of the ☰ menu since
   await page.evaluateOnNewDocument(`window.__clickMenuItem = ${clickMenuItem.toString()};`);
   await page.goto(url, { waitUntil: 'load' });
+  await passModeScreen(page);
   const log = await page.evaluate(() => {
     const click = () => __clickMenuItem('music');
     click(); // on

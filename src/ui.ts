@@ -3,22 +3,26 @@
 //  plus all click/keyboard handlers (buttons carry data-a="action").
 // =====================================================================
 import { audio, startMusicOnGesture, toggleMusic } from './audio';
-import { BENCH_COST, CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, MARKET, MAX_HEAT, RECIPES, RENT, SUPPLIER } from './data';
+import {
+  BENCH_COST, CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, MARKET, MAX_HEAT, MODES, MODE_TEXT,
+  PLAYABLE_MODES, RECIPES, RENT, SUPPLIER,
+} from './data';
 import { byId, maybeById } from './dom';
 import { iconSvg } from './icons';
 import {
-  askBuyer, availableOfType, buyFromSeller, buySeat, callNextCustomer, canBuySeat, canCraft, canVisitMarket, closeShop,
+  askBuyer, availableOfType, buyFromSeller, buySeat, callNextCustomer, canBuySeat, canCraft, hasShuttle, isDebtClosed, canVisitMarket, closeShop,
   collateralHeatRelief, craft, customerLeaves, deferredDebt, deferRent, digPile, estimatedValue, evict, feedback,
   goHome, goToJunkyard, hunchVerdict, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer, itemName,
   nextRent, offerToSeller, orderParts, payEarly, payRent, payWithCollateral, perceivedChance, planCollateral, presentItem,
   recipeNeeds, scrapValue, seatPrice, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
 } from './economy';
 import type { CollateralPlan } from './economy';
+import { isPlayable, loadProfile, recordEnding, saveProfile } from './profile';
 import { onSceneClick, paintIcons, pileAt } from './scene';
 import {
-  actor, actorAtCounter, actorReset, addLog, exportSave, findItem, importSave, newGame, saveGame, setState, state, ui,
+  actor, actorAtCounter, actorReset, addLog, exportSave, findItem, importSave, newGame, persistence, readSlot, saveGame, setState, state, ui,
 } from './state';
-import type { BuyerCustomer, Item, ItemType, Recipe, RentCustomer, SellerCustomer, Tab } from './types';
+import type { BuyerCustomer, GameState, Item, ItemType, Mode, Profile, Recipe, RentCustomer, SellerCustomer, Tab } from './types';
 import { daysRu, fill, roundTo10 } from './util';
 import { VERSION_LABEL } from './version';
 
@@ -133,7 +137,7 @@ function renderHud(): void {
   byId('hud').innerHTML = `<div class="stats">${[
     hudStat(HUD.credits, `<b>${state.credits}</b>`),
     // the shuttle day goes into the label ("день/60"): the number column keeps two digits
-    hudStat(`${HUD.day}/${state.shuttleDay}`, `<b>${state.day}</b>`),
+    hudStat(hasShuttle() ? `${HUD.day}/${state.shuttleDay}` : HUD.day, `<b>${state.day}</b>`),
     paymentStat(),
     hudStat(HUD.parts, `<b>${state.parts}</b>`),
   ].join('')}</div>${menu}`;
@@ -434,6 +438,7 @@ export function render(): void {
   renderTabs();
   renderPane();
   saveGame();
+  noteProgress();
 }
 
 /* =====================================================================
@@ -461,10 +466,11 @@ function openModal(title: string, body: string, buttons: string, footer = ''): v
   byId('modal').hidden = false;
 }
 
-/** ☰ menu: a sheet over the HUD with the game title, the debt, music, save and new game (later: RU/EN). */
+/** ☰ menu: a sheet over the HUD with the current mode on top, the debt, modes, music, save and new game (later: RU/EN). */
 function openMenu(): void {
-  byId('mbox').innerHTML = `<h2>${HUD.gameTitle}</h2>
+  byId('mbox').innerHTML = `<h2>${MODE_UI.names[state.mode]}</h2>
     <button class="btn menu-item" data-a="debt">${fill(DEBT_UI.menuDebt, { debt: state.debt })}</button>
+    <button class="btn menu-item" data-a="modes">${MODE_UI.menuModes}</button>
     <button class="btn menu-item" data-a="music" aria-pressed="${audio.on}">${HUD.music}: ${audio.on ? HUD.on : HUD.off}</button>
     <button class="btn menu-item" data-a="savemenu">${HUD.save}</button>
     <button class="btn menu-item" data-a="newgame">${HUD.newGame}</button>
@@ -527,7 +533,7 @@ function openDebt(): void {
       ${payment}
       <span>${DEBT_UI.youHave}</span><span class="price">${state.credits} кр.</span></div>
     ${state.debt > 0 ? `<h3>${DEBT_UI.early}</h3><p class="hint">${DEBT_UI.earlyHint}</p><div class="early">${earlyButtons()}</div>` : ''}
-    <h3>${DEBT_UI.seatTitle}</h3>${seatBlock()}</div>`, CLOSE_BUTTON);
+    ${hasShuttle() ? `<h3>${DEBT_UI.seatTitle}</h3>${seatBlock()}` : ''}</div>`, CLOSE_BUTTON);
 }
 
 /** Buying the seat cannot be undone: ask first. */
@@ -538,7 +544,7 @@ function confirmSeat(): void {
 
 function openSaveMenu(): void {
   openModal('Сохранение', `<p class="hint" style="margin:0">Скопируйте код и сохраните в заметки. На другом устройстве или в другой версии игры вставьте его в поле загрузки.</p>
-      <label for="savecode">Код текущей игры · день ${state.day}, ${state.credits} кр.</label><textarea id="savecode" readonly>${exportSave()}</textarea>
+      <label for="savecode">${fill(MODE_UI.saveCode, { mode: MODE_UI.names[state.mode], day: state.day, credits: state.credits })}</label><textarea id="savecode" readonly>${exportSave()}</textarea>
       <div class="mbtns"><button class="btn pri" data-a="copysave">Скопировать</button></div>
       <label for="loadcode">Загрузить сейв</label><textarea id="loadcode" placeholder="Вставьте код"></textarea>
       <div id="savemsg" class="hint"></div>`,
@@ -571,14 +577,9 @@ function loadSaveCode(): boolean {
     byId('savemsg').classList.add('m-risk');
     return false;
   }
-  setState(loaded);
-  ui.sel = null;
-  ui.tab = 'deal';
-  if (state.cust) {
-    actorAtCounter(state.cust.seed);
-  } else {
-    actorReset();
-  }
+  // the current game is already in its slot (render saves after every action);
+  // the code goes into the slot of its own mode, and the game switches to that mode
+  enterGame(loaded);
   addLog(`Сейв загружен: день ${state.day}, ${state.credits} кр.`);
   closeModal();
   return true;
@@ -588,9 +589,184 @@ function openLog(): void {
   openModal('Лента', `<ul>${state.log.map(line => `<li>${line}</li>`).join('')}</ul>`, CLOSE_BUTTON);
 }
 
-function confirmNewGame(): void {
-  openModal(HUD.confirmTitle, `<p>${HUD.confirmText}</p>`,
-    `<button class="btn pri" data-a="newgame-yes">${HUD.confirmYes}</button><button class="btn" data-a="close">${HUD.confirmNo}</button>`);
+/* =====================================================================
+   Game modes: the mode screen, slots, the player profile
+   ===================================================================== */
+
+/** Mode strings in the interface language. */
+const MODE_UI = MODE_TEXT.ru;
+
+/** Player profile; loaded by startGame(). */
+let profile: Profile = loadProfile(null);
+
+/** Puts the actor where the loaded game has it. */
+function syncActor(): void {
+  if (state.cust) {
+    actorAtCounter(state.cust.seed);
+  } else {
+    actorReset();
+  }
+}
+
+/** Makes a game the current one: its mode becomes "last" in the profile. */
+function enterGame(game: GameState): void {
+  setState(game);
+  persistence.enabled = true;
+  ui.sel = null;
+  ui.tab = 'deal';
+  syncActor();
+  rememberMode();
+}
+
+function rememberMode(): void {
+  if (profile.last !== state.mode) {
+    profile.last = state.mode;
+    saveProfile(profile);
+  }
+}
+
+/** Endings go into the profile; a closed debt in calm counts as 'paid'. */
+function noteProgress(): void {
+  if (!persistence.enabled) {
+    return;
+  }
+  const fresh = (state.ending && recordEnding(profile, state.mode, state.ending))
+    || (isDebtClosed() && recordEnding(profile, state.mode, 'paid'));
+  if (fresh) {
+    saveProfile(profile);
+  }
+}
+
+/** The game in a mode's slot; the current game is read live (its slot may lag a render behind). */
+function gameIn(mode: Mode): GameState | null {
+  if (mode === state.mode) {
+    return persistence.enabled ? state : null;
+  }
+  return readSlot(mode);
+}
+
+function modeStatus(game: GameState | null): string {
+  if (!game) {
+    return '';
+  }
+  if (game.over) {
+    return fill(MODE_UI.finished, { ending: ENDING_TEXT.ru[game.ending ?? 'evicted'].title, day: game.day });
+  }
+  if (game.mode === 'calm' && game.debt === 0) {
+    return fill(MODE_UI.paidOff, { day: game.day });
+  }
+  return fill(MODE_UI.progress, { day: game.day, debt: game.debt });
+}
+
+function modeCard(mode: Mode): string {
+  const name = `<span class="mode-name">${MODE_UI.names[mode]}</span>`;
+  const about = `<p class="hint">${MODE_UI.about[mode]}</p>`;
+  if (!isPlayable(profile, mode)) {
+    return `<div class="mode-card m-inactive">${name}${about}<p class="mode-lock">${iconSvg('lock')}${MODE_UI.locked}</p></div>`;
+  }
+  const game = gameIn(mode);
+  const current = mode === state.mode && persistence.enabled ? ` <span class="tag">${MODE_UI.current}</span>` : '';
+  let buttons: string;
+  if (!game) {
+    buttons = `<button class="btn pri" data-a="mode-go" data-v="${mode}">${MODE_UI.start}</button>`;
+  } else if (game.over) {
+    buttons = `<button class="btn pri" data-a="mode-reset" data-v="${mode}">${MODE_UI.restart}</button>`;
+  } else {
+    buttons = `<button class="btn pri" data-a="mode-go" data-v="${mode}">${MODE_UI.continue}</button>`
+      + `<button class="btn" data-a="mode-reset" data-v="${mode}">${MODE_UI.restart}</button>`;
+  }
+  const status = game ? `<p class="mode-status">${modeStatus(game)}</p>` : '';
+  return `<div class="mode-card"><div>${name}${current}</div>${about}${status}<div class="mode-btns">${buttons}</div></div>`;
+}
+
+/** Mode screen: on the first launch (no close button) and from ☰ ("Режимы", "Новая игра"). */
+function openModes(): void {
+  const close = persistence.enabled ? `<button class="btn" data-a="close">${MODE_UI.close}</button>` : '';
+  openModal(MODE_UI.screenTitle, `<div class="modes">${MODES.map(modeCard).join('')}</div>`, close);
+}
+
+const isMode = (value: string | undefined): value is Mode => (MODES as readonly (string | undefined)[]).includes(value);
+
+/** "Продолжить" / "Начать": switch to the mode's game, or start one there. */
+function goToMode(mode: Mode): void {
+  if (!isPlayable(profile, mode)) {
+    return;
+  }
+  if (!persistence.enabled) {
+    // first launch: the provisional story game behind the screen becomes the real one
+    persistence.enabled = true;
+    if (mode !== state.mode) {
+      newGame(mode);
+    }
+    rememberMode();
+  } else if (mode !== state.mode) {
+    saveGame();
+    const saved = readSlot(mode);
+    if (saved) {
+      enterGame(saved);
+    } else {
+      newGame(mode);
+      rememberMode();
+    }
+  }
+  closeModal();
+  showEnding();
+}
+
+/** "Начать заново": a finished game restarts at once, a running one asks first. */
+function askResetMode(mode: Mode): void {
+  const game = gameIn(mode);
+  if (!game || game.over) {
+    resetMode(mode);
+    return;
+  }
+  openModal(MODE_UI.resetTitle, `<p>${fill(MODE_UI.resetText, { mode: MODE_UI.names[mode] })}</p>`,
+    `<button class="btn pri" data-a="mode-reset-yes" data-v="${mode}">${MODE_UI.resetYes}</button>`
+    + `<button class="btn" data-a="modes">${MODE_UI.resetNo}</button>`);
+}
+
+function resetMode(mode: Mode): void {
+  if (!isPlayable(profile, mode)) {
+    return;
+  }
+  if (mode !== state.mode) {
+    saveGame();
+  }
+  persistence.enabled = true;
+  ui.sel = null;
+  newGame(mode);
+  rememberMode();
+  closeModal();
+}
+
+/** calm: the debt has just been closed. "Продолжить" keeps the shop going without payments. */
+function showDebtClosed(): void {
+  const totals = fill(DEBT_UI.totals, { day: state.day, credits: state.credits, debt: state.debt });
+  openModal(MODE_UI.paidTitle, `<p>${MODE_UI.paidLine}</p><p class="hint">${totals}</p>`,
+    `<button class="btn pri" data-a="close">${MODE_UI.paidContinue}</button><button class="btn" data-a="newgame-yes">${MODE_UI.paidNewGame}</button>`);
+}
+
+/**
+ * Launch: continue the last played mode (or any mode with a save) right away;
+ * with no save at all, show the mode screen over a provisional story game.
+ */
+export function startGame(): void {
+  profile = loadProfile();
+  const order: Mode[] = [profile.last, ...PLAYABLE_MODES.filter(mode => mode !== profile.last)];
+  for (const mode of order) {
+    const saved = isPlayable(profile, mode) ? readSlot(mode) : null;
+    if (saved) {
+      enterGame(saved);
+      render();
+      // a finished game opens on its final window
+      showEnding();
+      return;
+    }
+  }
+  persistence.enabled = false;
+  newGame('story');
+  render();
+  openModes();
 }
 
 /* =====================================================================
@@ -699,14 +875,36 @@ const ACTIONS: Record<string, ActionHandler> = {
     return NO_RENDER;
   },
   close: () => closeModal(),
+  // "Новая игра" in ☰ opens the mode screen ("Начать заново" there asks first)
   newgame: () => {
-    confirmNewGame();
+    openModes();
     return NO_RENDER;
   },
+  // after an ending or a closed debt: a new game in the same mode, no questions
   'newgame-yes': () => {
     closeModal();
     ui.sel = null;
-    newGame();
+    newGame(state.mode);
+  },
+  // modes
+  modes: () => {
+    openModes();
+    return NO_RENDER;
+  },
+  'mode-go': value => {
+    if (isMode(value)) {
+      goToMode(value);
+    }
+  },
+  'mode-reset': value => {
+    if (isMode(value)) {
+      askResetMode(value);
+    }
+  },
+  'mode-reset-yes': value => {
+    if (isMode(value)) {
+      resetMode(value);
+    }
   },
 };
 
@@ -723,8 +921,13 @@ function onClick(event: MouseEvent): void {
   }
   const action = button.dataset.a ?? '';
   const handler = Object.hasOwn(ACTIONS, action) ? ACTIONS[action] : null;
+  const debtBefore = state.debt;
+  const modeBefore = state.mode;
   const result = handler ? handler(button.dataset.v) : undefined;
   flushFeedback();
+  if (isDebtClosed() && debtBefore > 0 && state.mode === modeBefore && !state.over) {
+    showDebtClosed();
+  }
   if (result === NO_RENDER) {
     return;
   }
