@@ -2,7 +2,7 @@
 //  ui.ts — HTML rendering of the HUD, scene overlay, tabs and panes,
 //  plus all click/keyboard handlers (buttons carry data-a="action").
 // =====================================================================
-import { barAction, mainAction } from './actionbar';
+import { barAction, chipLines, mainAction } from './actionbar';
 import { audio, startMusicOnGesture, toggleMusic } from './audio';
 import {
   BENCH_COST, CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, MARKET, MAX_HEAT, MODES, MODE_TEXT,
@@ -23,7 +23,7 @@ import { onSceneClick, paintIcons, pileAt } from './scene';
 import {
   actor, actorAtCounter, actorReset, addLog, exportSave, findItem, importSave, newGame, persistence, readSlot, saveGame, setState, state, ui,
 } from './state';
-import type { BuyerCustomer, GameState, Item, ItemType, Mode, Profile, Recipe, RentCustomer, SellerCustomer, Tab } from './types';
+import type { BuyerCustomer, GameState, InspectCheck, Item, ItemType, Mode, Profile, Recipe, RentCustomer, SellerCustomer, Tab } from './types';
 import { daysRu, fill, roundTo10 } from './util';
 import { VERSION_LABEL } from './version';
 
@@ -147,18 +147,8 @@ function renderHud(): void {
 /** Screen-reader text of the wanted-level meter drawn on the scene ("розыск 3 из 10"). */
 const heatText = (): string => `${HUD.heat} ${state.heat} ${HUD.of} ${MAX_HEAT}`;
 
-function chipText(): string {
-  if (state.over) {
-    return 'ЗАКРЫТО';
-  }
-  if (state.phase === 'evening') {
-    return `${state.where === 'junk' ? 'СВАЛКА' : 'ВЕЧЕР'} · ${state.hours} Ч`;
-  }
-  const queue = CUSTOMERS_PER_DAY - state.slot - (state.cust ? 1 : 0);
-  const landlordDue = isLandlordDue();
-  const queueText = queue > 0 ? `ОЧЕРЕДЬ: ${queue}` : landlordDue ? 'ОЧЕРЕДЬ: 0' : 'СМЕНА ОКОНЧЕНА';
-  return queueText + (landlordDue ? ' +ПЛАТЁЖ' : '');
-}
+/** The log the ticker showed last: a different array means a new line (see renderSceneOverlay). */
+let shownLog: string[] | null = null;
 
 /** Speech bubble, queue chip and the log ticker ("call next" lives in the action bar since V1.5). */
 export function renderSceneOverlay(): void {
@@ -176,8 +166,18 @@ export function renderSceneOverlay(): void {
       bubble.textContent = customer.msg;
     }
   }
-  byId('chip').textContent = chipText();
-  byId('ticker').innerHTML = `<b>›</b> ${state.log[0] || ''}`;
+  byId('chip').innerHTML = chipLines().map(line => `<span>${line}</span>`).join('');
+  const ticker = byId('ticker');
+  ticker.innerHTML = `<b>›</b> ${state.log[0] || ''}`;
+  // addLog() makes a new array: a new line arrived, even if its text repeats the last one
+  if (state.log !== shownLog) {
+    if (shownLog) {
+      ticker.classList.remove('fresh');
+      void ticker.offsetWidth; // restart the animation
+      ticker.classList.add('fresh');
+    }
+    shownLog = state.log;
+  }
   const heat = byId('heatText');
   if (heat.textContent !== heatText()) {
     // aria-live: announced only when the level changes
@@ -313,25 +313,26 @@ function customerHeader(customer: SellerCustomer | BuyerCustomer): string {
   <div class="pips" title="Терпение">${meterCells(customer.max, customer.pat)}</div></div>`;
 }
 
-function knownFact(known: boolean, html: string): string {
-  return known ? html : UNKNOWN;
+/**
+ * One inspection fact of the seller's item (V1.6, compact for iPhone SE): until the check is done
+ * it is the inspect button itself ("Сост. ?"), after that the result in its meaning color.
+ */
+function fact(customer: SellerCustomer, check: InspectCheck, label: string, title: string, result: string): string {
+  if (!customer.done[check]) {
+    return `<button class="btn fact" data-a="insp" data-v="${check}" title="${title}">${label} ${UNKNOWN}</button>`;
+  }
+  return `<span class="fact">${label} ${result}</span>`;
 }
 
 function sellerPane(customer: SellerCustomer): string {
   const item = customer.item;
   const condition = `<span class="${item.cond < 40 ? 'm-wear' : ''}">${item.cond}%</span>`;
   const serial = item.stolen ? '<span class="m-risk">спилен</span>' : '<span class="m-action">чистый</span>';
-  const insides = item.infected ? '<span class="m-risk">ИИ-вирус</span>' : item.defect ? '<span class="m-wear">дефект</span>' : '<span class="m-action">ок</span>';
+  const insides = item.infected ? '<span class="m-risk">ИИ</span>' : item.defect ? '<span class="m-wear">дефект</span>' : '<span class="m-action">ок</span>';
   const defaultOffer = Math.min(state.credits, roundTo10(customer.ask * HAGGLE.sellerDefaultOfferShare));
-  return `<div class="card">${iconCanvas(item.t, 'bigico', showsInfection(item))}<div style="min-width:0"><div class="rn">${itemName(item.t)}</div><div class="rows">
-      <span>Состояние</span><span>${knownFact(item.k.cond, condition)}</span>
-      <span>Серийник</span><span>${knownFact(item.k.serial, serial)}</span>
-      <span>Начинка</span><span>${knownFact(item.k.flaw, insides)}</span>
-      <span>Оценка</span><span class="price">${approx(estimatedValue(item))} кр.</span></div></div></div>
-      <div class="tools"><button class="btn" data-a="insp" data-v="cond" ${disabledIf(customer.done.cond)}>Сканер</button>
-      <button class="btn" data-a="insp" data-v="serial" ${disabledIf(customer.done.serial)}>Серийник</button>
-      <button class="btn" data-a="insp" data-v="flaw" ${disabledIf(customer.done.flaw)}>Диагностика</button></div>
-    <div class="deal"><div class="ask">Просит: <b class="price">${customer.ask}</b> кр. · у вас ${state.credits}</div>
+  return `<div class="card deal-item">${iconCanvas(item.t, 'midico', showsInfection(item))}<div class="di-body"><div class="rn">${itemName(item.t)}</div>
+      <div class="facts">${fact(customer, 'cond', 'Сост.', 'Сканер: состояние', condition)}${fact(customer, 'serial', '№', 'Серийник: краденое или чистое', serial)}${fact(customer, 'flaw', 'Начинка', 'Диагностика: дефект, ИИ', insides)}</div></div></div>
+    <div class="deal"><div class="ask">Просит <b class="price">${customer.ask}</b> кр. · оценка ${approx(estimatedValue(item))}</div>
       ${priceRow(defaultOffer)}
       <div class="acts"><button class="btn alt" data-a="accept" ${disabledIf(customer.ask > state.credits)}>За ${customer.ask}</button>
       <button class="btn" data-a="refuse">Отпустить</button></div></div>`;
@@ -339,15 +340,16 @@ function sellerPane(customer: SellerCustomer): string {
 
 function buyerPane(customer: BuyerCustomer): string {
   const matching = state.inv.filter(item => item.t === customer.want);
-  let html = `<div class="ask" style="margin-bottom:6px">Нужно: <b>${itemName(customer.want)}</b></div>`;
+  let html = `<div class="ask want">Нужно: <b>${itemName(customer.want)}</b></div>`;
   if (!matching.length) {
     return html + '<div class="hint">На складе такого нет.</div>';
   }
   const tiles = matching.map(item => {
     const shown = customer.item && customer.item.uid === item.uid;
-    return `<button class="tile ${shown ? 'on' : ''}" data-a="show" data-v="${item.uid}">${itemDots(item)}${iconCanvas(item.t, '', showsInfection(item))}<span>${conditionText(item)}</span><span class="tv">${approx(estimatedValue(item))}</span></button>`;
+    return `<button class="tile ${shown ? 'on' : ''}" data-a="show" data-v="${item.uid}">${itemDots(item)}${iconCanvas(item.t, '', showsInfection(item))}<span>${conditionText(item)} · <span class="tv">${approx(estimatedValue(item))}</span></span></button>`;
   }).join('');
-  html += `<div class="shelf">${tiles}</div>`;
+  // compact row tiles (V1.6): the price and the gut feeling fit an iPhone SE without scrolling
+  html += `<div class="shelf pick">${tiles}</div>`;
   if (!isPresentedBuyer(customer)) {
     return html + '<div class="hint" style="margin:8px 0">Выложите товар на прилавок.</div><button class="btn" data-a="refuse" style="width:100%">Отпустить</button>';
   }
@@ -996,19 +998,36 @@ function startMusicOnFirstTouch(): void {
   events.forEach(type => document.addEventListener(type, onGesture, true));
 }
 
-/** Hides the bottom bar while the on-screen keyboard is open, so it does not cover the price box. */
+/**
+ * While the on-screen keyboard is open (price box): hide the HUD, keep the action bar (V1.6).
+ * The page is sized to the visual viewport, so the bar sits right above the keyboard,
+ * and the price box is scrolled into view inside the pane.
+ */
 function trackKeyboard(): void {
   const viewport = window.visualViewport;
   if (!viewport) {
     return;
   }
+  const root = document.documentElement;
   const update = (): void => {
     const typing = document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement;
     // the keyboard takes far more than this; pinch zoom alone does not count (scale > 1)
     const keyboardOpen = typing && viewport.scale <= 1 && window.innerHeight - viewport.height > KEYBOARD_MIN_PX;
-    document.documentElement.classList.toggle('kb-open', keyboardOpen);
+    const wasOpen = root.classList.contains('kb-open');
+    root.classList.toggle('kb-open', keyboardOpen);
+    if (keyboardOpen) {
+      root.style.setProperty('--kb-height', `${viewport.height}px`);
+      root.style.setProperty('--kb-top', `${viewport.offsetTop}px`);
+      if (!wasOpen && document.activeElement instanceof HTMLElement) {
+        document.activeElement.scrollIntoView({ block: 'nearest' });
+      }
+    } else {
+      root.style.removeProperty('--kb-height');
+      root.style.removeProperty('--kb-top');
+    }
   };
   viewport.addEventListener('resize', update);
+  viewport.addEventListener('scroll', update);
   document.addEventListener('focusin', update);
   document.addEventListener('focusout', () => requestAnimationFrame(update));
 }

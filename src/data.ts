@@ -442,6 +442,9 @@ export const DIG_LOOT = {
   rareCondMin: 40,
   rareCondMax: 80,
 };
+/** Neon "ЛАВКА 7Б" sign with its dark frame, in scene pixels (160×100). The speech bubble and the queue chip keep clear of it (V1.6). */
+export const SHOP_SIGN = { x: 59, y: 3, w: 42, h: 11 };
+
 export const JUNK_PILES = [
   { x: 30, y: 76, w: 38, h: 14 },
   { x: 80, y: 74, w: 42, h: 15 },
