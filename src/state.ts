@@ -220,6 +220,20 @@ export function migrate(data: SavedGame | null): GameState | null {
     }
   }
   delete data.won;
+  // Before junkyard v2 a visit had six piles and each dig cost an evening hour.
+  // A visit in progress becomes a v2 visit with as many digs as the old one still allowed
+  // (undug piles, but not more than the hours left), already "deep" by the piles dug;
+  // with nothing left to dig the player is at home. Old saves kept the piles after "home": dropped.
+  if (data.junk && 'piles' in data.junk) {
+    const left = Math.min(data.junk.piles.filter(pile => !pile.dug).length, data.hours);
+    if (data.where === 'junk' && left > 0) {
+      data.junk = { d: left, n: 0, dp: data.junk.piles.length - left, f: [], s: data.junk.piles[0]?.seed ?? 1 };
+    } else {
+      data.junk = null;
+      data.where = 'home';
+      data.jmsg = '';
+    }
+  }
   // Before modes every save was the story; an unknown or locked mode is read as story too.
   if (!(PLAYABLE_MODES as readonly unknown[]).includes(data.mode)) {
     data.mode = 'story';

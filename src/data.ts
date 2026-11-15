@@ -175,6 +175,7 @@ export const HUD_TEXT = {
     heat: 'розыск',
     of: 'из',
     music: 'Музыка',
+    sounds: 'Звуки',
     on: 'вкл',
     off: 'выкл',
     menu: 'Меню',
@@ -190,6 +191,7 @@ export const HUD_TEXT = {
     heat: 'wanted',
     of: 'of',
     music: 'Music',
+    sounds: 'Sounds',
     on: 'on',
     off: 'off',
     menu: 'Menu',
@@ -428,10 +430,30 @@ export const CRAFT_CONDITION_BONUS = 10;
 // ---------- night ----------
 export const NIGHT = { infectionSpreadChance: 0.35, raidChancePerHeat: 0.1, raidBaseFine: 50, raidFinePerItem: 60 };
 
-// ---------- junkyard ----------
-export const JUNK = { minHoursToGo: 2, travelHours: 1 };
-// Cumulative thresholds of a single dig roll.
-export const DIG_ODDS = { drone: 0.1, parts: 0.48, broken: 0.86, rare: 0.94 };
+// ---------- junkyard (v2, 15.11.2026: one heap, "Копать", noise → drone) ----------
+/**
+ * A visit costs a fixed travelHours + visitHours of the evening (1 h is left for
+ * the flea market, as before). Inside it the player digs up to digsBase + digBonus()
+ * times; each dig adds noise, and the noise raises the drone chance.
+ */
+export const JUNK = {
+  travelHours: 1,
+  visitHours: 2,
+  digsBase: 5,
+  /** Noise added by one dig: noisePerDig ± noiseSpread (0…100 scale). */
+  noisePerDig: 13,
+  noiseSpread: 3,
+  /** Noise word thresholds: below [0] "тихо", below [1] "слышно", below [2] "громко", else "дрон рядом". */
+  noiseLevels: [20, 40, 60],
+  /** Drone chance of a dig = (noise before it / droneNoiseScale)²; never on the first dig. */
+  droneNoiseScale: 100,
+  /** Each dig of this visit adds this much to the rare-find chance (taken from "empty"). */
+  rarePerDepth: 0.02,
+  /** Wanted level added by the drone when it has no find of this visit to take. */
+  droneHeat: 1,
+};
+/** Chances of one dig (they sum to 1; the depth bonus moves chance from empty to rare). */
+export const DIG_ODDS = { parts: 0.4, broken: 0.34, rare: 0.05, empty: 0.21 };
 export const DIG_LOOT = {
   partsMin: 1,
   partsMax: 4,
@@ -442,15 +464,48 @@ export const DIG_LOOT = {
   rareCondMin: 40,
   rareCondMax: 80,
 };
+/** Junkyard words: the noise scale, the panel, the messages. RU/EN; {n} etc. are filled by fill(). */
+export const JUNK_TEXT = {
+  ru: {
+    title: 'Свалка «Кольцо Б»',
+    about: 'Дорога и свалка — {hours} ч. {digs} раскопок, глубже — больше редкого. Шумно — прилетает сторожевой дрон.',
+    arrive: 'Свалка «Кольцо Б». Одна большая куча. Копайте, пока тихо.',
+    dig: 'Копать',
+    digsLeft: 'Осталось',
+    depth: 'глубина',
+    noise: 'шум',
+    levels: ['тихо', 'слышно', 'громко', 'дрон рядом'],
+    empty: 'Пусто. Только ржавые болты.',
+    parts: 'Нашлись запчасти: +{n}.',
+    broken: 'Откопал: {name}, сломанный. Отнесу на верстак.',
+    rare: 'Редкая находка: {name}!',
+    droneTook: 'Сторожевой дрон! Пришлось бежать — {name} остался на свалке.',
+    droneHeat: 'Сторожевой дрон! Пришлось бежать, он успел снять лицо (розыск +{n}).',
+    noDigs: 'Куча перекопана. Пора домой.',
+    home: 'Свалка: домой. Находок за визит: {n}.',
+    homeHint: 'Уйти можно в любой момент.',
+  },
+  en: {
+    title: 'Ring B junkyard',
+    about: 'Road and junkyard — {hours} h. {digs} digs, deeper means rarer finds. Too loud and a guard drone comes.',
+    arrive: 'Ring B junkyard. One big heap. Dig while it is quiet.',
+    dig: 'Dig',
+    digsLeft: 'Left',
+    depth: 'depth',
+    noise: 'noise',
+    levels: ['quiet', 'audible', 'loud', 'drone near'],
+    empty: 'Nothing. Just rusty bolts.',
+    parts: 'Spare parts: +{n}.',
+    broken: 'Dug out: {name}, broken. Off to the workbench.',
+    rare: 'Rare find: {name}!',
+    droneTook: 'Guard drone! Had to run — the {name} stayed behind.',
+    droneHeat: 'Guard drone! Had to run, it got my face (wanted +{n}).',
+    noDigs: 'The heap is dug through. Time to go home.',
+    home: 'Junkyard: home. Finds this visit: {n}.',
+    homeHint: 'You can leave at any moment.',
+  },
+} as const;
 /** Neon "ЛАВКА 7Б" sign with its dark frame, in scene pixels (160×100). The speech bubble and the queue chip keep clear of it (V1.6). */
 export const SHOP_SIGN = { x: 59, y: 3, w: 42, h: 11 };
 
-export const JUNK_PILES = [
-  { x: 30, y: 76, w: 38, h: 14 },
-  { x: 80, y: 74, w: 42, h: 15 },
-  { x: 130, y: 76, w: 38, h: 14 },
-  { x: 28, y: 97, w: 44, h: 16 },
-  { x: 80, y: 97, w: 46, h: 17 },
-  { x: 132, y: 97, w: 44, h: 16 },
-];
 

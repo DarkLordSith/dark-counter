@@ -7,8 +7,8 @@
 // =====================================================================
 import {
   ACCEPT, HUNCH_VERDICT, HUNCH_VERDICT_TEXT, BENCH_COST, BUYER_COUNTER_LINES, BUYER_INSULTED_LINES, BUYER_LINES, COLLATERAL,
-  CRAFT_CONDITION_BONUS, CUSTOMER, CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, DIG_LOOT, DIG_ODDS, EVENING_HOURS, HAGGLE, HUMAN_NAMES,
-  INSPECT, ITEM_TYPES, JUNK, JUNK_PILES, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
+  CRAFT_CONDITION_BONUS, CUSTOMER, CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, DIG_LOOT, DIG_ODDS, EVENING_HOURS, JUNK_TEXT, HAGGLE, HUMAN_NAMES,
+  INSPECT, ITEM_TYPES, JUNK, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
   RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SELLER_COUNTER_LINES, SELLER_INSULTED_LINES, SELLER_LINES,
   SELLER_STOLEN_LINE, SUPPLIER, VALUE,
 } from './data';
@@ -18,11 +18,12 @@ import {
   actor, actorEnter, addLog, createItem, findItem, fullKnowledge, randomLandlordSlot, state, ui,
 } from './state';
 import type {
-  BuyerCustomer, Ending, InspectCheck, Item, ItemType, PresentedBuyer, Recipe, SellerCustomer,
+  BuyerCustomer, Ending, GameState, InspectCheck, Item, ItemType, JunkVisit, PresentedBuyer, Recipe, SellerCustomer,
 } from './types';
 import { clamp, daysRu, fill, pickRandom, randomBetween, randomInt, randomSeed, roundTo10 } from './util';
 
 const TEXT = DEBT_TEXT.ru;
+const JUNK_WORDS = JUNK_TEXT.ru;
 
 /* =====================================================================
    Feedback for the UI: floating numbers to show after the action.
@@ -635,35 +636,74 @@ export function sellToBuyer(price?: number): void {
    Evening: junkyard, flea market, supplier
    ===================================================================== */
 
+/** Extra digs per visit: always 0 for now — the hook for Patch D gear and skills and for events. */
+export const digBonus = (_game: GameState = state): number => 0;
+
+/** Digs of a fresh visit. */
+export const digsPerVisit = (game: GameState = state): number => JUNK.digsBase + digBonus(game);
+
+/** Evening hours a junkyard visit costs (fixed: road + the heap). */
+export const junkVisitHours = (): number => JUNK.travelHours + JUNK.visitHours;
+
+export const canGoToJunkyard = (): boolean => state.phase === 'evening' && state.where === 'home' && state.hours >= junkVisitHours();
+
+/** Noise word index: 0 тихо, 1 слышно, 2 громко, 3 дрон рядом. */
+export type NoiseLevel = 0 | 1 | 2 | 3;
+
+export function noiseLevel(noise: number): NoiseLevel {
+  const index = JUNK.noiseLevels.findIndex(limit => noise < limit);
+  return (index < 0 ? 3 : index) as NoiseLevel;
+}
+
+/** Drone chance of the next dig: (noise / scale)², never on the first dig of a visit. */
+export function droneChance(visit: JunkVisit): number {
+  if (visit.dp === 0) {
+    return 0;
+  }
+  return Math.min(1, (visit.n / JUNK.droneNoiseScale) ** 2);
+}
+
+/** Rare-find chance of a dig at this depth: deeper digs take chance from "empty". */
+export const rareChance = (depth: number): number =>
+  DIG_ODDS.rare + Math.min(DIG_ODDS.empty, JUNK.rarePerDepth * depth);
+
 export function goToJunkyard(): void {
-  if (state.hours < JUNK.minHoursToGo) {
+  if (!canGoToJunkyard()) {
     return;
   }
-  state.hours -= JUNK.travelHours;
+  state.hours -= junkVisitHours();
   state.where = 'junk';
-  state.junk = { piles: JUNK_PILES.map(() => ({ dug: false, seed: randomSeed() })) };
-  state.jmsg = 'Свалка «Кольцо Б». Выберите кучу и копайте. Каждая куча — час.';
+  state.junk = { d: digsPerVisit(), n: 0, dp: 0, f: [], s: randomSeed() };
+  state.jmsg = JUNK_WORDS.arrive;
 }
 
 export function goHome(): void {
+  if (state.where === 'junk' && state.junk) {
+    addLog(fill(JUNK_WORDS.home, { n: state.junk.f.length }));
+  }
   state.where = 'home';
+  state.junk = null;
   state.jmsg = '';
 }
 
-/** Rolls what a pile gives; applies the loot and returns the message. */
-function rollDigOutcome(): string {
-  const roll = Math.random();
-  if (roll < DIG_ODDS.drone) {
-    state.hours = Math.max(0, state.hours - 1);
-    return 'Сторожевой дрон! Пришлось прятаться, час потерян.';
-  }
-  if (roll < DIG_ODDS.parts) {
+/** What one dig gave; ui.ts picks the sound and the animation by `kind`. */
+export interface DigResult {
+  kind: 'empty' | 'parts' | 'broken' | 'rare' | 'drone';
+  message: string;
+}
+
+/** Rolls the heap's loot at this depth; applies it and returns the result. */
+function rollLoot(visit: JunkVisit): DigResult {
+  let roll = Math.random();
+  roll -= DIG_ODDS.parts;
+  if (roll < 0) {
     const found = randomInt(DIG_LOOT.partsMin, DIG_LOOT.partsMax);
     state.parts += found;
     floatText(`+${found} ⚙`, MEANING.action);
-    return `Нашлись запчасти: +${found}.`;
+    return { kind: 'parts', message: fill(JUNK_WORDS.parts, { n: found }) };
   }
-  if (roll < DIG_ODDS.broken) {
+  roll -= DIG_ODDS.broken;
+  if (roll < 0) {
     const type = pickRandomItemType();
     const item = createItem(type, {
       cond: randomInt(DIG_LOOT.brokenCondMin, DIG_LOOT.brokenCondMax),
@@ -671,36 +711,62 @@ function rollDigOutcome(): string {
       stolen: Math.random() < DIG_LOOT.brokenStolen,
     });
     state.inv.push(item);
+    visit.f.push(item.uid);
     floatText('+1', MEANING.wear); // a broken find
-    return `Откопал: ${itemName(type)}, сломанный. Отнесу на верстак.`;
+    return { kind: 'broken', message: fill(JUNK_WORDS.broken, { name: itemName(type) }) };
   }
-  if (roll < DIG_ODDS.rare) {
+  roll -= rareChance(visit.dp - 1);
+  if (roll < 0) {
     const type = pickRandom(RARE_FINDS);
     const item = createItem(type, { cond: randomInt(DIG_LOOT.rareCondMin, DIG_LOOT.rareCondMax), stolen: false });
     state.inv.push(item);
+    visit.f.push(item.uid);
     floatText('★', MEANING.action); // a rare find
-    return `Редкая находка: ${itemName(type)}!`;
+    return { kind: 'rare', message: fill(JUNK_WORDS.rare, { name: itemName(type) }) };
   }
-  return 'Пусто. Только ржавые болты.';
+  return { kind: 'empty', message: JUNK_WORDS.empty };
 }
 
-export function digPile(index: number): void {
-  if (state.where !== 'junk' || state.hours < 1 || !state.junk) {
-    return;
+/** The guard drone: takes one find of this visit (if any is still here) or raises the wanted level; the visit ends. */
+function droneCatches(visit: JunkVisit): DigResult {
+  visit.d = 0;
+  visit.run = true;
+  const finds = state.inv.filter(item => visit.f.includes(item.uid));
+  if (finds.length) {
+    const taken = pickRandom(finds);
+    state.inv = state.inv.filter(item => item.uid !== taken.uid);
+    visit.f = visit.f.filter(uid => uid !== taken.uid);
+    if (ui.sel === taken.uid) {
+      ui.sel = null;
+    }
+    floatText('−1', MEANING.risk);
+    return { kind: 'drone', message: fill(JUNK_WORDS.droneTook, { name: itemName(taken.t) }) };
   }
-  const pile = state.junk.piles[index];
-  if (!pile || pile.dug) {
-    return;
+  state.heat = Math.min(MAX_HEAT, state.heat + JUNK.droneHeat);
+  floatText(`+${JUNK.droneHeat}`, MEANING.risk);
+  return { kind: 'drone', message: fill(JUNK_WORDS.droneHeat, { n: JUNK.droneHeat }) };
+}
+
+/**
+ * "Копать": one dig of the heap. The drone may come first (its chance is set by the
+ * noise so far); otherwise the dig makes noise, goes one level deeper and rolls the loot.
+ */
+export function dig(): DigResult | null {
+  const visit = state.junk;
+  if (state.where !== 'junk' || !visit || visit.d <= 0) {
+    return null;
   }
-  pile.dug = true;
-  state.hours--;
-  const message = rollDigOutcome();
-  state.jmsg = message;
-  addLog('Свалка: ' + message);
-  if (state.hours <= 0) {
-    goHome();
-    addLog('Стемнело окончательно, пора домой.');
+  const caught = Math.random() < droneChance(visit);
+  visit.n = Math.min(100, visit.n + JUNK.noisePerDig + randomInt(-JUNK.noiseSpread, JUNK.noiseSpread));
+  visit.d--;
+  visit.dp++;
+  const result = caught ? droneCatches(visit) : rollLoot(visit);
+  state.jmsg = result.message;
+  addLog('Свалка: ' + result.message);
+  if (!caught && visit.d === 0) {
+    addLog(JUNK_WORDS.noDigs);
   }
+  return result;
 }
 
 export const canVisitMarket = (): boolean => state.hours >= MARKET.hours && !state.market && state.credits >= MARKET.price;

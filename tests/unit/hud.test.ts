@@ -187,7 +187,7 @@ describe('music', () => {
   });
 
   it('starts on the first touch and is a text item of the menu', () => {
-    expect(uiTs).toMatch(/function startMusicOnFirstTouch\(\)[\s\S]*?'pointerdown', 'touchend'/);
+    expect(uiTs).toMatch(/function startSoundOnFirstTouch\(\)[\s\S]*?'pointerdown', 'touchend'/);
     expect(openMenu).toContain('data-a="music"');
     expect(openMenu).toContain('${HUD.music}: ${audio.on ? HUD.on : HUD.off}');
     expect(HUD_TEXT.ru.music + ': ' + HUD_TEXT.ru.on).toBe('Музыка: вкл');

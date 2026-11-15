@@ -1,6 +1,7 @@
 // =====================================================================
 //  audio.ts — generative "space lofi" via Web Audio: kick, snare, hats,
-//  a 4-chord pad loop, bass and random pentatonic plinks over vinyl crackle.
+//  a 4-chord pad loop, bass and random pentatonic plinks over vinyl crackle;
+//  plus the junkyard sound effects (v2), switched on and off apart from the music.
 // =====================================================================
 import { pickRandom } from './util';
 
@@ -18,8 +19,12 @@ const NOISE_SECONDS = 2;
 const CHORD_PROGRESSION = [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 60], [48, 52, 55, 59]]; // MIDI notes
 const MELODY_NOTES = [72, 74, 76, 79, 81, 84];
 
+const SFX_VOLUME = 0.32; // below the music, no sharp peaks
+const SFX_LOWPASS_HZ = 3200;
+
 /* ---------- state ---------- */
-export const audio = { on: false };
+/** on — the music plays; sfx — sound effects are wanted (the menu item "Звуки"). */
+export const audio = { on: false, sfx: true };
 
 /* ---------- the player's choice (V1.4 fix) ----------
    Music is on by default and starts on the first touch (browsers do not let
@@ -66,10 +71,42 @@ export function rememberMusic(on: boolean, storage: PrefStorage | null = browser
   }
 }
 
+/* ---------- sound effects: their own choice (junkyard v2) ---------- */
+
+/** localStorage key of "Звуки: выкл"; separate from the music and the save. */
+export const SFX_KEY = 'dark-counter-sfx';
+
+/** True unless the player turned the sound effects off earlier. */
+export function sfxWanted(storage: PrefStorage | null = browserStorage()): boolean {
+  try {
+    return storage?.getItem(SFX_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+/** Remembers the sound effects choice: "off" is stored, "on" (the default) removes the key. */
+export function rememberSfx(on: boolean, storage: PrefStorage | null = browserStorage()): void {
+  try {
+    if (on) {
+      storage?.removeItem(SFX_KEY);
+    } else {
+      storage?.setItem(SFX_KEY, 'off');
+    }
+  } catch {
+    // private mode / storage full: the choice simply is not remembered
+  }
+}
+
+audio.sfx = sfxWanted();
+
 /** Created on the first "music on" click (browsers require a user gesture). */
 interface Engine {
   ac: AudioContext;
+  /** Music bus (lowpass, MASTER_VOLUME); muted while only the effects play. */
   master: GainNode;
+  /** Sound effects bus, created on the first effect. */
+  sfx: GainNode | null;
   noise: AudioBuffer;
   /** Sequencer step counter (16 steps per bar). */
   step: number;
@@ -135,6 +172,7 @@ function initAudio(): Engine {
   const created: Engine = {
     ac,
     master,
+    sfx: null,
     noise,
     step: 0,
     next: ac.currentTime + START_DELAY_S,
@@ -152,7 +190,9 @@ function envelope(gainNode: GainNode, time: number, attack: number, peak: number
   gainNode.gain.exponentialRampToValueAtTime(0.0001, time + attack + release);
 }
 
-function noiseHit(eng: Engine, time: number, filterType: BiquadFilterType, frequency: number, peak: number, duration: number): void {
+function noiseHit(
+  eng: Engine, time: number, filterType: BiquadFilterType, frequency: number, peak: number, duration: number, destination: AudioNode = eng.master,
+): void {
   const ac = eng.ac;
   const source = ac.createBufferSource();
   source.buffer = eng.noise;
@@ -163,12 +203,14 @@ function noiseHit(eng: Engine, time: number, filterType: BiquadFilterType, frequ
   envelope(gain, time, 0.002, peak, duration);
   source.connect(filter);
   filter.connect(gain);
-  gain.connect(eng.master);
+  gain.connect(destination);
   source.start(time, Math.random());
   source.stop(time + duration + 0.05);
 }
 
-function tone(eng: Engine, time: number, frequency: number, waveType: OscillatorType, peak: number, attack: number, release: number): void {
+function tone(
+  eng: Engine, time: number, frequency: number, waveType: OscillatorType, peak: number, attack: number, release: number, destination: AudioNode = eng.master,
+): void {
   const ac = eng.ac;
   const oscillator = ac.createOscillator();
   const gain = ac.createGain();
@@ -176,7 +218,7 @@ function tone(eng: Engine, time: number, frequency: number, waveType: Oscillator
   oscillator.frequency.value = frequency;
   envelope(gain, time, attack, peak, release);
   oscillator.connect(gain);
-  gain.connect(eng.master);
+  gain.connect(destination);
   oscillator.start(time);
   oscillator.stop(time + attack + release + 0.05);
 }
@@ -239,18 +281,31 @@ function scheduleAhead(eng: Engine): void {
   }
 }
 
+/** The context runs while the music or the effects are wanted; muting the music keeps the effects going. */
+function syncContext(eng: Engine): void {
+  eng.master.gain.value = audio.on ? MASTER_VOLUME : 0;
+  if (audio.on || audio.sfx) {
+    void eng.ac.resume();
+  } else {
+    void eng.ac.suspend();
+  }
+}
+
+function ensureEngine(): Engine {
+  if (!engine) {
+    engine = initAudio();
+  }
+  return engine;
+}
+
 function setMusic(on: boolean): void {
   try {
-    if (!engine) {
-      engine = initAudio();
-    }
+    const eng = ensureEngine();
     audio.on = on;
     if (audio.on) {
-      void engine.ac.resume();
-      engine.next = engine.ac.currentTime + START_DELAY_S;
-    } else {
-      void engine.ac.suspend();
+      eng.next = eng.ac.currentTime + START_DELAY_S;
     }
+    syncContext(eng);
   } catch {
     audio.on = false;
   }
@@ -262,19 +317,141 @@ export function toggleMusic(): void {
   rememberMusic(audio.on);
 }
 
+/** The menu item "Звуки": turns the effects on or off and remembers the choice. */
+export function toggleSfx(): void {
+  audio.sfx = !audio.sfx;
+  rememberSfx(audio.sfx);
+  if (engine) {
+    syncContext(engine);
+  }
+}
+
 /**
- * Called on a touch / key press until the music runs: starts it if the
- * player has not turned it off. Returns true when nothing is left to do
- * (playing, or not wanted), so the caller can stop listening.
+ * Called on a touch / key press until the sound runs: starts the music if the
+ * player has not turned it off, and wakes the context for the effects. Returns
+ * true when nothing is left to do (running, or nothing wanted), so the caller can stop listening.
  */
-export function startMusicOnGesture(): boolean {
-  if (!musicWanted()) {
+export function startSoundOnGesture(): boolean {
+  if (!musicWanted() && !audio.sfx) {
     return true;
   }
-  if (!audio.on) {
-    setMusic(true);
-  } else if (engine && engine.ac.state !== 'running') {
-    void engine.ac.resume();
+  try {
+    if (musicWanted() && !audio.on) {
+      setMusic(true);
+    } else {
+      syncContext(ensureEngine());
+    }
+  } catch {
+    return true;
   }
-  return audio.on && engine !== null && engine.ac.state === 'running';
+  return engine !== null && engine.ac.state === 'running';
+}
+
+/* ---------- junkyard sound effects (generated, no files) ---------- */
+
+/** Effects of the junkyard: a dig, its find by rarity, the noise tick, the drone, going home. */
+export type SfxName = 'dig' | 'empty' | 'parts' | 'broken' | 'rare' | 'tick' | 'hum' | 'drone' | 'home';
+
+function sfxBus(eng: Engine): GainNode {
+  if (!eng.sfx) {
+    const lowpass = eng.ac.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = SFX_LOWPASS_HZ;
+    const gain = eng.ac.createGain();
+    gain.gain.value = SFX_VOLUME;
+    gain.connect(lowpass);
+    lowpass.connect(eng.ac.destination);
+    eng.sfx = gain;
+  }
+  return eng.sfx;
+}
+
+/** Each effect as notes on the effects bus, starting at `time`. */
+const SFX: Record<SfxName, (eng: Engine, time: number, bus: AudioNode) => void> = {
+  // a dull thud and a shovel scrape: low-passed noise over a falling low sine
+  dig: (eng, time, bus) => {
+    noiseHit(eng, time, 'lowpass', 500, 0.5, 0.2, bus);
+    tone(eng, time, 72, 'sine', 0.35, 0.005, 0.14, bus);
+  },
+  // nothing: a quiet rustle, no "reward"
+  empty: (eng, time, bus) => noiseHit(eng, time + 0.12, 'bandpass', 2400, 0.1, 0.28, bus),
+  // spare parts: two small clicks
+  parts: (eng, time, bus) => {
+    tone(eng, time + 0.14, 1900, 'square', 0.05, 0.001, 0.03, bus);
+    tone(eng, time + 0.22, 2300, 'square', 0.04, 0.001, 0.03, bus);
+  },
+  // a broken thing: a metallic clang (inharmonic partials)
+  broken: (eng, time, bus) => {
+    [1, 2.76, 5.4].forEach((ratio, i) => tone(eng, time + 0.12, 440 * ratio, 'triangle', 0.12 / (i + 1), 0.002, 0.7 - i * 0.15, bus));
+  },
+  // a rare find: a short rising arpeggio
+  rare: (eng, time, bus) => {
+    [72, 76, 79, 84].forEach((note, i) => tone(eng, time + 0.14 + i * 0.08, midiToFrequency(note), 'sine', 0.14, 0.005, 0.35, bus));
+  },
+  // "громко": a faint tick, more often as the noise grows (see setJunkAmbience)
+  tick: (eng, time, bus) => tone(eng, time, 2600, 'square', 0.025, 0.001, 0.02, bus),
+  // "дрон рядом": a low hum under the ticks
+  hum: (eng, time, bus) => tone(eng, time, 58, 'sawtooth', 0.05, 0.12, 0.35, bus),
+  // the drone comes: a rising whine, then a two-tone alarm
+  drone: (eng, time, bus) => {
+    const ac = eng.ac;
+    const oscillator = ac.createOscillator();
+    const gain = ac.createGain();
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.setValueAtTime(220, time);
+    oscillator.frequency.exponentialRampToValueAtTime(1100, time + 0.8);
+    envelope(gain, time, 0.6, 0.06, 0.3);
+    oscillator.connect(gain);
+    gain.connect(bus);
+    oscillator.start(time);
+    oscillator.stop(time + 1);
+    [880, 660, 880, 660].forEach((frequency, i) => tone(eng, time + 0.9 + i * 0.16, frequency, 'square', 0.05, 0.005, 0.12, bus));
+  },
+  // going home: a short calm falling triad
+  home: (eng, time, bus) => {
+    [67, 64, 60].forEach((note, i) => tone(eng, time + i * 0.14, midiToFrequency(note), 'sine', 0.1, 0.01, 0.5, bus));
+  },
+};
+
+export const SFX_NAMES = Object.keys(SFX) as SfxName[];
+
+/** Plays an effect; false when the effects are off or the sound has not started (no touch yet). */
+export function playSfx(name: SfxName): boolean {
+  if (!audio.sfx || !engine || engine.ac.state !== 'running') {
+    return false;
+  }
+  try {
+    SFX[name](engine, engine.ac.currentTime + 0.01, sfxBus(engine));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/* ---------- junkyard ambience: ticks at "громко", ticks + hum at "дрон рядом" ---------- */
+
+const AMBIENCE_TICK_MS = [0, 0, 900, 420];
+const ambience = { level: 0, timer: 0 as ReturnType<typeof setTimeout> | 0 };
+
+/** Junkyard noise level (0…3) for the background ticking; 0 (or leaving) stops it. */
+export function setJunkAmbience(level: number): void {
+  ambience.level = level;
+  if (level >= 2 && !ambience.timer) {
+    scheduleTick();
+  }
+}
+
+function scheduleTick(): void {
+  const every = AMBIENCE_TICK_MS[ambience.level] ?? 0;
+  if (!every) {
+    ambience.timer = 0;
+    return;
+  }
+  ambience.timer = setTimeout(() => {
+    playSfx('tick');
+    if (ambience.level === 3) {
+      playSfx('hum');
+    }
+    scheduleTick();
+  }, every);
 }

@@ -1,7 +1,7 @@
 // V1.5 "Каркас": the action bar above the HUD — one main button per screen, always in the same place.
 import { afterEach, describe, expect, it } from 'vitest';
 import { barAction, canCallNext, mainAction, type MainAction } from '../../src/actionbar';
-import { ACTION_TEXT, CUSTOMERS_PER_DAY, LANDLORD_SEED } from '../../src/data';
+import { ACTION_TEXT, CUSTOMERS_PER_DAY, JUNK_TEXT, LANDLORD_SEED } from '../../src/data';
 import { actor, actorAtCounter, actorReset, state } from '../../src/state';
 import type { Tab } from '../../src/types';
 import styleCss from '../../src/style.css?raw';
@@ -85,12 +85,19 @@ describe('main action table', () => {
     expect(mainAction('deal')).toMatchObject({ action: 'evict', tone: 'risk' });
   });
 
-  it('evening → "Спать"; junkyard → "Вернуться домой"; on other tabs a hint', () => {
+  it('evening → "Спать"; junkyard → "Копать", then "Вернуться домой"; on other tabs a hint', () => {
     makeState({ phase: 'evening', where: 'home', hours: 4 });
     expect(action()).toBe('sleep');
     expect(mainAction('inv')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.toEvening });
     state.where = 'junk';
+    state.junk = { d: 2, n: 30, dp: 3, f: [], s: 1 };
+    expect(action()).toBe('dig');
+    expect(mainAction('deal')).toMatchObject({ label: JUNK_TEXT.ru.dig });
+    state.junk.d = 0;
     expect(action()).toBe('home');
+    state.junk = { d: 0, n: 50, dp: 4, f: [], s: 1, run: true }; // after the drone
+    expect(action()).toBe('home');
+    expect(mainAction('inv')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.toJunkyard });
   });
 
   it('after the end the bar is hidden (the final window has its buttons)', () => {
@@ -114,7 +121,7 @@ describe('main action table', () => {
 
 describe('one main button per screen', () => {
   it('the moved actions are not in the panes any more: only the bar draws them', () => {
-    for (const moved of ['call', 'offer', 'ask', 'closeshop', 'sleep', 'home', 'evict']) {
+    for (const moved of ['call', 'offer', 'ask', 'closeshop', 'sleep', 'dig', 'evict']) {
       // buttons only: the Enter key handler still looks for [data-a="offer"] in the bar
       const asButton = new RegExp(`<button[^>]*data-a="${moved}"`);
       expect(uiTs, moved).not.toMatch(asButton);
@@ -123,6 +130,9 @@ describe('one main button per screen', () => {
     // Grobov's chosen option leaves the list (rentOptions), "Нет такого" leaves the buyer pane
     expect(uiTs).toMatch(/function rentOptions[\s\S]*?barAction\('deal'\)/);
     expect(uiTs).not.toContain('Нет такого, до свидания');
+    // junkyard v2: "Вернуться домой" is a secondary pane button only while "Копать" holds the bar
+    expect(uiTs).toMatch(/const homeButton = visit\.d > 0 \? `<button class="btn" data-a="home">/);
+    expect(uiTs.match(/<button[^>]*data-a="home"/g)).toHaveLength(1);
   });
 
   it('the bar renders one button or one hint', () => {

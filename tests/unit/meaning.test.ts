@@ -29,6 +29,8 @@ const DECOR = [
   '.mbox', '.mbox h2', '.mbox label', '.mbox .version', '.diag', '.diag h2',
   // section headings of the debt window ("Внести досрочно", "Место на шаттле"): grey like .mbox label
   '.debt h3',
+  // "шум" label of the junkyard noise scale: grey like the "Чуйка" row; the scale itself is risk
+  '.noise',
   // customer kind label ("продаёт" / "покупает"): a type, not a state, so neutral grey (V1.3)
   '.kind',
   // font lab: a debug sheet (src/fontlab.ts)
