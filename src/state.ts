@@ -8,8 +8,9 @@
 //  saves in migrate().
 // =====================================================================
 import {
-  DEBT, DEBT_TEXT, ENDING_TEXT, ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, MODE_TEXT, PLAYABLE_MODES, RENT, SAVE_CODE_PREFIX, SAVE_KEYS, START,
+  CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, MODE_TEXT, PLAYABLE_MODES, RENT, SAVE_CODE_PREFIX, SAVE_KEYS, START,
 } from './data';
+import { customersToday } from './day';
 import { browserStore } from './profile';
 import type { Actor, GameState, Item, ItemKnowledge, ItemType, KeyValueStore, Mode, SavedGame, UiState } from './types';
 import { daysRu, fill, randomInt } from './util';
@@ -47,6 +48,8 @@ export function newGame(mode: Mode = 'story'): void {
   state = {
     day: 1,
     slot: 0,
+    cn: CUSTOMERS_PER_DAY,
+    late: 0,
     credits: START.credits,
     parts: START.parts,
     heat: 0,
@@ -73,6 +76,8 @@ export function newGame(mode: Mode = 'story'): void {
     ending: null,
     mode,
   };
+  // day 1 is the first day of the station week: a quiet start
+  state.cn = customersToday(state).count;
   state.inv.push(createItem('battery', { cond: 70, stolen: false, defect: false, infected: false, known: true }));
   state.inv.push(createItem('comm', { cond: 55, stolen: false, defect: false, infected: false, known: true }));
   const start = mode === 'story' ? DEBT_TEXT.ru.start : MODE_TEXT.ru.startCalm;
@@ -234,6 +239,10 @@ export function migrate(data: SavedGame | null): GameState | null {
       data.jmsg = '';
     }
   }
+  // Before the day update (task 16) every day had 6 customers and the shop opened at 08:00:
+  // today keeps 6, the station week starts from the next morning.
+  data.cn ??= CUSTOMERS_PER_DAY;
+  data.late ??= 0;
   // Before modes every save was the story; an unknown or locked mode is read as story too.
   if (!(PLAYABLE_MODES as readonly unknown[]).includes(data.mode)) {
     data.mode = 'story';

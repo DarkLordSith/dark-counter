@@ -151,6 +151,8 @@ export const SHOP = {
 
 export const JUNKYARD = {
   sky: '#0a0c17',
+  /** Past midnight (task 16): the sky goes darker, the stars show more. */
+  skyNight: '#040509',
   starDim: '#3a3f62',
   hills: '#121527',
   ground: '#15182a',

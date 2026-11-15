@@ -138,6 +138,11 @@ export interface GameState {
   day: number;
   /** Customers served today. */
   slot: number;
+  /** Customers expected today ("customers number"): customersToday() in the morning; 6 in saves before task 16. */
+  cn: number;
+  /** Digs past midnight: counted at the junkyard tonight, next day they open the shop later (2 h each)
+   *  and take customers; reset when the shop closes. 0 in saves before task 16. */
+  late: number;
   credits: number;
   /** Spare parts. */
   parts: number;
@@ -216,8 +221,10 @@ type DebtFields = 'debt' | 'seat' | 'shuttleDay' | 'ending' | 'mode';
  * saves before the debt update have `won` (shop bought out), which migrate() turns into the 'left' ending,
  * and saves before junkyard v2 may hold a visit with six piles.
  */
-export type SavedGame = Omit<GameState, RentFields | DebtFields | 'junk'>
-  & Partial<Pick<GameState, RentFields | DebtFields>>
+/** Fields added by task 16 (the day: clock, week, late opening). */
+type DayFields = 'cn' | 'late';
+export type SavedGame = Omit<GameState, RentFields | DebtFields | DayFields | 'junk'>
+  & Partial<Pick<GameState, RentFields | DebtFields | DayFields>>
   & { won?: boolean; junk: GameState['junk'] | { piles: JunkPile[] } };
 
 /* ---------- screen state (not saved) ---------- */

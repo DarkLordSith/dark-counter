@@ -6,7 +6,8 @@
 //  Also the queue chip on the scene (chipLines): the other bit of
 //  "where am I in the day" text drawn over the scene.
 // =====================================================================
-import { ACTION_TEXT, CUSTOMERS_PER_DAY, JUNK_TEXT } from './data';
+import { ACTION_TEXT, DAY_TEXT, JUNK_TEXT } from './data';
+import { clockOf } from './day';
 import { isLandlordDue, isPresentedBuyer, planCollateral } from './economy';
 import { actor, state } from './state';
 import type { Tab } from './types';
@@ -29,7 +30,7 @@ const hint = (text: string): MainAction => ({ kind: 'hint', text });
 /** "Позвать следующего" is possible: the counter is free and someone is still in the queue (or Grobov is due). */
 export function canCallNext(): boolean {
   return state.phase === 'shop' && actor.phase === 'empty' && !state.cust && !state.over
-    && (state.slot < CUSTOMERS_PER_DAY || isLandlordDue());
+    && (state.slot < state.cn || isLandlordDue());
 }
 
 /** Grobov at the counter: pay if the money is there, else defer, else goods, else eviction. */
@@ -80,7 +81,7 @@ export function mainAction(tab: Tab): MainAction {
     if (tab !== 'deal') {
       return hint(TEXT.shiftOver);
     }
-    return state.slot >= CUSTOMERS_PER_DAY && !isLandlordDue() ? button('closeshop', TEXT.closeShop) : hint(TEXT.wait);
+    return state.slot >= state.cn && !isLandlordDue() ? button('closeshop', TEXT.closeShop) : hint(TEXT.wait);
   }
   if (tab !== 'deal') {
     return hint(TEXT.toCounter);
@@ -97,22 +98,31 @@ export function mainAction(tab: Tab): MainAction {
   return isPresentedBuyer(customer) ? button('ask', TEXT.ask) : hint(TEXT.showItem);
 }
 
+const DAY_WORDS = DAY_TEXT.ru;
+
 /**
- * Queue chip in the scene corner, one or two lines (V1.6): "+ПЛАТЁЖ" goes on a second line,
- * so the chip stays clear of the "ЛАВКА 7Б" sign on a 375 pt screen.
+ * Chip in the scene corner: the game time first (task 16), then the queue. Short lines (V1.6),
+ * so the chip stays clear of the "ЛАВКА 7Б" sign on a 375 pt screen: in the evening one line
+ * "21:00 · ВЕЧЕР", in the shop the time, "ОЧЕРЕДЬ: 3" and "+ПЛАТЁЖ" each on its own line.
+ * The first line is the time; ui.ts tints it `wear` past midnight (chipIsNight).
  */
 export function chipLines(): string[] {
   if (state.over) {
-    return ['ЗАКРЫТО'];
+    return [DAY_WORDS.closed];
   }
+  const clock = clockOf(state);
   if (state.phase === 'evening') {
-    return [`${state.where === 'junk' ? 'СВАЛКА' : 'ВЕЧЕР'} · ${state.hours} Ч`];
+    const place = clock.night ? DAY_WORDS.night : state.where === 'junk' ? DAY_WORDS.junk : DAY_WORDS.evening;
+    return [`${clock.text} · ${place}`];
   }
-  const queue = CUSTOMERS_PER_DAY - state.slot - (state.cust ? 1 : 0);
+  const queue = state.cn - state.slot - (state.cust ? 1 : 0);
   const landlordDue = isLandlordDue();
-  const queueText = queue > 0 ? `ОЧЕРЕДЬ: ${queue}` : landlordDue ? 'ОЧЕРЕДЬ: 0' : 'СМЕНА ОКОНЧЕНА';
-  return landlordDue ? [queueText, '+ПЛАТЁЖ'] : [queueText];
+  const queueText = queue > 0 ? fill(DAY_WORDS.queue, { n: queue }) : landlordDue ? fill(DAY_WORDS.queue, { n: 0 }) : DAY_WORDS.shiftOver;
+  return landlordDue ? [clock.text, queueText, DAY_WORDS.payment] : [clock.text, queueText];
 }
+
+/** Past midnight: the chip's time is drawn in `wear` (time, as in the colour dictionary). */
+export const chipIsNight = (): boolean => !state.over && clockOf(state).night;
 
 /** The action the bar took from the pane on this screen, if any (the pane leaves it out). */
 export function barAction(tab: Tab): string | null {

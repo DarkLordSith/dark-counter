@@ -2,10 +2,11 @@
 //  ui.ts — HTML rendering of the HUD, scene overlay, tabs and panes,
 //  plus all click/keyboard handlers (buttons carry data-a="action").
 // =====================================================================
-import { barAction, chipLines, mainAction } from './actionbar';
+import { barAction, chipIsNight, chipLines, mainAction } from './actionbar';
+import { customersToday, formatHour, openingHour } from './day';
 import { audio, playSfx, setJunkAmbience, startSoundOnGesture, toggleMusic, toggleSfx } from './audio';
 import {
-  ACTION_TEXT, BENCH_COST, CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, JUNK_TEXT, MARKET, MAX_HEAT, MODES, MODE_TEXT,
+  ACTION_TEXT, BENCH_COST, DAY_TEXT, DEBT, JUNK, DEBT_TEXT, ENDING_TEXT, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, JUNK_TEXT, MARKET, MAX_HEAT, MODES, MODE_TEXT,
   PLAYABLE_MODES, RECIPES, RENT, SUPPLIER,
 } from './data';
 import { byId, maybeById } from './dom';
@@ -13,7 +14,7 @@ import { iconSvg } from './icons';
 import {
   askBuyer, availableOfType, buyFromSeller, buySeat, callNextCustomer, canBuySeat, canCraft, hasShuttle, isDebtClosed, canVisitMarket, closeShop,
   collateralHeatRelief, craft, customerLeaves, deferredDebt, deferRent, dig, digsPerVisit, estimatedValue, evict, feedback,
-  canGoToJunkyard, goHome, goToJunkyard, hunchVerdict, junkVisitHours, noiseLevel, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer, itemName,
+  canGoToJunkyard, digIsLate, goHome, goToJunkyard, hunchVerdict, junkVisitHours, noiseLevel, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer, itemName,
   nextRent, offerToSeller, orderParts, payEarly, payRent, payWithCollateral, perceivedChance, planCollateral, presentItem,
   recipeNeeds, scrapValue, seatPrice, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
 } from './economy';
@@ -166,7 +167,9 @@ export function renderSceneOverlay(): void {
       bubble.textContent = customer.msg;
     }
   }
-  byId('chip').innerHTML = chipLines().map(line => `<span>${line}</span>`).join('');
+  // the time comes first; past midnight it reads as `wear` (time)
+  const night = chipIsNight();
+  byId('chip').innerHTML = chipLines().map((line, i) => `<span${i === 0 && night ? ' class="m-wear"' : ''}>${line}</span>`).join('');
   const ticker = byId('ticker');
   ticker.innerHTML = `<b>›</b> ${state.log[0] || ''}`;
   // addLog() makes a new array: a new line arrived, even if its text repeats the last one
@@ -232,6 +235,7 @@ function option(action: string, disabled: boolean, title: string, description: s
 
 /** Junkyard words (v2): the noise scale, the panel, the messages. */
 const JUNK_UI = JUNK_TEXT.ru;
+const DAY_UI = DAY_TEXT.ru;
 const ACTION_UI = ACTION_TEXT.ru;
 /** Cells of the noise scale: 10 cells for 0…100. */
 const NOISE_CELLS = 10;
@@ -244,6 +248,20 @@ function noiseMeter(noise: number): string {
   return `<div class="noise${level >= 2 ? ' loud' : ''}"><span>${JUNK_UI.noise}</span><div class="nbar">${meterCells(NOISE_CELLS, filled)}</div><b class="nword${level >= 2 ? ' m-risk' : ''}">${word}</b></div>`;
 }
 
+/** Time before "Копать" (task 16): the last dig before midnight, then each dig costs a customer tomorrow. Time reads as `wear`. */
+function junkTimeNote(digsLeft: number): string {
+  const lines: string[] = [];
+  if (digsLeft > 0 && digIsLate()) {
+    lines.push(JUNK_UI.pastMidnight);
+  } else if (digsLeft > 0 && state.hours === JUNK.digHours) {
+    lines.push(JUNK_UI.lastFree);
+  }
+  if (state.late > 0) {
+    lines.push(fill(JUNK_UI.lateSoFar, { n: state.late * JUNK.lateCustomerLoss }));
+  }
+  return lines.map(line => `<div class="hint m-wear">${line}</div>`).join('');
+}
+
 function junkyardPane(): string {
   const visit = state.junk;
   if (!visit) {
@@ -253,7 +271,7 @@ function junkyardPane(): string {
   // "Копать" is the main action (the action bar), "Вернуться домой" is here until the digs run out — then it goes to the bar
   const homeButton = visit.d > 0 ? `<button class="btn" data-a="home">${ACTION_UI.home}</button>` : '';
   const homeHint = visit.d > 0 ? `<div class="hint">${JUNK_UI.homeHint}</div>` : '';
-  return `<div class="junk-stats"><span>${JUNK_UI.digsLeft}: <b class="rn">${visit.d}</b> ${HUD.of} ${total}</span><span>${JUNK_UI.depth} <b class="rn">${visit.dp}</b></span></div>
+  return `${junkTimeNote(visit.d)}<div class="junk-stats"><span>${JUNK_UI.digsLeft}: <b class="rn">${visit.d}</b> ${HUD.of} ${total}</span><span>${JUNK_UI.depth} <b class="rn">${visit.dp}</b></span></div>
       ${noiseMeter(visit.n)}
       ${homeHint}
       ${homeButton}`;
@@ -262,7 +280,7 @@ function junkyardPane(): string {
 function eveningPane(): string {
   return `<div class="hint" style="margin-bottom:8px">Лавка закрыта. Осталось часов: <b>${state.hours}</b>. Верстак и сборка работают бесплатно.</div>
     <div class="opts">
-      ${option('junk', !canGoToJunkyard(), JUNK_UI.title, fill(JUNK_UI.about, { hours: junkVisitHours(), digs: digsPerVisit() }), '→')}
+      ${option('junk', !canGoToJunkyard(), JUNK_UI.title, fill(JUNK_UI.about, { hours: junkVisitHours(), dig: JUNK.digHours, digs: digsPerVisit() }), '→')}
       ${option('market', !canVisitMarket(), 'Барахолка у шлюза', `${MARKET.hours} ч. ${MARKET.parts} запчастей за ${MARKET.price} кр. Раз за вечер.`, MARKET.price)}
     </div>
     <div class="hint note">«Спать» — кнопка внизу: закончить день. Ночью: платёж, рейды, заражение склада.</div>`;
@@ -278,7 +296,7 @@ function emptyCounterPane(): string {
   if (state.over) {
     return '<div class="hint">Лавка опечатана.</div>';
   }
-  if (state.slot >= CUSTOMERS_PER_DAY && !isLandlordDue()) {
+  if (state.slot >= state.cn && !isLandlordDue()) {
     return '<div class="hint">Очередь кончилась. Пора закрываться.</div>';
   }
   return '<div class="hint">Прилавок свободен. Зовите следующего, когда будете готовы. Пока можно разобрать склад.</div>';
@@ -536,12 +554,25 @@ export function showEnding(): void {
     `<button class="btn pri" data-a="newgame-yes">${DEBT_UI.newGame}</button>`);
 }
 
+/** "+4" / "−2" with a real minus sign. */
+const signed = (n: number): string => (n > 0 ? '+' : '−') + Math.abs(n);
+
+/** Morning window (task 16): "Ожидается клиентов: N" and the reasons it differs from a usual day, in `wear`. */
+function expectedCustomers(): string {
+  const today = customersToday(state);
+  const time = formatHour(openingHour(state));
+  const reasons = today.reasons
+    .map(reason => `<li class="m-wear">${fill(DAY_UI.reasons[reason.key], { time })} (${signed(reason.n)})</li>`)
+    .join('');
+  return `<p class="expect">${fill(DAY_UI.expected, { n: `<b class="rn">${today.count}</b>` })}</p>${reasons ? `<ul class="reasons">${reasons}</ul>` : ''}`;
+}
+
 function showMorningReport(events: string[]): void {
   if (state.over) {
     showEnding();
     return;
   }
-  const body = `<ul>${events.map(event => `<li>${event}</li>`).join('')}</ul>`;
+  const body = `${expectedCustomers()}<ul>${events.map(event => `<li>${event}</li>`).join('')}</ul>`;
   openModal(`Утро. День ${state.day}`, body, '<button class="btn pri" data-a="close">Открыть лавку</button>');
 }
 

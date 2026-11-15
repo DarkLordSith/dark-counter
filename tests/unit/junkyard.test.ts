@@ -32,14 +32,14 @@ afterEach(() => {
 });
 
 describe('a visit', () => {
-  it('costs fixed hours and leaves one for the flea market', () => {
+  it('the road costs an hour, every dig then pays its own (past midnight: day.test.ts)', () => {
     makeState({ phase: 'evening', hours: 4 });
     expect(canGoToJunkyard()).toBe(true);
     goToJunkyard();
     expect(state.where).toBe('junk');
     expect(state.hours).toBe(4 - junkVisitHours());
-    expect(state.hours).toBeGreaterThanOrEqual(1);
-    makeState({ phase: 'evening', hours: junkVisitHours() - 1 });
+    expect(junkVisitHours()).toBe(JUNK.travelHours);
+    makeState({ phase: 'evening', hours: junkVisitHours() });
     expect(canGoToJunkyard()).toBe(false);
   });
 
