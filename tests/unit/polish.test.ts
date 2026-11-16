@@ -57,30 +57,30 @@ describe('queue chip', () => {
   function allChips(): string[][] {
     const chips: string[][] = [];
     makeState({ slot: 0, day: 3, nextDue: 7 });
-    chips.push(chipLines()); // ОЧЕРЕДЬ: 6
+    chips.push(chipLines(state)); // ОЧЕРЕДЬ: 6
     state.slot = CUSTOMERS_PER_DAY;
-    chips.push(chipLines()); // СМЕНА ОКОНЧЕНА
+    chips.push(chipLines(state)); // СМЕНА ОКОНЧЕНА
     state.day = 7;
     state.nextDue = 7;
     state.slot = 1;
-    chips.push(chipLines()); // ОЧЕРЕДЬ: 5 / +ПЛАТЁЖ
+    chips.push(chipLines(state)); // ОЧЕРЕДЬ: 5 / +ПЛАТЁЖ
     state.slot = CUSTOMERS_PER_DAY;
-    chips.push(chipLines()); // ОЧЕРЕДЬ: 0 / +ПЛАТЁЖ
+    chips.push(chipLines(state)); // ОЧЕРЕДЬ: 0 / +ПЛАТЁЖ
     state.cust = makeSeller();
-    chips.push(chipLines());
+    chips.push(chipLines(state));
     state.cust = { kind: 'rent', name: 'Гробов', seed: LANDLORD_SEED, msg: '', pat: 0, max: 0, done: {} };
-    chips.push(chipLines());
+    chips.push(chipLines(state));
     makeState({ phase: 'evening', hours: 4, where: 'home' });
-    chips.push(chipLines());
+    chips.push(chipLines(state));
     state.where = 'junk';
-    chips.push(chipLines());
+    chips.push(chipLines(state));
     state.hours = 0;
     state.late = 2;
-    chips.push(chipLines()); // 02:00 · НОЧЬ
+    chips.push(chipLines(state)); // 02:00 · НОЧЬ
     makeState({ slot: 3, late: 2, cn: 4 });
-    chips.push(chipLines()); // 16:00 / ОЧЕРЕДЬ: 1
+    chips.push(chipLines(state)); // 16:00 / ОЧЕРЕДЬ: 1
     makeState({ over: 'конец', ending: 'stayed' });
-    chips.push(chipLines());
+    chips.push(chipLines(state));
     return chips;
   }
 

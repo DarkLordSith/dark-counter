@@ -1,4 +1,5 @@
 // Concept skeleton: the father's debt to Grobov, early payments, the shuttle seat, endings on day 60.
+import { gameRng } from '../../src/rng';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEBT, ENDING_TEXT, LANDLORD_SEED } from '../../src/data';
 import {
@@ -18,13 +19,13 @@ function payOnDueDay(): number {
   state.llDone = false;
   const paid = state.owed;
   landlordAtCounter();
-  payRent();
+  payRent(state);
   return paid;
 }
 
 function sleep(): string[] {
-  closeShop();
-  return sleepUntilMorning();
+  closeShop(state);
+  return sleepUntilMorning(state, gameRng);
 }
 
 afterEach(() => {
@@ -45,7 +46,7 @@ describe('weekly payment', () => {
   it('reduces the debt', () => {
     makeState({ day: 7, nextDue: 7, rent: 400, owed: 400, credits: 400, debt: 25000 });
     landlordAtCounter();
-    payRent();
+    payRent(state);
     expect(state).toMatchObject({ debt: 24600, credits: 0 });
   });
 
@@ -60,20 +61,20 @@ describe('weekly payment', () => {
   it('paid with goods also comes off the debt', () => {
     makeState({ day: 7, nextDue: 7, rent: 400, owed: 400, credits: 100, debt: 5000, inv: [makeItem('arm')] });
     landlordAtCounter();
-    payWithCollateral();
+    payWithCollateral(state);
     expect(state.debt).toBe(4600);
   });
 
   it('never asks for more than the debt left; with no debt Grobov stops coming', () => {
     makeState({ day: 7, nextDue: 7, rent: 400, owed: 400, credits: 1000, debt: 500 });
     landlordAtCounter();
-    payRent();
+    payRent(state);
     expect(state).toMatchObject({ debt: 100, owed: 100 });
     payOnDueDay();
     expect(state.debt).toBe(0);
     state.day = state.nextDue;
     state.llDone = false;
-    expect(isLandlordDue()).toBe(false);
+    expect(isLandlordDue(state)).toBe(false);
   });
 });
 
@@ -81,7 +82,7 @@ describe('deferral', () => {
   it('puts the +20% fine onto the debt', () => {
     makeState({ day: 7, nextDue: 7, rent: 400, owed: 400, credits: 0, debt: 25000 });
     landlordAtCounter();
-    deferRent();
+    deferRent(state);
     expect(state).toMatchObject({ owed: 480, debt: 25080, deferred: true, nextDue: 9 });
     // paying the bigger payment later: the fine was a cost, only 400 of the father's debt is gone
     payOnDueDay();
@@ -91,7 +92,7 @@ describe('deferral', () => {
   it('eviction stays: it is the "evicted" ending', () => {
     makeState({ day: 9, nextDue: 9, owed: 480, deferred: true, credits: 0 });
     landlordAtCounter();
-    evict();
+    evict(state);
     expect(state).toMatchObject({ ending: 'evicted', over: ENDING_TEXT.ru.evicted.line, cust: null });
   });
 });
@@ -99,23 +100,23 @@ describe('deferral', () => {
 describe('early payment', () => {
   it('reduces the debt by the step, any day', () => {
     makeState({ day: 3, credits: 700, debt: 25000 });
-    expect(payEarly(500)).toBe(500);
+    expect(payEarly(state, 500)).toBe(500);
     expect(state).toMatchObject({ credits: 200, debt: 24500 });
-    expect(payEarly(500)).toBe(200); // no more than the credits
+    expect(payEarly(state, 500)).toBe(200); // no more than the credits
     expect(state).toMatchObject({ credits: 0, debt: 24300 });
-    expect(payEarly(100)).toBe(0);
+    expect(payEarly(state, 100)).toBe(0);
   });
 
   it('no more than the debt; the weekly payment shrinks to what is left', () => {
     makeState({ day: 3, credits: 5000, debt: 300, owed: 650 });
-    expect(payEarly(5000)).toBe(300);
+    expect(payEarly(state, 5000)).toBe(300);
     expect(state).toMatchObject({ credits: 4700, debt: 0, owed: 0 });
     expect(state.log[0]).toContain('выплачен');
   });
 
   it('does nothing after the game has ended', () => {
     makeState({ credits: 500, debt: 1000, over: 'конец', ending: 'stayed' });
-    expect(payEarly(100)).toBe(0);
+    expect(payEarly(state, 100)).toBe(0);
     expect(state.debt).toBe(1000);
   });
 });
@@ -129,22 +130,22 @@ describe('shuttle seat', () => {
 
   it('is not sold while there is any debt', () => {
     makeState({ day: 20, credits: 99999, debt: 1 });
-    expect(canBuySeat()).toBe(false);
-    expect(buySeat()).toBe(false);
+    expect(canBuySeat(state)).toBe(false);
+    expect(buySeat(state)).toBe(false);
     expect(state.seat).toBe(false);
   });
 
   it('is sold at zero debt for the price of the day, once', () => {
     makeState({ day: 20, credits: 5000, debt: 0 });
-    expect(buySeat()).toBe(true);
+    expect(buySeat(state)).toBe(true);
     expect(state).toMatchObject({ seat: true, credits: 1000 });
-    expect(buySeat()).toBe(false);
+    expect(buySeat(state)).toBe(false);
     expect(state.credits).toBe(1000);
   });
 
   it('needs the money', () => {
     makeState({ day: 20, credits: 3999, debt: 0 });
-    expect(canBuySeat()).toBe(false);
+    expect(canBuySeat(state)).toBe(false);
   });
 });
 

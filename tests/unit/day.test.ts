@@ -1,5 +1,6 @@
 // The day (task 16): the station week and the customers it brings, the wanted level,
 // the late opening after digs past midnight, the game clock in the scene chip.
+import { gameRng } from '../../src/rng';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chipIsNight, chipLines } from '../../src/actionbar';
 import {
@@ -118,15 +119,15 @@ describe('the clock', () => {
 
   it('is the first thing in the scene chip, tinted `wear` past midnight', () => {
     makeState({ phase: 'shop', slot: 3, cn: 6, nextDue: 7 });
-    expect(chipLines()).toEqual(['13:30', 'ОЧЕРЕДЬ: 3']);
+    expect(chipLines(state)).toEqual(['13:30', 'ОЧЕРЕДЬ: 3']);
     makeState({ phase: 'evening', hours: 3 });
-    expect(chipLines()).toEqual(['21:00 · ВЕЧЕР']);
-    expect(chipIsNight()).toBe(false);
+    expect(chipLines(state)).toEqual(['21:00 · ВЕЧЕР']);
+    expect(chipIsNight(state)).toBe(false);
     state.where = 'junk';
     state.hours = 0;
     state.late = 1;
-    expect(chipLines()).toEqual(['01:00 · НОЧЬ']);
-    expect(chipIsNight()).toBe(true);
+    expect(chipLines(state)).toEqual(['01:00 · НОЧЬ']);
+    expect(chipIsNight(state)).toBe(true);
     expect(uiTs).toContain(`i === 0 && night ? ' class="m-wear"' : ''`);
   });
 });
@@ -134,22 +135,22 @@ describe('the clock', () => {
 describe('digs past midnight', () => {
   const evening = (): void => {
     makeState({ phase: 'evening', hours: EVENING_HOURS, day: 3, nextDue: 7 });
-    goToJunkyard();
+    goToJunkyard(state, gameRng);
   };
 
   it('the road takes an hour, four digs fit the evening, the fifth goes past midnight', () => {
     quiet();
     evening();
     expect(state.hours).toBe(EVENING_HOURS - JUNK.travelHours);
-    dig();
-    dig();
-    dig();
-    expect(digIsLate()).toBe(false);
-    dig();
+    dig(state, gameRng);
+    dig(state, gameRng);
+    dig(state, gameRng);
+    expect(digIsLate(state)).toBe(false);
+    dig(state, gameRng);
     expect(state.hours).toBe(0);
     expect(state.late).toBe(0);
-    expect(digIsLate()).toBe(true);
-    dig();
+    expect(digIsLate(state)).toBe(true);
+    dig(state, gameRng);
     expect(state.late).toBe(1);
   });
 
@@ -157,27 +158,27 @@ describe('digs past midnight', () => {
     quiet();
     evening();
     for (let i = 0; i < JUNK.digsBase; i++) {
-      dig();
+      dig(state, gameRng);
     }
-    goHome();
-    const events = sleepUntilMorning();
+    goHome(state);
+    const events = sleepUntilMorning(state, gameRng);
     expect(state.day).toBe(4);
     expect(state.cn).toBe(CUSTOMERS_PER_DAY - 1);
     // in the log (the ticker), not in the morning list: the window shows it as a reason
     expect(state.log).toContain('Д4: Проспал после свалки: лавка открылась позже, клиентов на 1 меньше.');
     expect(state.log).toContain('Д4: Лавка открылась в 10:00.');
     expect(events.join(' ')).not.toContain('Проспал');
-    expect(chipLines()).toEqual(['10:00', 'ОЧЕРЕДЬ: 5']);
+    expect(chipLines(state)).toEqual(['10:00', 'ОЧЕРЕДЬ: 5']);
     // the late opening lasts the day; closing the shop starts a new evening count
-    closeShop();
+    closeShop(state);
     expect(state.late).toBe(0);
   });
 
   it('a junkyard visit needs the road and at least one dig before midnight', () => {
     makeState({ phase: 'evening', hours: JUNK.travelHours + JUNK.digHours });
-    expect(canGoToJunkyard()).toBe(true);
+    expect(canGoToJunkyard(state)).toBe(true);
     state.hours = JUNK.travelHours;
-    expect(canGoToJunkyard()).toBe(false);
+    expect(canGoToJunkyard(state)).toBe(false);
   });
 
   it('the panel warns before midnight and after it, in `wear`', () => {
@@ -194,26 +195,26 @@ describe('a day with fewer customers', () => {
     actorReset();
     let served = 0;
     for (let i = 0; i < 10; i++) {
-      callNextCustomer();
+      callNextCustomer(state, gameRng);
       if (!state.cust) {
         break;
       }
-      customerLeaves();
+      customerLeaves(state);
       actor.phase = 'empty';
       served++;
     }
     expect(served).toBe(4);
-    expect(chipLines()).toEqual(['19:00', 'СМЕНА ОКОНЧЕНА']);
+    expect(chipLines(state)).toEqual(['19:00', 'СМЕНА ОКОНЧЕНА']);
   });
 
   it('the morning sets today\'s customers by the morning wanted level (after the night cools it)', () => {
     quiet();
     makeState({ phase: 'evening', day: 3, nextDue: 7, heat: CUSTOMER_FLOW.heatShy });
-    sleepUntilMorning();
+    sleepUntilMorning(state, gameRng);
     // heat cooled to 6 overnight: no "wanted" reason on day 4
     expect(state.cn).toBe(6);
     makeState({ phase: 'evening', day: 4, nextDue: 7, heat: CUSTOMER_FLOW.heatShy + 1 });
-    sleepUntilMorning();
+    sleepUntilMorning(state, gameRng);
     expect(state.cn).toBe(10 - 1); // day 5 is payday, still wanted
   });
 
@@ -246,11 +247,11 @@ describe('the evening of 19:00–24:00 (task 17)', () => {
 
   it('the junkyard is open while the road and one dig fit before midnight', () => {
     makeState({ phase: 'evening', hours: EVENING_HOURS });
-    expect(canGoToJunkyard()).toBe(true);
+    expect(canGoToJunkyard(state)).toBe(true);
     state.hours = JUNK.travelHours + JUNK.digHours;
-    expect(canGoToJunkyard()).toBe(true);
+    expect(canGoToJunkyard(state)).toBe(true);
     state.hours -= 1;
-    expect(canGoToJunkyard()).toBe(false);
+    expect(canGoToJunkyard(state)).toBe(false);
   });
 });
 

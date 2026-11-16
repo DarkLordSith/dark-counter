@@ -1,4 +1,5 @@
 // Weekly payment of the father's debt: Grobov comes on day 7, then every 7 days (400, 650, 900…).
+import { gameRng } from '../../src/rng';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEBT, LANDLORD_SEED } from '../../src/data';
 import { callNextCustomer, closeShop, customerLeaves, isLandlordDue, payRent, sleepUntilMorning } from '../../src/economy';
@@ -13,18 +14,18 @@ function seedRandom(seed: number): void {
 
 /** Ends the current day without trading. */
 function skipDay(): string[] {
-  closeShop();
-  return sleepUntilMorning();
+  closeShop(state);
+  return sleepUntilMorning(state, gameRng);
 }
 
 /** Calls customers until the landlord stands at the counter. */
 function waitForLandlord(): void {
   for (let guard = 0; guard < 20 && state.cust?.kind !== 'rent'; guard++) {
     if (state.cust) {
-      customerLeaves();
+      customerLeaves(state);
     }
     actorReset();
-    callNextCustomer();
+    callNextCustomer(state, gameRng);
   }
 }
 
@@ -44,11 +45,11 @@ describe('payment schedule', () => {
     expect(state).toMatchObject({ day: 1, rent: 400, owed: 400, nextDue: 7, debt: 25000 });
     expect(state.log.at(-1)).toContain('раз в 7 дней');
     while (state.day < 7) {
-      expect(isLandlordDue()).toBe(false);
+      expect(isLandlordDue(state)).toBe(false);
       const events = skipDay();
       expect(events.some(event => event.includes('за платежом'))).toBe(state.day === 7);
     }
-    expect(isLandlordDue()).toBe(true);
+    expect(isLandlordDue(state)).toBe(true);
     waitForLandlord();
     expect(state.cust).toMatchObject({ kind: 'rent', seed: LANDLORD_SEED });
   });
@@ -56,7 +57,7 @@ describe('payment schedule', () => {
   it('after paying, the next visit is 7 days later and the payment grows by 250', () => {
     makeState({ day: 7, nextDue: 7, rent: 400, owed: 400, credits: 1000 });
     state.cust = { kind: 'rent', name: 'Гробов', seed: LANDLORD_SEED, msg: '', pat: 0, max: 0, done: {} };
-    payRent();
+    payRent(state);
     expect(state).toMatchObject({ credits: 600, rent: 650, owed: 650, nextDue: 14, llDone: true });
     expect(state.log[0]).toContain('650 кр. на день 14');
   });

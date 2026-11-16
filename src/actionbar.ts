@@ -5,12 +5,12 @@
 //  and leaves that action out of the pane, Vitest checks the table.
 //  Also the queue chip on the scene (chipLines): the other bit of
 //  "where am I in the day" text drawn over the scene.
+//  The game state and the scene figure come as parameters (task 21).
 // =====================================================================
 import { ACTION_TEXT, DAY_TEXT, JUNK_TEXT } from './data';
 import { clockOf } from './day';
 import { isLandlordDue, isPresentedBuyer, planCollateral } from './economy';
-import { actor, state } from './state';
-import type { Tab } from './types';
+import type { Actor, GameState, Tab } from './types';
 import { fill } from './util';
 
 const TEXT = ACTION_TEXT.ru;
@@ -27,21 +27,24 @@ export type MainAction =
 const button = (action: string, label: string, tone: 'action' | 'risk' = 'action'): MainAction => ({ kind: 'button', action, label, tone });
 const hint = (text: string): MainAction => ({ kind: 'hint', text });
 
+/** What the bar needs to know about the scene: whether a figure is walking in or out. */
+export type SceneFigure = Pick<Actor, 'phase'>;
+
 /** "Позвать следующего" is possible: the counter is free and someone is still in the queue (or Grobov is due). */
-export function canCallNext(): boolean {
+export function canCallNext(state: GameState, actor: SceneFigure): boolean {
   return state.phase === 'shop' && actor.phase === 'empty' && !state.cust && !state.over
-    && (state.slot < state.cn || isLandlordDue());
+    && (state.slot < state.cn || isLandlordDue(state));
 }
 
 /** Grobov at the counter: pay if the money is there, else defer, else goods, else eviction. */
-function landlordAction(): MainAction {
+function landlordAction(state: GameState): MainAction {
   if (state.credits >= state.owed) {
     return button('rentpay', fill(TEXT.pay, { amount: state.owed }));
   }
   if (!state.deferred) {
     return button('rentdefer', TEXT.defer);
   }
-  const plan = planCollateral();
+  const plan = planCollateral(state);
   if (plan.ok && plan.items.length) {
     return button('rentitems', TEXT.collateral);
   }
@@ -53,7 +56,7 @@ function landlordAction(): MainAction {
  * (as the scene button did); the others need the "Прилавок" / evening pane,
  * so on the other tabs the bar says where to go.
  */
-export function mainAction(tab: Tab): MainAction {
+export function mainAction(state: GameState, actor: SceneFigure, tab: Tab): MainAction {
   if (state.over) {
     return { kind: 'none' };
   }
@@ -67,7 +70,7 @@ export function mainAction(tab: Tab): MainAction {
     }
     return button('sleep', TEXT.sleep);
   }
-  if (canCallNext()) {
+  if (canCallNext(state, actor)) {
     return button('call', TEXT.call);
   }
   if (actor.phase === 'in') {
@@ -81,13 +84,13 @@ export function mainAction(tab: Tab): MainAction {
     if (tab !== 'deal') {
       return hint(TEXT.shiftOver);
     }
-    return state.slot >= state.cn && !isLandlordDue() ? button('closeshop', TEXT.closeShop) : hint(TEXT.wait);
+    return state.slot >= state.cn && !isLandlordDue(state) ? button('closeshop', TEXT.closeShop) : hint(TEXT.wait);
   }
   if (tab !== 'deal') {
     return hint(TEXT.toCounter);
   }
   if (customer.kind === 'rent') {
-    return landlordAction();
+    return landlordAction(state);
   }
   if (customer.kind === 'sell') {
     return button('offer', TEXT.offer);
@@ -106,7 +109,7 @@ const DAY_WORDS = DAY_TEXT.ru;
  * "21:00 · ВЕЧЕР", in the shop the time, "ОЧЕРЕДЬ: 3" and "+ПЛАТЁЖ" each on its own line.
  * The first line is the time; ui.ts tints it `wear` past midnight (chipIsNight).
  */
-export function chipLines(): string[] {
+export function chipLines(state: GameState): string[] {
   if (state.over) {
     return [DAY_WORDS.closed];
   }
@@ -116,16 +119,16 @@ export function chipLines(): string[] {
     return [`${clock.text} · ${place}`];
   }
   const queue = state.cn - state.slot - (state.cust ? 1 : 0);
-  const landlordDue = isLandlordDue();
+  const landlordDue = isLandlordDue(state);
   const queueText = queue > 0 ? fill(DAY_WORDS.queue, { n: queue }) : landlordDue ? fill(DAY_WORDS.queue, { n: 0 }) : DAY_WORDS.shiftOver;
   return landlordDue ? [clock.text, queueText, DAY_WORDS.payment] : [clock.text, queueText];
 }
 
 /** Past midnight: the chip's time is drawn in `wear` (time, as in the colour dictionary). */
-export const chipIsNight = (): boolean => !state.over && clockOf(state).night;
+export const chipIsNight = (state: GameState): boolean => !state.over && clockOf(state).night;
 
 /** The action the bar took from the pane on this screen, if any (the pane leaves it out). */
-export function barAction(tab: Tab): string | null {
-  const main = mainAction(tab);
+export function barAction(state: GameState, actor: SceneFigure, tab: Tab): string | null {
+  const main = mainAction(state, actor, tab);
   return main.kind === 'button' ? main.action : null;
 }

@@ -19,7 +19,7 @@ const rule = (selector: string): string => {
 const rootPx = (name: string): number => parseFloat(RULES.filter(([sel]) => sel === ':root').map(([, body]) => body).join('\n')
   .match(new RegExp(`${name}:\\s*([^;]+);`))?.[1] ?? 'NaN');
 
-const action = (tab: Tab = 'deal'): string | null => barAction(tab);
+const action = (tab: Tab = 'deal'): string | null => barAction(state, actor, tab);
 const at = (main: MainAction): string => main.kind === 'button' ? main.label : main.kind === 'hint' ? main.text : '';
 const landlord = () => ({ kind: 'rent' as const, name: 'Гробов', seed: LANDLORD_SEED, msg: '', pat: 0, max: 0, done: {} });
 
@@ -28,7 +28,7 @@ afterEach(() => actorReset());
 describe('main action table', () => {
   it('shop, free counter → "Позвать следующего" on any tab', () => {
     makeState({ slot: 0 });
-    expect(canCallNext()).toBe(true);
+    expect(canCallNext(state, actor)).toBe(true);
     for (const tab of ['deal', 'inv', 'craft'] as const) {
       expect(action(tab)).toBe('call');
     }
@@ -37,17 +37,17 @@ describe('main action table', () => {
   it('the queue is over → "Закрыть лавку"', () => {
     makeState({ slot: CUSTOMERS_PER_DAY, day: 3, nextDue: 7 });
     expect(action()).toBe('closeshop');
-    expect(mainAction('inv')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.shiftOver });
+    expect(mainAction(state, actor, 'inv')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.shiftOver });
   });
 
   it('a customer walking in or out → a dim hint, not an empty bar', () => {
     makeState();
     state.cust = makeSeller();
     actor.phase = 'in';
-    expect(mainAction('deal')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.approaching });
+    expect(mainAction(state, actor, 'deal')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.approaching });
     state.cust = null;
     actor.phase = 'out';
-    expect(mainAction('deal')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.leaving });
+    expect(mainAction(state, actor, 'deal')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.leaving });
   });
 
   it('seller → "Предложить"; buyer → "Назвать цену" once an item is shown', () => {
@@ -55,10 +55,10 @@ describe('main action table', () => {
     state.cust = makeSeller();
     actorAtCounter(1);
     expect(action()).toBe('offer');
-    expect(mainAction('inv').kind).toBe('hint');
+    expect(mainAction(state, actor, 'inv').kind).toBe('hint');
     state.inv = [makeItem('battery')];
     state.cust = { ...makePresentedBuyer(), item: null };
-    expect(mainAction('deal')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.showItem });
+    expect(mainAction(state, actor, 'deal')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.showItem });
     state.cust = makePresentedBuyer({ item: state.inv[0] });
     expect(action()).toBe('ask');
   });
@@ -74,7 +74,7 @@ describe('main action table', () => {
     makeState({ credits: 500, owed: 400 });
     state.cust = landlord();
     actorAtCounter(LANDLORD_SEED);
-    expect(at(mainAction('deal'))).toBe('Заплатить 400 кр.');
+    expect(at(mainAction(state, actor, 'deal'))).toBe('Заплатить 400 кр.');
     expect(action()).toBe('rentpay');
     state.credits = 100;
     expect(action()).toBe('rentdefer');
@@ -82,27 +82,27 @@ describe('main action table', () => {
     state.inv = [makeItem('arm')];
     expect(action()).toBe('rentitems');
     state.inv = [];
-    expect(mainAction('deal')).toMatchObject({ action: 'evict', tone: 'risk' });
+    expect(mainAction(state, actor, 'deal')).toMatchObject({ action: 'evict', tone: 'risk' });
   });
 
   it('evening → "Спать"; junkyard → "Копать", then "Вернуться домой"; on other tabs a hint', () => {
     makeState({ phase: 'evening', where: 'home', hours: 4 });
     expect(action()).toBe('sleep');
-    expect(mainAction('inv')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.toEvening });
+    expect(mainAction(state, actor, 'inv')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.toEvening });
     state.where = 'junk';
     state.junk = { d: 2, n: 30, dp: 3, f: [], s: 1 };
     expect(action()).toBe('dig');
-    expect(mainAction('deal')).toMatchObject({ label: JUNK_TEXT.ru.dig });
+    expect(mainAction(state, actor, 'deal')).toMatchObject({ label: JUNK_TEXT.ru.dig });
     state.junk.d = 0;
     expect(action()).toBe('home');
     state.junk = { d: 0, n: 50, dp: 4, f: [], s: 1, run: true }; // after the drone
     expect(action()).toBe('home');
-    expect(mainAction('inv')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.toJunkyard });
+    expect(mainAction(state, actor, 'inv')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.toJunkyard });
   });
 
   it('after the end the bar is hidden (the final window has its buttons)', () => {
     makeState({ over: 'конец', ending: 'stayed' });
-    expect(mainAction('deal')).toEqual({ kind: 'none' });
+    expect(mainAction(state, actor, 'deal')).toEqual({ kind: 'none' });
   });
 
   it('only "Позвать следующего" is a button off the "Прилавок" tab (the rest needs the pane)', () => {
@@ -110,7 +110,7 @@ describe('main action table', () => {
     state.cust = makeSeller();
     actorAtCounter(1);
     for (const tab of ['inv', 'craft'] as const) {
-      expect(mainAction(tab).kind).toBe('hint');
+      expect(mainAction(state, actor, tab).kind).toBe('hint');
     }
   });
 
@@ -128,7 +128,7 @@ describe('one main button per screen', () => {
       expect(indexHtml, moved).not.toMatch(asButton);
     }
     // Grobov's chosen option leaves the list (rentOptions), "Нет такого" leaves the buyer pane
-    expect(uiTs).toMatch(/function rentOptions[\s\S]*?barAction\('deal'\)/);
+    expect(uiTs).toMatch(/function rentOptions[\s\S]*?barAction\(state, actor, 'deal'\)/);
     expect(uiTs).not.toContain('Нет такого, до свидания');
     // junkyard v2: "Вернуться домой" is a secondary pane button only while "Копать" holds the bar
     expect(uiTs).toMatch(/const homeButton = visit\.d > 0 \? `<button class="btn" data-a="home">/);

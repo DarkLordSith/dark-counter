@@ -13,7 +13,9 @@ import {
 import { customersToday } from './day';
 import { browserStore } from './profile';
 import type { Actor, GameState, Item, ItemKnowledge, ItemType, KeyValueStore, Mode, SavedGame, UiState } from './types';
-import { daysRu, fill, randomInt } from './util';
+import { gameRng, randomInt } from './rng';
+import type { Rng } from './rng';
+import { daysRu, fill } from './util';
 
 /* ---------- state ---------- */
 
@@ -39,13 +41,13 @@ export function setState(next: GameState): void {
  */
 export const persistence = { enabled: true };
 
-export function randomLandlordSlot(): number {
-  return randomInt(RENT.landlordSlotMin, RENT.landlordSlotMax);
+export function randomLandlordSlot(rng: Rng): number {
+  return randomInt(rng, RENT.landlordSlotMin, RENT.landlordSlotMax);
 }
 
-/** A new game in a mode; the mode also picks its save slot. */
-export function newGame(mode: Mode = 'story'): void {
-  state = {
+/** A new game in a mode (the mode also picks its save slot). Pure: returns the game, touches no globals. */
+export function createGame(mode: Mode, rng: Rng): GameState {
+  const game: GameState = {
     day: 1,
     slot: 0,
     cn: CUSTOMERS_PER_DAY,
@@ -68,7 +70,7 @@ export function newGame(mode: Mode = 'story'): void {
     nextDue: DEBT.periodDays,
     owed: DEBT.firstPayment,
     deferred: false,
-    llAt: randomLandlordSlot(),
+    llAt: randomLandlordSlot(rng),
     llDone: false,
     debt: DEBT.start,
     seat: false,
@@ -77,11 +79,17 @@ export function newGame(mode: Mode = 'story'): void {
     mode,
   };
   // day 1 is the first day of the station week: a quiet start
-  state.cn = customersToday(state).count;
-  state.inv.push(createItem('battery', { cond: 70, stolen: false, defect: false, infected: false, known: true }));
-  state.inv.push(createItem('comm', { cond: 55, stolen: false, defect: false, infected: false, known: true }));
+  game.cn = customersToday(game).count;
+  game.inv.push(createItem(game, 'battery', { cond: 70, stolen: false, defect: false, infected: false, known: true }, rng));
+  game.inv.push(createItem(game, 'comm', { cond: 55, stolen: false, defect: false, infected: false, known: true }, rng));
   const start = mode === 'story' ? DEBT_TEXT.ru.start : MODE_TEXT.ru.startCalm;
-  addLog(fill(start, { debt: DEBT.start, period: daysRu(DEBT.periodDays), shuttle: DEBT.shuttleDay }));
+  addLog(game, fill(start, { debt: DEBT.start, period: daysRu(DEBT.periodDays), shuttle: DEBT.shuttleDay }));
+  return game;
+}
+
+/** Starts a new game as the current one: the scene is empty, the counter tab is open. */
+export function newGame(mode: Mode = 'story'): void {
+  state = createGame(mode, gameRng);
   actorReset();
   ui.tab = 'deal';
 }
@@ -101,15 +109,15 @@ export interface ItemOverrides {
   known?: boolean;
 }
 
-/** New item; unspecified properties are rolled randomly (in this order). */
-export function createItem(type: ItemType, overrides: ItemOverrides = {}): Item {
+/** New item of a game (takes its next uid); unspecified properties are rolled randomly (in this order). */
+export function createItem(game: GameState, type: ItemType, overrides: ItemOverrides, rng: Rng): Item {
   const item: Item = {
-    uid: ++state.uid,
+    uid: ++game.uid,
     t: type,
-    cond: overrides.cond ?? randomInt(ITEM_ODDS.condMin, ITEM_ODDS.condMax),
-    stolen: overrides.stolen ?? Math.random() < ITEM_ODDS.stolen,
-    defect: overrides.defect ?? Math.random() < ITEM_ODDS.defect,
-    infected: overrides.infected ?? (!!ITEM_TYPES[type].aiCapable && Math.random() < ITEM_ODDS.infected),
+    cond: overrides.cond ?? randomInt(rng, ITEM_ODDS.condMin, ITEM_ODDS.condMax),
+    stolen: overrides.stolen ?? rng() < ITEM_ODDS.stolen,
+    defect: overrides.defect ?? rng() < ITEM_ODDS.defect,
+    infected: overrides.infected ?? (!!ITEM_TYPES[type].aiCapable && rng() < ITEM_ODDS.infected),
     k: { cond: false, serial: false, flaw: false },
   };
   if (overrides.known) {
@@ -118,13 +126,13 @@ export function createItem(type: ItemType, overrides: ItemOverrides = {}): Item 
   return item;
 }
 
-export function findItem(uid: number | null): Item | undefined {
-  return state.inv.find(item => item.uid === uid);
+export function findItem(game: GameState, uid: number | null): Item | undefined {
+  return game.inv.find(item => item.uid === uid);
 }
 
-export function addLog(text: string): void {
-  state.log.unshift(`Д${state.day}: ${text}`);
-  state.log = state.log.slice(0, LOG_LIMIT);
+export function addLog(game: GameState, text: string): void {
+  game.log.unshift(`Д${game.day}: ${text}`);
+  game.log = game.log.slice(0, LOG_LIMIT);
 }
 
 /* ---------- actor (scene figure) ---------- */
@@ -190,16 +198,16 @@ export function loadGame(mode: Mode = 'story', store: KeyValueStore | null = bro
 }
 
 /** The game saved in a mode's slot, migrated; the slot decides the mode. */
-export function readSlot(mode: Mode, store: KeyValueStore | null = browserStore()): GameState | null {
-  const loaded = migrate(loadGame(mode, store));
+export function readSlot(mode: Mode, store: KeyValueStore | null = browserStore(), rng: Rng = gameRng): GameState | null {
+  const loaded = migrate(loadGame(mode, store), rng);
   if (loaded) {
     loaded.mode = mode;
   }
   return loaded;
 }
 
-/** Upgrades saves from older versions in place. */
-export function migrate(data: SavedGame | null): GameState | null {
+/** Upgrades saves from older versions in place; `rng` rolls Grobov's slot for saves older than his visit. */
+export function migrate(data: SavedGame | null, rng: Rng = gameRng): GameState | null {
   if (!data) {
     return null;
   }
@@ -209,7 +217,7 @@ export function migrate(data: SavedGame | null): GameState | null {
     data.nextDue = data.day + ((LEGACY_RENT_PERIOD - data.day % LEGACY_RENT_PERIOD) % LEGACY_RENT_PERIOD);
     data.owed = data.rent;
     data.deferred = false;
-    data.llAt = randomLandlordSlot();
+    data.llAt = randomLandlordSlot(rng);
     data.llDone = false;
   }
   // Before the debt update the goal was buying the shop out. The current rent
@@ -252,12 +260,12 @@ export function migrate(data: SavedGame | null): GameState | null {
 
 /* ---------- save code (DC1:base64 JSON) ---------- */
 
-export function exportSave(): string {
-  return SAVE_CODE_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+export function exportSave(game: GameState = state): string {
+  return SAVE_CODE_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(game))));
 }
 
 /** Returns migrated state or null if the code is not a valid save. */
-export function importSave(code: string | null | undefined): GameState | null {
+export function importSave(code: string | null | undefined, rng: Rng = gameRng): GameState | null {
   try {
     let payload = (code || '').trim().replace(/\s+/g, '');
     if (payload.startsWith(SAVE_CODE_PREFIX)) {
@@ -267,7 +275,7 @@ export function importSave(code: string | null | undefined): GameState | null {
     if (!isValidSaveCode(data)) {
       return null;
     }
-    return migrate(data);
+    return migrate(data, rng);
   } catch {
     return null;
   }

@@ -1,5 +1,6 @@
 // Junkyard v2 (15.11.2026): one heap, "Копать" up to digsBase + digBonus times, depth raises
 // the rare chance, noise raises the guard drone chance; "home" at any moment.
+import { gameRng } from '../../src/rng';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DIG_ODDS, HUD_TEXT, JUNK, JUNK_TEXT, MAX_HEAT, SAVE_KEY } from '../../src/data';
 import {
@@ -24,7 +25,7 @@ function seedRandom(seed: number): void {
 
 const atJunkyard = (): void => {
   makeState({ phase: 'evening', hours: 4 });
-  goToJunkyard();
+  goToJunkyard(state, gameRng);
 };
 
 afterEach(() => {
@@ -34,54 +35,54 @@ afterEach(() => {
 describe('a visit', () => {
   it('the road costs an hour, every dig then pays its own (past midnight: day.test.ts)', () => {
     makeState({ phase: 'evening', hours: 4 });
-    expect(canGoToJunkyard()).toBe(true);
-    goToJunkyard();
+    expect(canGoToJunkyard(state)).toBe(true);
+    goToJunkyard(state, gameRng);
     expect(state.where).toBe('junk');
     expect(state.hours).toBe(4 - junkVisitHours());
     expect(junkVisitHours()).toBe(JUNK.travelHours);
     makeState({ phase: 'evening', hours: junkVisitHours() });
-    expect(canGoToJunkyard()).toBe(false);
+    expect(canGoToJunkyard(state)).toBe(false);
   });
 
   it('gives exactly 5 digs without a bonus, then nothing more', () => {
     seedRandom(7);
     atJunkyard();
-    expect(digBonus()).toBe(0);
+    expect(digBonus(state)).toBe(0);
     expect(state.junk?.d).toBe(JUNK.digsBase);
     let digs = 0;
     // the drone may end the visit early: count until it says no more
-    while (dig()) {
+    while (dig(state, gameRng)) {
       digs++;
     }
     expect(digs).toBeLessThanOrEqual(5);
     expect(state.junk?.d).toBe(0);
-    expect(dig()).toBeNull();
+    expect(dig(state, gameRng)).toBeNull();
   });
 
   it('never meets the drone without noise: 5 quiet digs', () => {
     atJunkyard();
     // drone rolls 0.99 (no drone), noise spread 0.5, loot 0.99 (empty) …
     vi.spyOn(Math, 'random').mockReturnValue(0.99);
-    const kinds = Array.from({ length: 6 }, () => dig()?.kind);
+    const kinds = Array.from({ length: 6 }, () => dig(state, gameRng)?.kind);
     expect(kinds).toEqual(['empty', 'empty', 'empty', 'empty', 'empty', undefined]);
   });
 
   it('a fresh visit gets digsBase + digBonus digs (the bonus is the hook for gear and events)', () => {
     makeState({ phase: 'evening', hours: 4 });
-    expect(digsPerVisit()).toBe(JUNK.digsBase + digBonus(state));
-    goToJunkyard();
-    expect(state.junk?.d).toBe(digsPerVisit());
+    expect(digsPerVisit(state)).toBe(JUNK.digsBase + digBonus(state));
+    goToJunkyard(state, gameRng);
+    expect(state.junk?.d).toBe(digsPerVisit(state));
   });
 
   it('"home" works at any moment and ends the visit', () => {
     atJunkyard();
-    goHome();
+    goHome(state);
     expect(state.where).toBe('home');
     expect(state.junk).toBeNull();
-    expect(dig()).toBeNull();
+    expect(dig(state, gameRng)).toBeNull();
     atJunkyard();
-    dig();
-    goHome();
+    dig(state, gameRng);
+    goHome(state);
     expect(state.where).toBe('home');
   });
 });
@@ -89,8 +90,8 @@ describe('a visit', () => {
 describe('depth and noise', () => {
   it('each dig goes one level deeper; deeper means a higher rare chance', () => {
     atJunkyard();
-    dig();
-    dig();
+    dig(state, gameRng);
+    dig(state, gameRng);
     expect(state.junk?.dp).toBe(2);
     expect(rareChance(4)).toBeGreaterThan(rareChance(0));
     expect(rareChance(0)).toBe(DIG_ODDS.rare);
@@ -104,12 +105,12 @@ describe('depth and noise', () => {
     const roll = DIG_ODDS.parts + DIG_ODDS.broken + DIG_ODDS.rare + 0.01;
     atJunkyard();
     rolls(0.99, 0.5, roll);
-    const first = dig()?.kind;
+    const first = dig(state, gameRng)?.kind;
     vi.restoreAllMocks();
     state.junk!.dp = 4;
     state.junk!.n = 0; // quiet: no drone
     rolls(0.99, 0.5, roll);
-    const deep = dig()?.kind;
+    const deep = dig(state, gameRng)?.kind;
     expect(first).toBe('empty');
     expect(deep).toBe('rare');
   });
@@ -119,7 +120,7 @@ describe('depth and noise', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.99);
     const noise: number[] = [];
     for (let i = 0; i < 5; i++) {
-      dig();
+      dig(state, gameRng);
       noise.push(state.junk!.n);
     }
     expect(noise.every((value, i) => i === 0 || value > noise[i - 1])).toBe(true);
@@ -142,19 +143,19 @@ describe('the guard drone', () => {
     state.inv.push(old);
     // first dig: the drone check cannot hit, loot roll just past parts → a broken find
     rolls(0, 0.5, DIG_ODDS.parts + 0.01);
-    expect(dig()?.kind).toBe('broken');
+    expect(dig(state, gameRng)?.kind).toBe('broken');
     vi.restoreAllMocks();
     const found = state.junk!.f[0];
     expect(state.inv.some(item => item.uid === found)).toBe(true);
     state.junk!.n = 100; // the drone surely comes
     rolls(0);
-    const result = dig();
+    const result = dig(state, gameRng);
     expect(result?.kind).toBe('drone');
     expect(result?.message).toContain('Пришлось бежать');
     expect(state.inv.some(item => item.uid === found)).toBe(false);
     expect(state.inv).toContain(old); // older stock is safe
     expect(state.junk).toMatchObject({ d: 0, run: true });
-    expect(dig()).toBeNull();
+    expect(dig(state, gameRng)).toBeNull();
   });
 
   it('with no find of this visit it raises the wanted level', () => {
@@ -163,14 +164,14 @@ describe('the guard drone', () => {
     state.junk!.dp = 2;
     state.junk!.n = 100;
     rolls(0);
-    expect(dig()?.kind).toBe('drone');
+    expect(dig(state, gameRng)?.kind).toBe('drone');
     expect(state.heat).toBe(2 + JUNK.droneHeat);
     state.heat = MAX_HEAT;
     atJunkyard();
     state.junk!.dp = 2;
     state.junk!.n = 100;
     state.heat = MAX_HEAT;
-    dig();
+    dig(state, gameRng);
     expect(state.heat).toBe(MAX_HEAT);
   });
 });

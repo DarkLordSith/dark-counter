@@ -1,8 +1,9 @@
 // Save compatibility: migrate(), DC1 export/import and real saves of past versions.
+import { gameRng } from '../../src/rng';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEBT, LANDLORD_SEED, LEGACY_RENT_PERIOD, SAVE_CODE_PREFIX } from '../../src/data';
 import { callNextCustomer, closeShop, customerLeaves, payRent, sleepUntilMorning } from '../../src/economy';
-import { actor, actorReset, exportSave, importSave, migrate, newGame, setState, state } from '../../src/state';
+import { actorReset, exportSave, importSave, migrate, newGame, setState, state } from '../../src/state';
 import type { SavedGame } from '../../src/types';
 import { makeState } from './helpers';
 
@@ -78,7 +79,7 @@ describe('DC1 save code', () => {
   it('survives export → import unchanged, mid-game with a customer at the counter', () => {
     seedRandom(42);
     newGame();
-    callNextCustomer();
+    callNextCustomer(state, gameRng);
     const code = exportSave();
     expect(code.startsWith('DC1:')).toBe(true);
     const imported = importSave(code);
@@ -155,7 +156,7 @@ describe('saves of past versions (tests/fixtures)', () => {
       state.day = state.nextDue;
       state.credits = state.owed;
       state.cust = { kind: 'rent', name: 'Гробов', seed: LANDLORD_SEED, msg: '', pat: 0, max: 0, done: {} };
-      payRent();
+      payRent(state);
       expect(state.nextDue).toBe(state.day + DEBT.periodDays);
       expect(state.rent).toBe((original.rent ?? 0) + DEBT.paymentStep);
       expect(state.debt).toBe(DEBT.start - (original.owed ?? 0));
@@ -168,18 +169,19 @@ describe('saves of past versions (tests/fixtures)', () => {
       const day = loaded.day;
       if (state.phase === 'shop') {
         if (state.cust) {
-          customerLeaves();
+          customerLeaves(state);
           actorReset();
         }
-        closeShop();
+        closeShop(state);
       }
-      sleepUntilMorning();
+      sleepUntilMorning(state, gameRng);
       expect(state.day).toBe(day + 1);
       expect(state.phase).toBe('shop');
-      callNextCustomer();
+      const came = callNextCustomer(state, gameRng);
       if (!state.over) {
+        // the rule says someone came; ui.ts then walks the figure in (the scene is not the rule's business)
+        expect(came).toBe(true);
         expect(state.cust).not.toBeNull();
-        expect(actor.phase).toBe('in');
       }
     });
   });

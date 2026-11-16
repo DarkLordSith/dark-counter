@@ -22,11 +22,12 @@ import type { CollateralPlan } from './economy';
 import { isPlayable, loadProfile, recordEnding, saveProfile } from './profile';
 import { isOnHeap, onSceneClick, paintIcons, playDigFx } from './scene';
 import {
-  actor, actorAtCounter, actorReset, addLog, exportSave, findItem, importSave, newGame, persistence, readSlot, saveGame, setState, state, ui,
+  actor, actorAtCounter, actorEnter, actorReset, addLog, exportSave, findItem, importSave, newGame, persistence, readSlot, saveGame, setState, state, ui,
 } from './state';
-import type { BuyerCustomer, GameState, InspectCheck, Item, ItemType, Mode, Profile, Recipe, RentCustomer, SellerCustomer, Tab } from './types';
+import type { BuyerCustomer, Customer, GameState, InspectCheck, Item, ItemType, Mode, Profile, Recipe, RentCustomer, SellerCustomer, Tab } from './types';
 import { daysRu, fill, roundTo10 } from './util';
 import { VERSION_LABEL } from './version';
+import { gameRng } from './rng';
 
 /* =====================================================================
    Small HTML helpers
@@ -139,7 +140,7 @@ function renderHud(): void {
   byId('hud').innerHTML = `<div class="stats">${[
     hudStat(HUD.credits, `<b>${state.credits}</b>`),
     // the shuttle day goes into the label ("день/60"): the number column keeps two digits
-    hudStat(hasShuttle() ? `${HUD.day}/${state.shuttleDay}` : HUD.day, `<b>${state.day}</b>`),
+    hudStat(hasShuttle(state) ? `${HUD.day}/${state.shuttleDay}` : HUD.day, `<b>${state.day}</b>`),
     paymentStat(),
     hudStat(HUD.parts, `<b>${state.parts}</b>`),
   ].join('')}</div>${menu}`;
@@ -168,11 +169,11 @@ export function renderSceneOverlay(): void {
     }
   }
   // the time comes first; past midnight it reads as `wear` (time)
-  const night = chipIsNight();
-  byId('chip').innerHTML = chipLines().map((line, i) => `<span${i === 0 && night ? ' class="m-wear"' : ''}>${line}</span>`).join('');
+  const night = chipIsNight(state);
+  byId('chip').innerHTML = chipLines(state).map((line, i) => `<span${i === 0 && night ? ' class="m-wear"' : ''}>${line}</span>`).join('');
   const ticker = byId('ticker');
   ticker.innerHTML = `<b>›</b> ${state.log[0] || ''}`;
-  // addLog() makes a new array: a new line arrived, even if its text repeats the last one
+  // addLog(state, ) makes a new array: a new line arrived, even if its text repeats the last one
   if (state.log !== shownLog) {
     if (shownLog) {
       ticker.classList.remove('fresh');
@@ -251,7 +252,7 @@ function noiseMeter(noise: number): string {
 /** Time before "Копать" (task 16): the last dig before midnight, then each dig costs a customer tomorrow. Time reads as `wear`. */
 function junkTimeNote(digsLeft: number): string {
   const lines: string[] = [];
-  if (digsLeft > 0 && digIsLate()) {
+  if (digsLeft > 0 && digIsLate(state)) {
     lines.push(JUNK_UI.pastMidnight);
   } else if (digsLeft > 0 && state.hours === JUNK.digHours) {
     lines.push(JUNK_UI.lastFree);
@@ -280,8 +281,8 @@ function junkyardPane(): string {
 function eveningPane(): string {
   return `<div class="hint" style="margin-bottom:8px">Лавка закрыта. Осталось часов: <b>${state.hours}</b>. Верстак и сборка работают бесплатно.</div>
     <div class="opts">
-      ${option('junk', !canGoToJunkyard(), JUNK_UI.title, fill(JUNK_UI.about, { hours: junkVisitHours(), dig: JUNK.digHours, digs: digsPerVisit() }), '→')}
-      ${option('market', !canVisitMarket(), 'Барахолка у шлюза', `${MARKET.hours} ч. ${MARKET.parts} запчастей за ${MARKET.price} кр. Раз за вечер.`, MARKET.price)}
+      ${option('junk', !canGoToJunkyard(state), JUNK_UI.title, fill(JUNK_UI.about, { hours: junkVisitHours(), dig: JUNK.digHours, digs: digsPerVisit(state) }), '→')}
+      ${option('market', !canVisitMarket(state), 'Барахолка у шлюза', `${MARKET.hours} ч. ${MARKET.parts} запчастей за ${MARKET.price} кр. Раз за вечер.`, MARKET.price)}
     </div>
     <div class="hint note">«Спать» — кнопка внизу: закончить день. Ночью: платёж, рейды, заражение склада.</div>`;
 }
@@ -296,7 +297,7 @@ function emptyCounterPane(): string {
   if (state.over) {
     return '<div class="hint">Лавка опечатана.</div>';
   }
-  if (state.slot >= state.cn && !isLandlordDue()) {
+  if (state.slot >= state.cn && !isLandlordDue(state)) {
     return '<div class="hint">Очередь кончилась. Пора закрываться.</div>';
   }
   return '<div class="hint">Прилавок свободен. Зовите следующего, когда будете готовы. Пока можно разобрать склад.</div>';
@@ -307,19 +308,19 @@ function collateralDescription(plan: CollateralPlan): string {
     return 'Даже со всем складом не хватает.';
   }
   const goods = plan.items.length ? ' и ' + plan.items.map(item => itemName(item.t)).join(', ') : '';
-  const heatNote = plan.hot ? ` <span class="m-action">Розыск −${collateralHeatRelief(plan)}.</span>` : '';
+  const heatNote = plan.hot ? ` <span class="m-action">Розыск −${collateralHeatRelief(state, plan)}.</span>` : '';
   return `Заберёт ${plan.cash} кр.${goods}. Сначала берёт краденое (за 50%), остальное за 60%, сдачи не даёт.${heatNote}`;
 }
 
 function rentPane(customer: RentCustomer): string {
-  const plan = planCollateral();
+  const plan = planCollateral(state);
   const canPay = state.credits >= state.owed;
   const deferText = state.deferred
     ? 'Вторую отсрочку Гробов не даст.'
-    : fill(DEBT_UI.deferOption, { days: daysRu(RENT.deferDays), amount: deferredDebt() });
+    : fill(DEBT_UI.deferOption, { days: daysRu(RENT.deferDays), amount: deferredDebt(state) });
   const payText = fill(DEBT_UI.paymentOption, {
     debt: state.debt - state.owed,
-    next: Math.min(nextRent(), Math.max(0, state.debt - state.owed)),
+    next: Math.min(nextRent(state), Math.max(0, state.debt - state.owed)),
     period: daysRu(DEBT.periodDays),
   });
   let html = `<div class="thead"><div><span class="cname">${customer.name}</span><span class="kind m-risk">за платежом</span></div></div>
@@ -340,7 +341,7 @@ function rentPane(customer: RentCustomer): string {
  * its explanation stays as a line on top; "Нечем платить" is only in the bar.
  */
 function rentOptions(options: [action: string, title: string, html: string, description: string][]): string {
-  const main = barAction('deal');
+  const main = barAction(state, actor, 'deal');
   const chosen = options.find(([action]) => action === main);
   const note = chosen ? `<div class="hint note">«${chosen[1]}» — кнопка внизу. ${chosen[3]}</div>` : '';
   return note + options.filter(([action]) => action !== main).map(([, , html]) => html).join('');
@@ -425,7 +426,7 @@ function workbench(item: Item): string {
     <div class="bgrid">${benchButton('diag', 'Диагностика', !isFullyKnown(item))}${benchButton('repair', 'Ремонт +25%', item.cond < 100)}
     ${benchButton('fix', 'Убрать дефект', item.k.flaw && item.defect)}${benchButton('purge', 'Вычистить ИИ', item.k.flaw && item.infected)}
     ${benchButton('wipe', 'Перебить №', item.k.serial && item.stolen)}
-    <button class="btn" data-a="bench" data-v="scrap" ${disabledIf(isOnCounter(item))}><span>Разобрать</span><span class="price">+${scrapValue(item)}⚙</span></button></div>
+    <button class="btn" data-a="bench" data-v="scrap" ${disabledIf(isOnCounter(state, item))}><span>Разобрать</span><span class="price">+${scrapValue(item)}⚙</span></button></div>
     <div class="hint note">Перебитый серийник: +1 к розыску.</div></div>`;
 }
 
@@ -438,7 +439,7 @@ function inventoryPane(): string {
     .join('');
   const html = `<div class="shelf">${tiles}</div>
   <div class="legend"><span>${DOT.unknown}не проверено</span><span>${DOT.risk}краденое / ИИ</span><span>${DOT.wear}дефект</span></div>`;
-  const selected = findItem(ui.sel);
+  const selected = findItem(state, ui.sel);
   return html + (selected ? workbench(selected) : '<div class="hint">Нажмите на предмет, чтобы открыть верстак.</div>');
 }
 
@@ -448,11 +449,11 @@ function inventoryPane(): string {
 
 function recipeRow(recipe: Recipe, index: number): string {
   const parts = recipeNeeds(recipe)
-    .map(([type, count]) => `<span class="${availableOfType(type).length >= count ? 'm-ok' : 'm-inactive'}">${itemName(type)} ×${count}</span>`)
+    .map(([type, count]) => `<span class="${availableOfType(state, type).length >= count ? 'm-ok' : 'm-inactive'}">${itemName(type)} ×${count}</span>`)
     .join(' + ');
   const partsClass = state.parts >= recipe.parts ? 'm-ok' : 'm-inactive';
   return `<div class="recipe">${iconCanvas(recipe.out)}<div class="rb"><div class="rn">${itemName(recipe.out)}</div><div class="need">${parts} + <span class="${partsClass}">${recipe.parts}⚙</span> · ${approx(ITEM_TYPES[recipe.out].basePrice)} кр.</div></div>
-    <button class="btn" data-a="craft" data-v="${index}" ${canCraft(recipe) ? '' : 'disabled'}>Собрать</button></div>`;
+    <button class="btn" data-a="craft" data-v="${index}" ${canCraft(state, recipe) ? '' : 'disabled'}>Собрать</button></div>`;
 }
 
 function craftPane(): string {
@@ -480,7 +481,7 @@ export function renderPane(): void {
 /** The action bar above the HUD: the screen's one main button, a dim hint, or nothing after the end. */
 function renderActionBar(): void {
   const bar = byId('actionbar');
-  const main = mainAction(ui.tab);
+  const main = mainAction(state, actor, ui.tab);
   bar.hidden = main.kind === 'none';
   if (main.kind === 'button') {
     const value = main.value !== undefined ? ` data-v="${main.value}"` : '';
@@ -589,10 +590,10 @@ function seatBlock(): string {
   if (state.seat) {
     return `<p class="m-ok">${fill(DEBT_UI.seatOwned, { shuttle: state.shuttleDay })}</p>`;
   }
-  const price = seatPrice();
+  const price = seatPrice(state.day);
   const note = state.debt > 0 ? `<p class="hint m-inactive">${DEBT_UI.seatNeedsZero}</p>` : '';
   return `<p class="hint">${fill(DEBT_UI.seatPrice, { price, perDay: DEBT.seatPerDay, shuttle: state.shuttleDay })}</p>${note}
-    <button class="btn pri" data-a="seat" style="width:100%" ${disabledIf(!canBuySeat())}>${DEBT_UI.seatBuy} · ${price} кр.</button>`;
+    <button class="btn pri" data-a="seat" style="width:100%" ${disabledIf(!canBuySeat(state))}>${DEBT_UI.seatBuy} · ${price} кр.</button>`;
 }
 
 /** Debt window (HUD payment stat or ☰): the debt left, the next payment, early payments, the shuttle seat. */
@@ -606,12 +607,12 @@ function openDebt(): void {
       ${payment}
       <span>${DEBT_UI.youHave}</span><span class="price">${state.credits} кр.</span></div>
     ${state.debt > 0 ? `<h3>${DEBT_UI.early}</h3><p class="hint">${DEBT_UI.earlyHint}</p><div class="early">${earlyButtons()}</div>` : ''}
-    ${hasShuttle() ? `<h3>${DEBT_UI.seatTitle}</h3>${seatBlock()}` : ''}</div>`, CLOSE_BUTTON);
+    ${hasShuttle(state) ? `<h3>${DEBT_UI.seatTitle}</h3>${seatBlock()}` : ''}</div>`, CLOSE_BUTTON);
 }
 
 /** Buying the seat cannot be undone: ask first. */
 function confirmSeat(): void {
-  openModal(DEBT_UI.seatConfirmTitle, `<p>${fill(DEBT_UI.seatConfirmText, { price: seatPrice() })}</p>`,
+  openModal(DEBT_UI.seatConfirmTitle, `<p>${fill(DEBT_UI.seatConfirmText, { price: seatPrice(state.day) })}</p>`,
     `<button class="btn pri" data-a="seat-yes">${DEBT_UI.seatConfirmYes}</button><button class="btn" data-a="debt">${DEBT_UI.seatConfirmNo}</button>`);
 }
 
@@ -653,7 +654,7 @@ function loadSaveCode(): boolean {
   // the current game is already in its slot (render saves after every action);
   // the code goes into the slot of its own mode, and the game switches to that mode
   enterGame(loaded);
-  addLog(`Сейв загружен: день ${state.day}, ${state.credits} кр.`);
+  addLog(state, `Сейв загружен: день ${state.day}, ${state.credits} кр.`);
   closeModal();
   return true;
 }
@@ -704,7 +705,7 @@ function noteProgress(): void {
     return;
   }
   const fresh = (state.ending && recordEnding(profile, state.mode, state.ending))
-    || (isDebtClosed() && recordEnding(profile, state.mode, 'paid'));
+    || (isDebtClosed(state) && recordEnding(profile, state.mode, 'paid'));
   if (fresh) {
     saveProfile(profile);
   }
@@ -867,31 +868,44 @@ const ACTIONS: Record<string, ActionHandler> = {
     updateChanceMeter();
     return NO_RENDER;
   },
-  call: () => callNextCustomer(),
-  insp: value => {
-    if (isInspectCheck(value)) {
-      inspect(value);
+  call: () => {
+    // the next one waits until the last figure has left the scene
+    if (actor.phase === 'empty' && callNextCustomer(state, gameRng) && state.cust) {
+      actorEnter(state.cust.seed);
+      ui.tab = 'deal';
     }
   },
-  offer: () => offerToSeller(offerValue()),
-  accept: () => buyFromSeller(),
-  refuse: () => customerLeaves(),
-  show: value => presentItem(Number(value)),
-  ask: () => askBuyer(offerValue()),
-  take: () => sellToBuyer(),
-  closeshop: () => closeShop(),
+  insp: value => {
+    if (isInspectCheck(value) && inspect(state, value)) {
+      actor.scanStart = performance.now();
+    }
+  },
+  offer: () => {
+    selectItem(offerToSeller(state, offerValue(), gameRng));
+  },
+  accept: () => {
+    selectItem(buyFromSeller(state));
+  },
+  refuse: () => customerLeaves(state),
+  show: value => presentItem(state, Number(value)),
+  ask: () => askBuyer(state, offerValue(), gameRng),
+  take: () => sellToBuyer(state),
+  closeshop: () => {
+    closeShop(state);
+    ui.tab = 'deal';
+  },
   // rent
-  rentpay: () => payRent(),
-  rentdefer: () => deferRent(),
-  rentitems: () => payWithCollateral(),
+  rentpay: () => payRent(state),
+  rentdefer: () => deferRent(state),
+  rentitems: () => payWithCollateral(state),
   evict: () => {
-    evict();
+    evict(state);
     showEnding();
   },
   // debt window: early payments (no confirmation, the rest is shown at once) and the shuttle seat
   debt: () => openDebt(),
   early: value => {
-    payEarly(value === 'all' ? state.credits : Number(value));
+    payEarly(state, value === 'all' ? state.credits : Number(value));
     openDebt();
   },
   seat: () => {
@@ -899,7 +913,7 @@ const ACTIONS: Record<string, ActionHandler> = {
     return NO_RENDER;
   },
   'seat-yes': () => {
-    buySeat();
+    buySeat(state);
     openDebt();
   },
   // tabs, inventory, crafting
@@ -912,21 +926,27 @@ const ACTIONS: Record<string, ActionHandler> = {
     const uid = Number(value);
     ui.sel = ui.sel === uid ? null : uid;
   },
-  bench: value => useWorkbench(value ?? ''),
-  craft: value => craft(Number(value)),
-  parts: () => orderParts(),
+  bench: value => useWorkbench(state, ui.sel, value ?? ''),
+  craft: value => {
+    const built = craft(state, Number(value), gameRng);
+    if (built) {
+      ui.sel = built.uid;
+      ui.tab = 'inv';
+    }
+  },
+  parts: () => orderParts(state),
   // evening
   junk: () => {
-    goToJunkyard();
+    goToJunkyard(state, gameRng);
     ui.tab = 'deal';
   },
   dig: () => digAndShow(),
   home: () => {
-    goHome();
+    goHome(state);
     playSfx('home');
   },
-  market: () => visitMarket(),
-  sleep: () => showMorningReport(sleepUntilMorning()),
+  market: () => visitMarket(state),
+  sleep: () => showMorningReport(sleepUntilMorning(state, gameRng)),
   // header & modals
   music: () => {
     toggleMusic();
@@ -998,9 +1018,12 @@ function onClick(event: MouseEvent): void {
   const handler = Object.hasOwn(ACTIONS, action) ? ACTIONS[action] : null;
   const debtBefore = state.debt;
   const modeBefore = state.mode;
+  const game = state;
+  const visitor = state.cust;
   const result = handler ? handler(button.dataset.v) : undefined;
+  followGame(game, visitor);
   flushFeedback();
-  if (isDebtClosed() && debtBefore > 0 && state.mode === modeBefore && !state.over) {
+  if (isDebtClosed(state) && debtBefore > 0 && state.mode === modeBefore && !state.over) {
     showDebtClosed();
   }
   if (result === NO_RENDER) {
@@ -1009,9 +1032,35 @@ function onClick(event: MouseEvent): void {
   render();
 }
 
+/** Selects a new item on the shelf (a purchase), if there is one. */
+function selectItem(item: Item | null): void {
+  if (item) {
+    ui.sel = item.uid;
+  }
+}
+
+/**
+ * The screen follows what a rule did to the game (the rules never touch the screen):
+ * the visitor who left the counter walks out of the scene, an item gone from the shelf
+ * (sold, taken by Grobov or the drone, scrapped) is no longer selected.
+ * A new or loaded game sets up its own screen.
+ */
+function followGame(game: GameState, visitor: Customer | null): void {
+  if (state !== game) {
+    return;
+  }
+  if (visitor && !state.cust) {
+    actor.phase = 'out';
+    actor.seed = visitor.seed;
+  }
+  if (ui.sel !== null && !findItem(state, ui.sel)) {
+    ui.sel = null;
+  }
+}
+
 /** "Копать" (the bar or a tap on the heap): one dig, its sound, the shovel and the ambience of the new noise. */
 function digAndShow(): void {
-  const result = dig();
+  const result = dig(state, gameRng);
   if (!result) {
     return;
   }
@@ -1025,7 +1074,9 @@ function onSceneCanvasClick(event: MouseEvent): void {
   if (state.where !== 'junk' || !state.junk || !isOnHeap(event.clientX, event.clientY)) {
     return;
   }
+  const game = state;
   digAndShow();
+  followGame(game, null);
   flushFeedback();
   render();
 }

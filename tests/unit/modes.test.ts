@@ -1,4 +1,5 @@
 // Game modes (story / calm / sandbox stub), one save slot per mode, the player profile.
+import { gameRng } from '../../src/rng';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEBT, LANDLORD_SEED, MODE_TEXT, MODES, PLAYABLE_MODES, PROFILE_KEY, SAVE_CODE_PREFIX, SAVE_KEY, SAVE_KEYS } from '../../src/data';
 import {
@@ -18,8 +19,8 @@ function memoryStore(): KeyValueStore & { data: Map<string, string> } {
 }
 
 function sleep(): string[] {
-  closeShop();
-  return sleepUntilMorning();
+  closeShop(state);
+  return sleepUntilMorning(state, gameRng);
 }
 
 afterEach(() => {
@@ -121,32 +122,32 @@ describe('calm "Без таймера"', () => {
     expect(state).toMatchObject({ day: 61, ending: null, over: null });
     state.debt = 0;
     state.credits = 99999;
-    expect(canBuySeat()).toBe(false);
+    expect(canBuySeat(state)).toBe(false);
   });
 
   it('keeps the debt and the weekly payment', () => {
     makeState({ mode: 'calm', day: 7, nextDue: 7, rent: 400, owed: 400, credits: 400 });
     state.cust = { kind: 'rent', name: 'Гробов', seed: LANDLORD_SEED, msg: '', pat: 0, max: 0, done: {} };
-    payRent();
+    payRent(state);
     expect(state.debt).toBe(DEBT.start - 400);
   });
 
   it('a closed debt is "Долг закрыт"; continuing goes on without payments', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.99);
     makeState({ mode: 'calm', day: 20, debt: 300, owed: 300, nextDue: 21, credits: 500 });
-    expect(isDebtClosed()).toBe(false);
-    payEarly(500);
-    expect(isDebtClosed()).toBe(true);
+    expect(isDebtClosed(state)).toBe(false);
+    payEarly(state, 500);
+    expect(isDebtClosed(state)).toBe(true);
     for (let i = 0; i < 30; i++) {
       sleep();
-      expect(isLandlordDue()).toBe(false);
+      expect(isLandlordDue(state)).toBe(false);
     }
     expect(state).toMatchObject({ day: 50, ending: null, over: null, debt: 0 });
   });
 
   it('a closed debt in story is not "Долг закрыт" (the seat and the shuttle are ahead)', () => {
     makeState({ mode: 'story', debt: 0 });
-    expect(isDebtClosed()).toBe(false);
+    expect(isDebtClosed(state)).toBe(false);
   });
 });
 
