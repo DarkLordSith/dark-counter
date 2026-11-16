@@ -7,7 +7,7 @@
 // still load with the same day, credits and stock and keep playing without errors, but the
 // continuation is not compared with the old version, and the downgrade (3) is only reported:
 // an old build may not know the new save fields.
-import { clickMenuItem, deterministicInit, launch, passModeScreen, rng, storySave } from './common.mjs';
+import { clickMenuItem, deterministicInit, launch, loadCodeThroughUi, passModeScreen, rng, savedCode, storySave } from './common.mjs';
 
 const [, , OLD, NEW] = process.argv;
 const W = { call: 8, offer: 6, ask: 6, accept: 4, take: 4, show: 5, insp: 4, closeshop: 6, sleep: 4, junk: 5, dig: 6, market: 3, close: 6, rentpay: 6, rentdefer: 3, rentitems: 3, sel: 3, bench: 4, craft: 4, parts: 2, tab: 1, refuse: 2 };
@@ -65,20 +65,15 @@ const snap = async page => {
 };
 const exportCode = async page => {
   await page.evaluate(clickMenuItem, 'savemenu');
-  return page.evaluate(() => {
-    const code = document.getElementById('savecode').value;
-    document.querySelector('#modal [data-a="close"]').click();
-    return code;
-  });
+  const code = await savedCode(page);
+  await page.evaluate(() => document.querySelector('#modal [data-a="close"]').click());
+  return code;
 };
 const importCode = async (page, code) => {
   await page.evaluate(clickMenuItem, 'savemenu');
-  return page.evaluate(code => {
-    document.getElementById('loadcode').value = code;
-    document.querySelector('[data-a="loadsave"]').click();
-    __step(90);
-    return { modalOpen: !document.getElementById('modal').hidden, msg: document.getElementById('savemsg')?.textContent };
-  }, code);
+  const { modalOpen, msg } = await loadCodeThroughUi(page, code);
+  await page.evaluate(() => __step(90));
+  return { modalOpen, msg };
 };
 
 const NEW_BEHAVIOR = process.env.PARITY_NEW_BEHAVIOR === '1';

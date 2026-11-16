@@ -8,7 +8,7 @@
 //  saves in migrate().
 // =====================================================================
 import {
-  CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, MODE_TEXT, PLAYABLE_MODES, RENT, SAVE_CODE_PREFIX, SAVE_KEYS, START,
+  CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, MODE_TEXT, PLAYABLE_MODES, RENT, SAVE_CODE_PREFIX, SAVE_CODE_PREFIX_V2, SAVE_KEYS, SAVE_LOG_LINES, START,
 } from './data';
 import { customersToday } from './day';
 import { browserStore } from './profile';
@@ -172,13 +172,18 @@ function isValidSaveCode(value: unknown): value is SavedGame {
 
 /* ---------- persistence ---------- */
 
+/** What goes into a save: the game with only the last SAVE_LOG_LINES log lines (fields and their order unchanged). */
+export function saveSnapshot(game: GameState): GameState {
+  return { ...game, log: game.log.slice(0, SAVE_LOG_LINES) };
+}
+
 /** Writes the game into the slot of its mode (story = the old key dark-counter-v3). */
 export function saveGame(store: KeyValueStore | null = browserStore()): void {
   if (!persistence.enabled) {
     return;
   }
   try {
-    store?.setItem(SAVE_KEYS[state.mode], JSON.stringify(state));
+    store?.setItem(SAVE_KEYS[state.mode], JSON.stringify(saveSnapshot(state)));
   } catch {
     // storage unavailable (private mode, quota) — play without saving
   }
@@ -258,13 +263,56 @@ export function migrate(data: SavedGame | null, rng: Rng = gameRng): GameState |
   return data as GameState;
 }
 
-/* ---------- save code (DC1:base64 JSON) ---------- */
+/* ---------- save code: DC1:base64(JSON), DC2:base64(deflate-raw(JSON)) ---------- */
 
+/** The DC1 code (no compression): the fallback where CompressionStream is missing. */
 export function exportSave(game: GameState = state): string {
-  return SAVE_CODE_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(game))));
+  return SAVE_CODE_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(saveSnapshot(game)))));
 }
 
-/** Returns migrated state or null if the code is not a valid save. */
+/** Browsers (and Node) that can compress; older Safari cannot (before 16.4). */
+export const canCompress = (): boolean => typeof CompressionStream === 'function' && typeof DecompressionStream === 'function';
+
+async function pipeBytes(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
+  const output = new Blob([bytes as BlobPart]).stream().pipeThrough(stream);
+  return new Uint8Array(await new Response(output).arrayBuffer());
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
+const base64ToBytes = (base64: string): Uint8Array => Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+
+/** The save code to show and copy: DC2 (compressed), or DC1 where compression is missing. */
+export async function exportSaveCode(game: GameState = state, compress: boolean = canCompress()): Promise<string> {
+  if (!compress) {
+    return exportSave(game);
+  }
+  const json = new TextEncoder().encode(JSON.stringify(saveSnapshot(game)));
+  return SAVE_CODE_PREFIX_V2 + bytesToBase64(await pipeBytes(json, new CompressionStream('deflate-raw')));
+}
+
+/** Any save code (DC2, DC1, or DC1 without its prefix): the migrated game, or null if it is not a save. */
+export async function importSaveCode(code: string | null | undefined, rng: Rng = gameRng): Promise<GameState | null> {
+  const payload = (code || '').trim().replace(/\s+/g, '');
+  if (!payload.startsWith(SAVE_CODE_PREFIX_V2)) {
+    return importSave(payload, rng);
+  }
+  try {
+    const bytes = await pipeBytes(base64ToBytes(payload.slice(SAVE_CODE_PREFIX_V2.length)), new DecompressionStream('deflate-raw'));
+    const data: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    return isValidSaveCode(data) ? migrate(data, rng) : null;
+  } catch {
+    return null; // not base64, not deflate, not JSON — or DC2 on a browser without DecompressionStream
+  }
+}
+
+/** A DC1 code (or its base64 without the prefix): the migrated game, or null if it is not a valid save. */
 export function importSave(code: string | null | undefined, rng: Rng = gameRng): GameState | null {
   try {
     let payload = (code || '').trim().replace(/\s+/g, '');

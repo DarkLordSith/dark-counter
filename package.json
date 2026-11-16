@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tests/sim/tsconfig.json",
+    "sim": "node --import ./tests/sim/register.mjs tests/sim/run.ts"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

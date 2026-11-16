@@ -9,6 +9,8 @@ import type { ItemType, ItemTypeInfo, Recipe } from './types';
 /** Save slot of the "Начало конца" mode; old saves live here, so the key never changes. */
 export const SAVE_KEY = 'dark-counter-v3';
 export const SAVE_CODE_PREFIX = 'DC1:';
+/** Patch A: the save code is deflate-raw compressed (DC1: codes still load; DC1 is the fallback without CompressionStream). */
+export const SAVE_CODE_PREFIX_V2 = 'DC2:';
 
 // ---------- game modes ----------
 /** Modes in the order of the mode screen. sandbox is a stub: shown locked until Patch B1. */
@@ -97,6 +99,8 @@ export const CLOCK = {
 export const EVENING_HOURS = CLOCK.midnight - CLOCK.shiftEnd;
 export const MAX_HEAT = 10;
 export const LOG_LIMIT = 50;
+/** Log lines kept in a save (the log was ~76% of a day-25 save); the open game keeps LOG_LIMIT. */
+export const SAVE_LOG_LINES = 10;
 export const START = { credits: 400, parts: 4 };
 
 // Concept skeleton (14.11.2026, after the playtest where 5000 cr. took 16 days):
@@ -456,6 +460,46 @@ export const CRAFT_CONDITION_BONUS = 10;
 
 // ---------- night ----------
 export const NIGHT = { infectionSpreadChance: 0.35, raidChancePerHeat: 0.1, raidBaseFine: 50, raidFinePerItem: 60 };
+
+// ---------- daily expenses (Patch A, task 22) ----------
+/**
+ * Paid every morning: the shop's energy, and once a week (the first day of the station
+ * week, the morning after Grobov's day) the fee to the deck. About 10% of a careful
+ * player's weekly gain (balance bot: 1757 cr./week → 140 + 50 = 190). Not enough credits:
+ * the rest goes onto the debt. `expensesToday()` in economy.ts is the hook for Patch C events.
+ */
+export const EXPENSES = { energyPerDay: 20, tierFee: 50, tierFeeWeekday: 1 };
+
+/** The "Сохранение" window: the file buttons (Patch A, task 22). */
+export const SAVE_TEXT = {
+  ru: {
+    download: 'Скачать файлом',
+    upload: 'Загрузить из файла',
+    fileUnread: 'Файл не прочитан. Выберите файл сейва (.txt).',
+    preparing: 'Готовлю код…',
+  },
+  en: {
+    download: 'Download as file',
+    upload: 'Load from file',
+    fileUnread: 'Could not read the file. Choose a save file (.txt).',
+    preparing: 'Preparing the code…',
+  },
+} as const;
+
+export const EXPENSE_TEXT = {
+  ru: {
+    paid: 'Расходы: {items}',
+    energy: 'энергия −{n} кр.',
+    tier: 'взнос ярусу −{n} кр.',
+    shortfall: 'Не хватило {n} кр.: ушло в долг, долг {debt} кр.',
+  },
+  en: {
+    paid: 'Expenses: {items}',
+    energy: 'energy −{n} cr.',
+    tier: 'deck fee −{n} cr.',
+    shortfall: '{n} cr. short: added to the debt, debt {debt} cr.',
+  },
+} as const;
 
 // ---------- junkyard (v2, 15.11.2026: one heap, "Копать", noise → drone) ----------
 /**

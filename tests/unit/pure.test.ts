@@ -97,7 +97,7 @@ describe('one seed → one and the same day', () => {
         // fixed uids: makeItem() numbers items from a shared counter
         inv: [makeItem('chip', { uid: 1, infected: true }), makeItem('comm', { uid: 2 }), makeItem('visor', { uid: 3 }), makeItem('battery', { uid: 4, stolen: true })],
       });
-      const events = sleepUntilMorning(game, mulberry32(seed));
+      const { events } = sleepUntilMorning(game, mulberry32(seed));
       return { state: game, events };
     };
     const one = night(11);

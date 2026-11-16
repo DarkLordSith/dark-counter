@@ -5,7 +5,7 @@
 // PARITY_IGNORE=<css selector> hides and skips intentionally new elements
 // in both versions (the version label .version is always skipped).
 import fs from 'node:fs';
-import { clickMenuItem, deterministicInit, hash as h, launch, MENU_ACTIONS, passModeScreen, preloadFonts, rng, storySave, storyValues } from './common.mjs';
+import { clickMenuItem, deterministicInit, hash as h, launch, MENU_ACTIONS, passModeScreen, preloadFonts, rng, savedCode, storySave, storyValues, waitInPage } from './common.mjs';
 
 const [, , URL_A, URL_B, RUNS = '12', STEPS = '250'] = process.argv;
 // The version label ("v0.7 · <commit>") differs between any two builds by
@@ -68,12 +68,19 @@ async function act(page, c, r) {
   }
   if (c.a === 'loadsave') { // paste current save code (or garbage) into the loader
     const mode = Math.floor(r() * 6); // 0 garbage, 1 as-is, 2 rich (debt almost paid), 3 rent due today, 4 broke + rent due, 5 legacy save w/o nextDue
-    await page.evaluate(mode => {
+    await savedCode(page); // DC2 (Patch A) arrives in the box a moment after the window opens
+    await page.evaluate(async mode => {
       const code = document.getElementById('savecode').value;
+      // DC1: base64(JSON); DC2: base64(deflate-raw(JSON))
+      const json = async () => {
+        if (!code.startsWith('DC2:')) return decodeURIComponent(escape(atob(code.slice(4))));
+        const bytes = Uint8Array.from(atob(code.slice(4)), ch => ch.charCodeAt(0));
+        return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+      };
       let out = code;
       if (mode === 0) out = 'nonsense';
       if (mode >= 2) {
-        const d = JSON.parse(decodeURIComponent(escape(atob(code.slice(4)))));
+        const d = JSON.parse(await json());
         if (mode === 2) { d.credits += 5200; if ('debt' in d) d.debt = Math.min(d.debt, 300); }
         if (mode === 3) { d.nextDue = d.day; d.llAt = 1; }
         if (mode === 4) { d.nextDue = d.day; d.credits = 5; d.deferred = true; d.llAt = 1; }
@@ -86,14 +93,19 @@ async function act(page, c, r) {
   // header actions: a HUD button before V1.4, an item of the ☰ menu since
   const modalClosed = await page.evaluate(() => document.getElementById('modal').hidden);
   if (MENU_ACTIONS.includes(c.a) && modalClosed) {
-    return page.evaluate(clickMenuItem, c.a);
+    await page.evaluate(clickMenuItem, c.a);
+    // "Сохранение": the code box is filled asynchronously since Patch A (DC2)
+    return c.a === 'savemenu' ? savedCode(page) : undefined;
   }
   return page.evaluate(c => {
     const sel = `[data-a="${c.a}"]` + (c.v !== null ? `[data-v="${c.v}"]` : '');
     const modalOpen = !document.getElementById('modal').hidden;
     const root = modalOpen ? document.getElementById('modal') : document.getElementById('app');
     root.querySelector(sel).click();
-  }, c);
+  }, c).then(() => c.a === 'loadsave'
+    // the load is asynchronous since Patch A: wait until the window closes or says no
+    ? waitInPage(page, () => document.getElementById('modal').hidden || !!document.getElementById('savemsg')?.textContent)
+    : undefined);
 }
 
 async function snapshot(page, deep) {

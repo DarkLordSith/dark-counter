@@ -25,7 +25,7 @@ function payOnDueDay(): number {
 
 function sleep(): string[] {
   closeShop(state);
-  return sleepUntilMorning(state, gameRng);
+  return sleepUntilMorning(state, gameRng).events;
 }
 
 afterEach(() => {

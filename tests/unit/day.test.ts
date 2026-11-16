@@ -161,7 +161,7 @@ describe('digs past midnight', () => {
       dig(state, gameRng);
     }
     goHome(state);
-    const events = sleepUntilMorning(state, gameRng);
+    const { events } = sleepUntilMorning(state, gameRng);
     expect(state.day).toBe(4);
     expect(state.cn).toBe(CUSTOMERS_PER_DAY - 1);
     // in the log (the ticker), not in the morning list: the window shows it as a reason
