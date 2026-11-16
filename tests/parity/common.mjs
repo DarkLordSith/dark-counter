@@ -76,6 +76,38 @@ export function clickMenuItem(action) {
 export const MENU_ACTIONS = ['savemenu'];
 
 /**
+ * Polls `check` in the page from Node until it returns a truthy value (or the time is up).
+ * Node-side polling: the page's own timers and requestAnimationFrame may be stubbed by deterministicInit.
+ */
+export async function waitInPage(page, check, arg, timeoutMs = 3000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await page.evaluate(check, arg);
+    if (value || Date.now() > deadline) return value;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+}
+
+/**
+ * The code in the "Сохранение" window. Since Patch A (DC2) the code is compressed asynchronously
+ * and appears in the box a moment after the window opens; older builds fill it at once.
+ */
+export const savedCode = page => waitInPage(page, () => document.getElementById('savecode')?.value || '');
+
+/**
+ * Pastes a code into the loader and presses "Загрузить". Since Patch A the load is asynchronous:
+ * waits until the window closes (loaded) or the error line appears (rejected).
+ */
+export async function loadCodeThroughUi(page, code) {
+  await page.evaluate(code => {
+    document.getElementById('loadcode').value = code;
+    document.querySelector('[data-a="loadsave"]').click();
+  }, code);
+  await waitInPage(page, () => document.getElementById('modal').hidden || !!document.getElementById('savemsg')?.textContent);
+  return page.evaluate(() => ({ modalOpen: !document.getElementById('modal').hidden, msg: document.getElementById('savemsg')?.textContent, hud: document.getElementById('hud').innerText }));
+}
+
+/**
  * Since the modes update the very first launch shows the mode screen; the bot
  * plays the story mode ("Начало конца" = the behaviour before modes).
  * Older versions have no such screen: nothing happens.

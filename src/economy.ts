@@ -9,14 +9,14 @@
 // =====================================================================
 import {
   ACCEPT, HUNCH_VERDICT, HUNCH_VERDICT_TEXT, BENCH_COST, BUYER_COUNTER_LINES, BUYER_INSULTED_LINES, BUYER_LINES, COLLATERAL,
-  CRAFT_CONDITION_BONUS, CUSTOMER, DAY_TEXT, DEBT, DEBT_TEXT, ENDING_TEXT, DIG_LOOT, DIG_ODDS, EVENING_HOURS, JUNK_TEXT, HAGGLE, HUMAN_NAMES,
+  CRAFT_CONDITION_BONUS, CUSTOMER, DAY_TEXT, DEBT, DEBT_TEXT, ENDING_TEXT, EXPENSE_TEXT, EXPENSES, DIG_LOOT, DIG_ODDS, EVENING_HOURS, JUNK_TEXT, HAGGLE, HUMAN_NAMES,
   INSPECT, ITEM_TYPES, JUNK, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
   RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SELLER_COUNTER_LINES, SELLER_INSULTED_LINES, SELLER_LINES,
   SELLER_STOLEN_LINE, SUPPLIER, VALUE,
 } from './data';
 import { COLOR, MEANING } from './palette';
 import { appearanceFor } from './appearance';
-import { customersToday, formatHour, openingHour } from './day';
+import { customersToday, formatHour, openingHour, weekdayOf } from './day';
 import { addLog, createItem, findItem, fullKnowledge, randomLandlordSlot } from './state';
 import { pickRandom, randomBetween, randomInt, randomSeed } from './rng';
 import type { Rng } from './rng';
@@ -850,8 +850,59 @@ function coolDownAndMaybeRaid(state: GameState, events: string[], rng: Rng): voi
   events.push(`Утренний рейд патруля. Изъято краденого: ${stolen.length}. Штраф ${fine} кр.`);
 }
 
-/** Ends the day; returns the list of night events for the morning report. */
-export function sleepUntilMorning(state: GameState, rng: Rng): string[] {
+/** What the morning took (or nothing: the game ended, or a closed calm debt pays no bills). */
+export interface ExpensesPaid {
+  energy: number;
+  /** The weekly fee to the deck, 0 on other days. */
+  tier: number;
+  /** Paid from the credits. */
+  paid: number;
+  /** Not covered by the credits: went onto the debt. */
+  shortfall: number;
+}
+
+/** Today's bills: energy every day, the deck fee on the first day of the station week. The hook for Patch C events. */
+export function expensesToday(state: GameState): Pick<ExpensesPaid, 'energy' | 'tier'> {
+  return {
+    energy: EXPENSES.energyPerDay,
+    tier: weekdayOf(state) === EXPENSES.tierFeeWeekday ? EXPENSES.tierFee : 0,
+  };
+}
+
+/** The morning bills: from the credits, the rest onto the debt. */
+export function payExpenses(state: GameState): ExpensesPaid | null {
+  if (isDebtClosed(state)) {
+    return null; // calm after the debt: the shop goes on without payments
+  }
+  const { energy, tier } = expensesToday(state);
+  const paid = Math.min(state.credits, energy + tier);
+  const shortfall = energy + tier - paid;
+  state.credits -= paid;
+  state.debt += shortfall;
+  return { energy, tier, paid, shortfall };
+}
+
+/** Lines of the morning bills for the log and the morning window; `debt` is the debt after them. */
+export function expenseLines(expenses: ExpensesPaid, debt: number): { paid: string; shortfall: string | null } {
+  const words = EXPENSE_TEXT.ru;
+  const items = [fill(words.energy, { n: expenses.energy })];
+  if (expenses.tier) {
+    items.push(fill(words.tier, { n: expenses.tier }));
+  }
+  return {
+    paid: fill(words.paid, { items: items.join(', ') }),
+    shortfall: expenses.shortfall ? fill(words.shortfall, { n: expenses.shortfall, debt }) : null,
+  };
+}
+
+/** The night is over: its events for the morning window, and the morning bills. */
+export interface MorningReport {
+  events: string[];
+  expenses: ExpensesPaid | null;
+}
+
+/** Ends the day; returns the night events and the morning bills for the morning report. */
+export function sleepUntilMorning(state: GameState, rng: Rng): MorningReport {
   state.where = 'home';
   const events: string[] = [];
   spreadInfection(state, events, rng);
@@ -860,7 +911,7 @@ export function sleepUntilMorning(state: GameState, rng: Rng): string[] {
     // the last shuttle leaves this morning: the game ends, no raid and no landlord
     endGame(state, state.seat ? 'left' : 'stayed');
     events.push(state.over ?? '');
-    return events;
+    return { events, expenses: null };
   }
   const daysToShuttle = state.shuttleDay - state.day;
   if (hasShuttle(state) && (DEBT.shuttleReminders as readonly number[]).includes(daysToShuttle)) {
@@ -870,6 +921,8 @@ export function sleepUntilMorning(state: GameState, rng: Rng): string[] {
     events.push(fill(TEXT.landlordToday, { amount: state.owed }) + (state.deferred ? ' Отсрочки больше не будет.' : ''));
   }
   coolDownAndMaybeRaid(state, events, rng);
+  // the bills come after the raid's fine: what is left pays them
+  const expenses = payExpenses(state);
   // the morning's heat (after the night and a raid) and last night's digs decide today's customers
   state.cn = customersToday(state).count;
   // the late opening goes to the log only: the morning window already lists it as a reason
@@ -881,7 +934,14 @@ export function sleepUntilMorning(state: GameState, rng: Rng): string[] {
     events.push('Тихая ночь на нижнем ярусе.');
   }
   events.forEach(event => addLog(state, event));
-  return events;
+  if (expenses) {
+    const lines = expenseLines(expenses, state.debt);
+    addLog(state, lines.paid);
+    if (lines.shortfall) {
+      addLog(state, lines.shortfall);
+    }
+  }
+  return { events, expenses };
 }
 
 /* =====================================================================

@@ -20,7 +20,7 @@ function memoryStore(): KeyValueStore & { data: Map<string, string> } {
 
 function sleep(): string[] {
   closeShop(state);
-  return sleepUntilMorning(state, gameRng);
+  return sleepUntilMorning(state, gameRng).events;
 }
 
 afterEach(() => {

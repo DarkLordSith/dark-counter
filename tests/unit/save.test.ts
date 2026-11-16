@@ -1,9 +1,9 @@
 // Save compatibility: migrate(), DC1 export/import and real saves of past versions.
 import { gameRng } from '../../src/rng';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEBT, LANDLORD_SEED, LEGACY_RENT_PERIOD, SAVE_CODE_PREFIX } from '../../src/data';
+import { DEBT, LANDLORD_SEED, LEGACY_RENT_PERIOD, SAVE_CODE_PREFIX, SAVE_CODE_PREFIX_V2 } from '../../src/data';
 import { callNextCustomer, closeShop, customerLeaves, payRent, sleepUntilMorning } from '../../src/economy';
-import { actorReset, exportSave, importSave, migrate, newGame, setState, state } from '../../src/state';
+import { actorReset, exportSave, exportSaveCode, importSave, importSaveCode, migrate, newGame, saveSnapshot, setState, state } from '../../src/state';
 import type { SavedGame } from '../../src/types';
 import { makeState } from './helpers';
 
@@ -132,10 +132,18 @@ describe('saves of past versions (tests/fixtures)', () => {
     });
 
     // Fixtures predate the debt update, so migrate() adds fields; after that the code round-trips.
-    it('exports and imports back unchanged after migration', () => {
+    it('exports and imports back unchanged after migration (the save keeps the last log lines)', () => {
       const loaded = importSave(code)!;
       setState(loaded);
-      expect(importSave(exportSave())).toEqual(loaded);
+      expect(importSave(exportSave())).toEqual(saveSnapshot(loaded));
+    });
+
+    it('goes through DC2 and back: the async loader takes the old DC1 code and the new one', async () => {
+      const loaded = (await importSaveCode(code))!;
+      expect(loaded).toEqual(importSave(code));
+      const dc2 = await exportSaveCode(loaded);
+      expect(dc2.startsWith(SAVE_CODE_PREFIX_V2)).toBe(true);
+      expect(await importSaveCode(dc2)).toEqual(saveSnapshot(loaded));
     });
 
     it('gets the father\'s debt and at least three weeks to the shuttle', () => {

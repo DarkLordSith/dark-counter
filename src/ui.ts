@@ -7,7 +7,7 @@ import { customersToday, formatHour, openingHour } from './day';
 import { audio, playSfx, setJunkAmbience, startSoundOnGesture, toggleMusic, toggleSfx } from './audio';
 import {
   ACTION_TEXT, BENCH_COST, DAY_TEXT, DEBT, JUNK, DEBT_TEXT, ENDING_TEXT, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, JUNK_TEXT, MARKET, MAX_HEAT, MODES, MODE_TEXT,
-  PLAYABLE_MODES, RECIPES, RENT, SUPPLIER,
+  PLAYABLE_MODES, RECIPES, RENT, SAVE_TEXT, SUPPLIER,
 } from './data';
 import { byId, maybeById } from './dom';
 import { iconSvg } from './icons';
@@ -16,13 +16,13 @@ import {
   collateralHeatRelief, craft, customerLeaves, deferredDebt, deferRent, dig, digsPerVisit, estimatedValue, evict, feedback,
   canGoToJunkyard, digIsLate, goHome, goToJunkyard, hunchVerdict, junkVisitHours, noiseLevel, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer, itemName,
   nextRent, offerToSeller, orderParts, payEarly, payRent, payWithCollateral, perceivedChance, planCollateral, presentItem,
-  recipeNeeds, scrapValue, seatPrice, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
+  expenseLines, recipeNeeds, scrapValue, seatPrice, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
 } from './economy';
-import type { CollateralPlan } from './economy';
+import type { CollateralPlan, MorningReport } from './economy';
 import { isPlayable, loadProfile, recordEnding, saveProfile } from './profile';
 import { isOnHeap, onSceneClick, paintIcons, playDigFx } from './scene';
 import {
-  actor, actorAtCounter, actorEnter, actorReset, addLog, exportSave, findItem, importSave, newGame, persistence, readSlot, saveGame, setState, state, ui,
+  actor, actorAtCounter, actorEnter, actorReset, addLog, exportSaveCode, findItem, importSaveCode, newGame, persistence, readSlot, saveGame, setState, state, ui,
 } from './state';
 import type { BuyerCustomer, Customer, GameState, InspectCheck, Item, ItemType, Mode, Profile, Recipe, RentCustomer, SellerCustomer, Tab } from './types';
 import { daysRu, fill, roundTo10 } from './util';
@@ -568,12 +568,20 @@ function expectedCustomers(): string {
   return `<p class="expect">${fill(DAY_UI.expected, { n: `<b class="rn">${today.count}</b>` })}</p>${reasons ? `<ul class="reasons">${reasons}</ul>` : ''}`;
 }
 
-function showMorningReport(events: string[]): void {
+function showMorningReport(report: MorningReport): void {
   if (state.over) {
     showEnding();
     return;
   }
-  const body = `${expectedCustomers()}<ul>${events.map(event => `<li>${event}</li>`).join('')}</ul>`;
+  const lines = report.events.map(event => `<li>${event}</li>`);
+  if (report.expenses) {
+    const bills = expenseLines(report.expenses, state.debt);
+    lines.push(`<li>${bills.paid}</li>`);
+    if (bills.shortfall) {
+      lines.push(`<li class="m-risk">${bills.shortfall}</li>`); // short of money: onto the debt
+    }
+  }
+  const body = `${expectedCustomers()}<ul>${lines.join('')}</ul>`;
   openModal(`Утро. День ${state.day}`, body, '<button class="btn pri" data-a="close">Открыть лавку</button>');
 }
 
@@ -618,13 +626,49 @@ function confirmSeat(): void {
 
 function openSaveMenu(): void {
   openModal('Сохранение', `<p class="hint" style="margin:0">Скопируйте код и сохраните в заметки. На другом устройстве или в другой версии игры вставьте его в поле загрузки.</p>
-      <label for="savecode">${fill(MODE_UI.saveCode, { mode: MODE_UI.names[state.mode], day: state.day, credits: state.credits })}</label><textarea id="savecode" readonly>${exportSave()}</textarea>
-      <div class="mbtns"><button class="btn pri" data-a="copysave">Скопировать</button></div>
+      <label for="savecode">${fill(MODE_UI.saveCode, { mode: MODE_UI.names[state.mode], day: state.day, credits: state.credits })}</label><textarea id="savecode" readonly placeholder="${SAVE_UI.preparing}"></textarea>
+      <div class="mbtns"><button class="btn pri" data-a="copysave">Скопировать</button><button class="btn" data-a="savefile">${SAVE_UI.download}</button></div>
       <label for="loadcode">Загрузить сейв</label><textarea id="loadcode" placeholder="Вставьте код"></textarea>
+      <div class="mbtns"><button class="btn" data-a="loadfile">${SAVE_UI.upload}</button></div>
+      <input type="file" id="loadfilepick" accept=".txt,text/plain" hidden>
       <div id="savemsg" class="hint"></div>`,
     '<button class="btn alt" data-a="loadsave">Загрузить</button><button class="btn" data-a="close">Закрыть</button>',
     `<div class="version">${VERSION_LABEL}</div>`,
   );
+  // DC2 is compressed asynchronously: the code arrives a moment after the window
+  const game = state;
+  void exportSaveCode(game).then(code => {
+    const textarea = maybeById<HTMLTextAreaElement>('savecode');
+    if (textarea && state === game) {
+      textarea.value = code;
+    }
+  });
+}
+
+/** "Скачать файлом": the save code as a .txt file (the same code as in the box). */
+async function downloadSaveFile(): Promise<void> {
+  const code = await exportSaveCode(state);
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([code], { type: 'text/plain' }));
+  link.download = `dark-counter-${state.mode}-day${state.day}.txt`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+/** "Загрузить из файла": the chosen file's text goes into the load box and is loaded. */
+async function loadSaveFile(file: File | undefined): Promise<void> {
+  try {
+    byId<HTMLTextAreaElement>('loadcode').value = file ? (await file.text()).trim() : '';
+  } catch {
+    showSaveError(SAVE_UI.fileUnread);
+    return;
+  }
+  await loadSaveCode();
+}
+
+function showSaveError(text: string): void {
+  byId('savemsg').textContent = text;
+  byId('savemsg').classList.add('m-risk');
 }
 
 function copySaveCode(): void {
@@ -643,20 +687,19 @@ function copySaveCode(): void {
   }
 }
 
-/** Returns false if the code was rejected (the modal stays open). */
-function loadSaveCode(): boolean {
-  const loaded = importSave(byId<HTMLTextAreaElement>('loadcode').value);
+/** Loads the code from the load box (DC2 or DC1); a rejected code keeps the window open. */
+async function loadSaveCode(): Promise<void> {
+  const loaded = await importSaveCode(byId<HTMLTextAreaElement>('loadcode').value);
   if (!loaded) {
-    byId('savemsg').textContent = 'Код не распознан. Проверьте, что скопирован весь код целиком.';
-    byId('savemsg').classList.add('m-risk');
-    return false;
+    showSaveError('Код не распознан. Проверьте, что скопирован весь код целиком.');
+    return;
   }
   // the current game is already in its slot (render saves after every action);
   // the code goes into the slot of its own mode, and the game switches to that mode
   enterGame(loaded);
   addLog(state, `Сейв загружен: день ${state.day}, ${state.credits} кр.`);
   closeModal();
-  return true;
+  render();
 }
 
 function openLog(): void {
@@ -669,6 +712,8 @@ function openLog(): void {
 
 /** Mode strings in the interface language. */
 const MODE_UI = MODE_TEXT.ru;
+/** Save window strings (the file buttons). */
+const SAVE_UI = SAVE_TEXT.ru;
 
 /** Player profile; loaded by startGame(). */
 let profile: Profile = loadProfile(null);
@@ -969,7 +1014,18 @@ const ACTIONS: Record<string, ActionHandler> = {
     copySaveCode();
     return NO_RENDER;
   },
-  loadsave: () => loadSaveCode() ? undefined : NO_RENDER,
+  loadsave: () => {
+    void loadSaveCode();
+    return NO_RENDER;
+  },
+  savefile: () => {
+    void downloadSaveFile();
+    return NO_RENDER;
+  },
+  loadfile: () => {
+    maybeById<HTMLInputElement>('loadfilepick')?.click();
+    return NO_RENDER;
+  },
   log: () => {
     openLog();
     return NO_RENDER;
@@ -1099,6 +1155,11 @@ export function bindEvents(): void {
     }
   });
   document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('change', event => {
+    if (event.target instanceof HTMLInputElement && event.target.id === 'loadfilepick') {
+      void loadSaveFile(event.target.files?.[0]);
+    }
+  });
   onSceneClick(onSceneCanvasClick);
   startSoundOnFirstTouch();
   trackKeyboard();

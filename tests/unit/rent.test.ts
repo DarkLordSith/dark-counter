@@ -15,7 +15,7 @@ function seedRandom(seed: number): void {
 /** Ends the current day without trading. */
 function skipDay(): string[] {
   closeShop(state);
-  return sleepUntilMorning(state, gameRng);
+  return sleepUntilMorning(state, gameRng).events;
 }
 
 /** Calls customers until the landlord stands at the counter. */
