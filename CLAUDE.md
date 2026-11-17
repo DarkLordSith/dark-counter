@@ -8,7 +8,7 @@
 - чинит и собирает вещи;
 - вечером копает на свалке.
 
-Отец задолжал ростовщику Гробову 25 000 кр. Раз в неделю Гробов приходит за платежом (400, 650, 900…), платёж уменьшает долг; можно вносить досрочно. Последний шаттл со станции — день 60, место на нём Гробов продаёт только при нулевом долге. Концовки: «Улетел» (место куплено), «Остался на станции», выселение.
+Отец задолжал ростовщику Гробову 20 000 кр. (временный баланс 17.11, `DEBT` в `data.ts`). Раз в неделю Гробов приходит за платежом (400, 550, 700…), платёж уменьшает долг; можно вносить досрочно. Последний шаттл со станции — день 60, место на нём Гробов продаёт только при нулевом долге. Концовки: «Улетел» (место куплено), «Остался на станции», выселение.
 
 Режимы: «Начало конца» (`story`, всё выше), «Без таймера» (`calm`: долг и платежи без шаттла, при нулевом долге — «Долг закрыт» и лавка дальше без платежей), «Своя лавка» (`sandbox`, заготовка, закрыт до Патча B1). Первый запуск — экран выбора режима; дальше игра сразу продолжает последний режим.
 
@@ -29,13 +29,13 @@
 - `npm run preview` — проверка сборки локально, в том числе PWA и офлайн.
 - `npm test` — Vitest.
 - `npm run typecheck` — `tsc --noEmit` (в том числе `tests/sim`).
-- `npm run sim -- --seeds 1000 --strategy careful` — бот баланса: доли концовок, день закрытия долга, деньги по неделям (`tests/sim/README.md`).
+- `npm run sim -- --seeds 1000 --strategy careful` — бот баланса: доли концовок, день закрытия долга, деньги по неделям (`tests/sim/README.md`); `npm run sim:grid` — подбор чисел `DEBT` по сетке.
 
 ## Структура
 - `index.html` — разметка, подключает `src/main.ts`.
 - `src/main.ts` — инициализация: загрузка сейва, связка модулей, рендер, цикл анимации.
 - `src/types.ts` — `GameState`, `Item`, `ItemType`, `Customer` (размеченное объединение по `kind`: `'sell' | 'buy' | 'rent'`). Короткие поля сейва описаны с комментариями.
-- `src/data.ts` — товары (`ITEM_TYPES`), рецепты (`RECIPES`), имена, реплики, все балансовые числа (`DEBT`, `RENT`, `HAGGLE`, свалка `JUNK` и `DIG_ODDS`, день: `CLOCK`, неделя `CUSTOMERS_BY_WEEKDAY` и `WEEKDAY_REASONS`, `CUSTOMER_FLOW`…), режимы и ключи слотов (`MODES`, `SAVE_KEYS`, `PROFILE_KEY`), строки RU/EN: HUD и меню (`HUD_TEXT`), режимы (`MODE_TEXT`), долг и шаттл (`DEBT_TEXT`), концовки (`ENDING_TEXT`), свалка (`JUNK_TEXT`), день: утреннее окно, причины, чип (`DAY_TEXT`), утренние расходы (`EXPENSES`, `EXPENSE_TEXT`), окно сохранения (`SAVE_TEXT`). Плейсхолдеры `{name}` в строках заполняет `fill()` из `util.ts`. Новый контент добавляется здесь.
+- `src/data.ts` — товары (`ITEM_TYPES`), рецепты (`RECIPES`), имена, реплики, все балансовые числа (`DEBT`, `RENT`, `HAGGLE`, свалка `JUNK` и `DIG_ODDS`, день: `CLOCK`, неделя `CUSTOMERS_BY_WEEKDAY` и `WEEKDAY_REASONS`, `CUSTOMER_FLOW`, доля покупателей от склада `BUYER_FLOW`/`buyerShare`…), режимы и ключи слотов (`MODES`, `SAVE_KEYS`, `PROFILE_KEY`), строки RU/EN: HUD и меню (`HUD_TEXT`), режимы (`MODE_TEXT`), долг и шаттл (`DEBT_TEXT`), концовки (`ENDING_TEXT`), свалка (`JUNK_TEXT`), день: утреннее окно, причины, чип (`DAY_TEXT`), утренние расходы (`EXPENSES`, `EXPENSE_TEXT`), окно сохранения (`SAVE_TEXT`). Плейсхолдеры `{name}` в строках заполняет `fill()` из `util.ts`. Новый контент добавляется здесь.
 - `src/state.ts` — `state` (сейв), `ui` и `actor` (состояние экрана, не сохраняются), `createGame(mode, rng)` (чистая) и `newGame(mode)` (делает её текущей игрой), `createItem(state, type, overrides, rng)`, `addLog(state, text)`, `findItem(state, uid)`, слоты режимов (`saveGame`, `loadGame(mode)`, `readSlot`, `persistence`), `migrate`, `saveSnapshot` (в сейв — последние `SAVE_LOG_LINES` строк ленты), коды: `exportSaveCode`/`importSaveCode` (асинхронные, `DC2:`, фолбэк `DC1:`), `exportSave`/`importSave` (`DC1:`).
 - `src/profile.ts` — профиль игрока (`dark-counter-profile`): виденные концовки по режимам, открытые режимы, последний режим. Не сейв: «Новая игра» и коды его не трогают. Чистые функции над `KeyValueStore`.
 - `src/economy.ts` — торг (`sellerAcceptChance`/`buyerAcceptChance`, `perceivedChance`), долг: еженедельный платёж и залог (`payRent`, `planCollateral`), досрочный взнос (`payEarly`), место на шаттле (`seatPrice`, `buySeat`), концовки (`endGame`), свалка v2 (`goToJunkyard`, `dig` → `DigResult`, шум `noiseLevel`, `droneChance`, глубина `rareChance`, `digBonus` — точка расширения),  верстак (`useWorkbench`), сборка (`craft`), ночь (`sleepUntilMorning` → `MorningReport`: события и утренние расходы `payExpenses`; `expensesToday` — точка расширения для событий). **Чистые функции без DOM и без глобалов:** `state` и `rng` — параметры (`offerToSeller(state, price, rng)`), экран (выбор вещи, вкладка, фигура на сцене) не трогают — возвращают результат (`callNextCustomer` → пришёл ли кто-то, `offerToSeller`/`craft` → новая вещь, `inspect` → был ли осмотр).
@@ -59,7 +59,7 @@
 - `public/fonts/` — Public Pixel (`.woff2` и `.ttf` автора без изменений) и `README.md` с лицензией CC0 и источником.
 - `tests/unit/` — Vitest: логика и сейв.
 - `tests/fixtures/` — реальные коды сейвов прошлых версий.
-- `tests/sim/` — бот баланса (`npm run sim`): стратегии `careful`/`greedy` на чистых правилах и `mulberry32`; в `npm test` только смоук `tests/unit/sim.test.ts`.
+- `tests/sim/` — бот баланса (`npm run sim`): стратегии `careful`/`owner` (откалибрована по плейтесту владельца)/`greedy` на чистых правилах и `mulberry32`; в `npm test` только смоук `tests/unit/sim.test.ts`.
 - `tests/parity/` — стенд паритета: эталонная версия против кандидата в headless Chrome (см. его README). Гонять при рефакторинге и миграциях; если вид меняется намеренно — `PARITY_LOGIC_ONLY=1`.
 
 Правило: логика получает `state` и `rng` параметрами, меняет `GameState` и возвращает результат; глобальный `state`, `ui`, `actor` и `Math.random` она не трогает. Глобальную игру держит `state.ts`, правила зовёт `ui.ts` с `state` и `gameRng`, а по результату сам переключает экран (`followGame`: ушедший клиент уходит со сцены, проданная вещь снимается с выбора). Например, `sleepUntilMorning(state, rng)` возвращает события ночи, а всплывающие числа кладутся в очередь `feedback`. DOM трогают только `ui.ts` и `scene.ts` (через `dom.ts`). Без `any`; если тип неочевиден, описываем его в `types.ts`.

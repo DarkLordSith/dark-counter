@@ -126,7 +126,7 @@ describe('calm "Без таймера"', () => {
   });
 
   it('keeps the debt and the weekly payment', () => {
-    makeState({ mode: 'calm', day: 7, nextDue: 7, rent: 400, owed: 400, credits: 400 });
+    makeState({ mode: 'calm', day: 7, nextDue: 7, rent: 400, owed: 400, credits: 400, debt: DEBT.start });
     state.cust = { kind: 'rent', name: 'Гробов', seed: LANDLORD_SEED, msg: '', pat: 0, max: 0, done: {} };
     payRent(state);
     expect(state.debt).toBe(DEBT.start - 400);

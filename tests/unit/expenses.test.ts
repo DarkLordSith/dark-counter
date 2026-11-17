@@ -15,7 +15,7 @@ describe('the morning bills', () => {
   it('energy is paid every morning and shows in the log', () => {
     const state = evening(3, 7, 500);
     const { expenses } = sleepUntilMorning(state, mulberry32(1));
-    expect(expenses).toEqual({ energy: EXPENSES.energyPerDay, tier: 0, paid: EXPENSES.energyPerDay, shortfall: 0 });
+    expect(expenses).toEqual({ energy: EXPENSES.energyPerDay, tier: 0, paid: EXPENSES.energyPerDay, shortfall: 0, toDebt: 0 });
     expect(state.credits).toBe(500 - EXPENSES.energyPerDay);
     expect(state.debt).toBe(20000);
     expect(state.log.some(line => line.endsWith('Расходы: энергия −20 кр.'))).toBe(true);
@@ -33,7 +33,7 @@ describe('the morning bills', () => {
   it('without enough credits the rest goes onto the debt, with a line of its own', () => {
     const state = makeState({ day: 8, nextDue: 14, credits: 30, debt: 20000 });
     const paid = payExpenses(state)!;
-    expect(paid).toEqual({ energy: 20, tier: 50, paid: 30, shortfall: 40 });
+    expect(paid).toEqual({ energy: 20, tier: 50, paid: 30, shortfall: 40, toDebt: 40 });
     expect(state.credits).toBe(0);
     expect(state.debt).toBe(20040);
     expect(expenseLines(paid, state.debt).shortfall).toBe('Не хватило 40 кр.: ушло в долг, долг 20040 кр.');
@@ -44,6 +44,22 @@ describe('the morning bills', () => {
     payExpenses(state);
     expect(state.credits).toBe(0);
     expect(state.debt).toBe(EXPENSES.energyPerDay);
+  });
+
+  it('once the seat is bought, the shortfall does not go onto the debt (the seat is never at risk)', () => {
+    const state = makeState({ day: 52, nextDue: 56, credits: 5, debt: 0, seat: true });
+    const paid = payExpenses(state)!;
+    expect(paid).toEqual({ energy: 20, tier: 0, paid: 5, shortfall: 15, toDebt: 0 });
+    expect(state).toMatchObject({ credits: 0, debt: 0, seat: true });
+    expect(expenseLines(paid, state.debt).shortfall).toBe('Не хватило 15 кр. В долг не пишут: место на шаттле оплачено.');
+  });
+
+  it('a whole night after the seat: the morning leaves the debt at zero', () => {
+    const state = makeState({ phase: 'evening', day: 55, nextDue: 56, credits: 0, debt: 0, seat: true, heat: 0 });
+    const { expenses } = sleepUntilMorning(state, mulberry32(1));
+    expect(expenses?.toDebt).toBe(0);
+    expect(state.debt).toBe(0);
+    expect(state.over).toBeNull();
   });
 
   it('calm with the debt closed pays no bills (the shop goes on without payments)', () => {

@@ -34,11 +34,12 @@ afterEach(() => {
 });
 
 describe('a new game', () => {
-  it('starts with a debt of 25 000 and the shuttle on day 60, no buyout', () => {
+  it('starts with a debt of 20 000 and the shuttle on day 60, no buyout (temporary balance 17.11)', () => {
     newGame();
-    expect(state).toMatchObject({ debt: 25000, shuttleDay: 60, seat: false, ending: null, over: null });
+    expect(state).toMatchObject({ debt: 20000, shuttleDay: 60, seat: false, ending: null, over: null });
     expect(state).not.toHaveProperty('won');
-    expect(DEBT).toMatchObject({ start: 25000, shuttleDay: 60, seatBase: 2000, seatPerDay: 100 });
+    // the numbers picked by `npm run sim:grid` (tests/sim/README.md)
+    expect(DEBT).toMatchObject({ start: 20000, firstPayment: 400, paymentStep: 150, shuttleDay: 60, seatBase: 2000, seatPerDay: 50, legacyStart: 25000 });
   });
 });
 
@@ -50,12 +51,12 @@ describe('weekly payment', () => {
     expect(state).toMatchObject({ debt: 24600, credits: 0 });
   });
 
-  it('follows 400, 650, 900, 1150 … every 7 days', () => {
+  it('follows 400, 550, 700, 850 … every 7 days', () => {
     newGame();
     const paid = [payOnDueDay(), payOnDueDay(), payOnDueDay(), payOnDueDay()];
-    expect(paid).toEqual([400, 650, 900, 1150]);
+    expect(paid).toEqual([400, 550, 700, 850]);
     expect(state.nextDue).toBe(35);
-    expect(state.debt).toBe(25000 - 3100);
+    expect(state.debt).toBe(20000 - 2500);
   });
 
   it('paid with goods also comes off the debt', () => {
@@ -122,10 +123,10 @@ describe('early payment', () => {
 });
 
 describe('shuttle seat', () => {
-  it('costs 2000 + 100 × day', () => {
-    expect(seatPrice(1)).toBe(2100);
-    expect(seatPrice(30)).toBe(5000);
-    expect(seatPrice(59)).toBe(7900);
+  it('costs 2000 + 50 × day', () => {
+    expect(seatPrice(1)).toBe(2050);
+    expect(seatPrice(30)).toBe(3500);
+    expect(seatPrice(59)).toBe(4950);
   });
 
   it('is not sold while there is any debt', () => {
@@ -138,13 +139,13 @@ describe('shuttle seat', () => {
   it('is sold at zero debt for the price of the day, once', () => {
     makeState({ day: 20, credits: 5000, debt: 0 });
     expect(buySeat(state)).toBe(true);
-    expect(state).toMatchObject({ seat: true, credits: 1000 });
+    expect(state).toMatchObject({ seat: true, credits: 2000 });
     expect(buySeat(state)).toBe(false);
-    expect(state.credits).toBe(1000);
+    expect(state.credits).toBe(2000);
   });
 
   it('needs the money', () => {
-    makeState({ day: 20, credits: 3999, debt: 0 });
+    makeState({ day: 20, credits: 2999, debt: 0 });
     expect(canBuySeat(state)).toBe(false);
   });
 });

@@ -106,12 +106,20 @@ export const START = { credits: 400, parts: 4 };
 // Concept skeleton (14.11.2026, after the playtest where 5000 cr. took 16 days):
 // the father's debt to Grobov instead of rent and buyout, 60 days to the last shuttle.
 // Numbers are a proposal, tune after playtests.
+/**
+ * The father's debt. Временный баланс 17.11, пересчитать после B1: picked by `npm run sim:grid`
+ * on the owner bot (calibrated to the owner's playtest), see tests/sim/README.md. With these numbers
+ * the owner bot leaves on the shuttle in ~70% of games and closes the debt around day 49, the
+ * careful one is evicted in ~8%. Was: debt 25 000, step 250, seat 2000 + 100 × day.
+ */
 export const DEBT = {
-  /** Debt at the start of a new game. */
-  start: 25000,
-  /** Weekly payment: the first one, then + step every week (400, 650, 900…). */
+  /** Debt at the start of a new game (a save keeps its own debt). */
+  start: 20000,
+  /** Saves made before the debt update get this debt on migration (the old start: migrate() stays as it was). */
+  legacyStart: 25000,
+  /** Weekly payment: the first one, then + step every week (400, 550, 700…). */
   firstPayment: 400,
-  paymentStep: 250,
+  paymentStep: 150,
   periodDays: 7,
   /** The last shuttle leaves on this day; the game ends that morning. */
   shuttleDay: 60,
@@ -119,7 +127,7 @@ export const DEBT = {
   legacyDaysLeft: 21,
   /** Seat price = seatBase + seatPerDay × day (grows towards the evacuation). */
   seatBase: 2000,
-  seatPerDay: 100,
+  seatPerDay: 50,
   /** Early payment buttons (plus "everything you have"). */
   earlySteps: [100, 500],
   /** Morning reminders: this many days before the shuttle. */
@@ -156,8 +164,21 @@ export const VALUE = {
 export const ITEM_ODDS = { condMin: 15, condMax: 98, stolen: 0.25, defect: 0.25, infected: 0.35 };
 
 // ---------- customers & haggling ----------
+/**
+ * Buyers follow the stock (balance 17.11, owner playtest: 4 buys to 1 sale): an empty shop draws
+ * sellers, a full one buyers. The share of buyers among the visitors grows linearly from `fewShare`
+ * (`few` items or less) to `manyShare` (`many` items or more). With no stock at all every visitor sells.
+ */
+export const BUYER_FLOW = { few: 2, fewShare: 0.3, many: 8, manyShare: 0.65 };
+
+/** Chance that the next visitor is a buyer, by the number of items in stock. */
+export function buyerShare(stock: number): number {
+  const { few, fewShare, many, manyShare } = BUYER_FLOW;
+  const t = Math.min(1, Math.max(0, (stock - few) / (many - few)));
+  return fewShare + (manyShare - fewShare) * t;
+}
+
 export const CUSTOMER = {
-  buyerChance: 0.45,
   buyerWantsStockedChance: 0.7,
   patienceMin: 4,
   patienceMax: 6,
@@ -492,12 +513,14 @@ export const EXPENSE_TEXT = {
     energy: 'энергия −{n} кр.',
     tier: 'взнос ярусу −{n} кр.',
     shortfall: 'Не хватило {n} кр.: ушло в долг, долг {debt} кр.',
+    unpaid: 'Не хватило {n} кр. В долг не пишут: место на шаттле оплачено.',
   },
   en: {
     paid: 'Expenses: {items}',
     energy: 'energy −{n} cr.',
     tier: 'deck fee −{n} cr.',
     shortfall: '{n} cr. short: added to the debt, debt {debt} cr.',
+    unpaid: '{n} cr. short. Not added to the debt: the shuttle seat is paid for.',
   },
 } as const;
 
