@@ -453,6 +453,8 @@ input:focus-visible {
   min-height: 0;
   overflow: auto;
   padding-block: 8px 10px;
+  /* a size container: the stock follows the pane's width (V2.3) */
+  container: pane / inline-size;
 }
 
 /* ==================== Action bar (V1.5) ==================== */
@@ -1109,6 +1111,158 @@ input:focus-visible {
   padding: 16px;
 }
 
+/* ==================== Stock and the workbench window (V2.3) ==================== */
+
+/* The window body is a size container (like .pane): its content follows its own width
+   (iPhone SE 375, iPhone 15, the Mac mini window), not the screen's. */
+.win-body {
+  container: win / inline-size;
+}
+
+/* Filter chips: one row, one tap; the chosen one has the selection frame of a tile. */
+.chips {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-bottom: 6px;
+}
+
+.fchip {
+  flex: none;
+  min-height: 36px;
+  padding: 0 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: var(--fs-s);
+  white-space: nowrap;
+}
+
+.fchip.on {
+  border-color: var(--m-action);
+  box-shadow: inset 0 -2px 0 var(--m-action);
+}
+
+/* Compact tiles: the icon and the price; 12 items fit an iPhone SE pane without scrolling. */
+.shelf.stock {
+  grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
+  gap: 4px;
+}
+
+.stile {
+  gap: 2px;
+  padding: 4px 2px 2px;
+}
+
+/* The stock legend sits closer: the budget of 12 tiles on an iPhone SE. */
+.chips ~ .legend {
+  margin: 4px 0 0;
+}
+
+.stile .tv {
+  color: var(--fg);
+  font-size: var(--fs-px-s);
+}
+
+@container pane (max-width: 360px) {
+  .fchip {
+    padding: 0 7px;
+  }
+}
+
+@container pane (min-width: 560px) {
+  .shelf.stock {
+    grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  }
+}
+
+/* The customer at the counter, on top of the bench. */
+.bench-cust {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+
+.face {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  image-rendering: pixelated;
+}
+
+.bc-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bc-line {
+  font-size: var(--fs-s);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bench-card {
+  align-items: center;
+  padding: 6px;
+}
+
+.bench-info {
+  min-width: 0;
+}
+
+.bench-offer {
+  width: 100%;
+  min-height: 44px;
+}
+
+.win .bgrid .btn {
+  min-height: 40px;
+}
+
+/* ‹ n of total ›: the arrows at the edges, the place between them. */
+.bench-arrow {
+  flex: none;
+  min-width: 52px;
+  min-height: 40px;
+  font-size: var(--fs-l);
+  line-height: 1;
+}
+
+.bench-pos {
+  flex: 1;
+  align-self: center;
+  text-align: center;
+  font-size: var(--fs-s);
+}
+
+#winbtns:has(.bench-arrow) {
+  flex-wrap: nowrap;
+}
+
+/* Narrow window: one column of actions, a smaller icon. */
+@container win (max-width: 300px) {
+  .bgrid {
+    grid-template-columns: 1fr;
+  }
+
+  .bench-card .bigico {
+    width: 56px;
+    height: 32px;
+  }
+}
+
+/* Wide sheet (a big phone in landscape, a tablet): three columns of actions. */
+@container win (min-width: 440px) {
+  .bgrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 /* ==================== Window component (V2.2, src/window.ts) ==================== */
 
 /* A tap past the window closes it. The backdrop is clear: the scene, the action bar and
@@ -1409,6 +1563,7 @@ input:focus-visible {
    browser allows it, no letter spacing: anything else blurs the 8×8 pixels. */
 
 .st b,
+.stile .tv,
 .chip,
 .fx,
 .rn,

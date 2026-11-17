@@ -665,4 +665,44 @@ export const WINDOW_TEXT = {
   en: { close: 'Close window' },
 } as const;
 
+/** Stock and the workbench window (V2.3): filter chips, the bench, the customer strip. RU/EN. */
+export const STOCK_TEXT = {
+  ru: {
+    filters: { all: 'Все', tech: 'Электроника', gear: 'Железо', stolen: 'Краденое' },
+    filtersLabel: 'Фильтр склада',
+    empty: 'Склад пуст. Покупайте у клиентов или копайте на свалке.',
+    emptyFilter: 'Под этот фильтр вещей нет.',
+    legend: { unknown: 'не проверено', risk: 'краденое / ИИ', wear: 'дефект' },
+    estimate: 'Оценка',
+    actions: { diag: 'Диагностика', repair: 'Ремонт +25%', fix: 'Убрать дефект', purge: 'Вычистить ИИ', wipe: 'Перебить №', scrap: 'Разобрать' },
+    wipeNote: 'Перебитый серийник: +1 к розыску.',
+    offer: 'Предложить клиенту',
+    shown: 'Уже на прилавке',
+    prev: 'Предыдущая вещь',
+    next: 'Следующая вещь',
+    position: '{n} из {total}',
+    wants: 'Ищет: {item}',
+    sells: 'Продаёт: {item}, просит {ask} кр.',
+    collects: 'Пришёл за платежом: {amount} кр.',
+  },
+  en: {
+    filters: { all: 'All', tech: 'Electronics', gear: 'Hardware', stolen: 'Stolen' },
+    filtersLabel: 'Stock filter',
+    empty: 'The stock is empty. Buy from customers or dig at the junkyard.',
+    emptyFilter: 'Nothing fits this filter.',
+    legend: { unknown: 'not checked', risk: 'stolen / AI', wear: 'defect' },
+    estimate: 'Estimate',
+    actions: { diag: 'Diagnostics', repair: 'Repair +25%', fix: 'Fix the defect', purge: 'Purge the AI', wipe: 'Re-stamp the №', scrap: 'Scrap' },
+    wipeNote: 'A re-stamped serial: +1 to the wanted level.',
+    offer: 'Offer to the customer',
+    shown: 'On the counter',
+    prev: 'Previous item',
+    next: 'Next item',
+    position: '{n} of {total}',
+    wants: 'Looking for: {item}',
+    sells: 'Sells: {item}, asks {ask} cr.',
+    collects: 'Came for the payment: {amount} cr.',
+  },
+} as const;
+
 

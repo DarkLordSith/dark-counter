@@ -432,13 +432,30 @@ function drawItem(type: string, centerX: number, bottomY: number, now: number, i
   }
 }
 
-/** Draws every <canvas data-ico> icon currently in the DOM. */
+/** Draws every <canvas data-ico> icon and <canvas data-face> portrait currently in the DOM. */
 export function paintIcons(): void {
   document.querySelectorAll<HTMLCanvasElement>('canvas[data-ico]').forEach(canvas => {
     const sceneCtx = ctx;
     ctx = context2d(canvas);
     ctx.clearRect(0, 0, ICON_W, ICON_H);
     drawItem(canvas.dataset.ico ?? '', ICON_W / 2, ICON_H - 2, 0, canvas.dataset.inf === '1');
+    ctx = sceneCtx;
+  });
+  paintFaces();
+}
+
+/** Mini portrait (V2.3, until "Графика v1"): the head of the customer's own sprite in a 24×24 frame. */
+export const FACE_SIZE = 24;
+/** Sprite y at the top of the frame: the head and the collar (sprite rows 18–41). */
+const FACE_TOP = 18;
+
+/** Draws every <canvas data-face="seed"> portrait currently in the DOM. */
+function paintFaces(): void {
+  document.querySelectorAll<HTMLCanvasElement>('canvas[data-face]').forEach(canvas => {
+    const sceneCtx = ctx;
+    ctx = context2d(canvas);
+    fillRect(0, 0, FACE_SIZE, FACE_SIZE, SHOP.wall);
+    drawCustomer(FACE_SIZE / 2, -FACE_TOP, appearanceFor(Number(canvas.dataset.face)), 0);
     ctx = sceneCtx;
   });
 }
