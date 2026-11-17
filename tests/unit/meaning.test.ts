@@ -27,6 +27,8 @@ const DECOR = [
   // ☰ in the bottom bar: a grey icon, no meaning (V1.4 fix)
   '.ib',
   '.mbox', '.mbox h2', '.mbox label', '.mbox .version', '.diag', '.diag h2',
+  // window component (V2.2): the same turquoise frame and title as a modal
+  '.win', '.mbox h2, .win h2',
   // section headings of the debt window ("Внести досрочно", "Место на шаттле"): grey like .mbox label
   '.debt h3',
   // "шум" label of the junkyard noise scale: grey like the "Чуйка" row; the scale itself is risk

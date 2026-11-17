@@ -25,6 +25,11 @@ export const ICONS = {
     w: 16, h: 16,
     rects: [[2, 3, 12, 2], [2, 7, 12, 2], [2, 11, 12, 2]],
   },
+  /** ✕ — closes a window (8×8, drawn at 16 px inside a 44 pt button). */
+  close: {
+    w: 8, h: 8,
+    rects: [[0, 0, 2, 1], [6, 0, 2, 1], [1, 1, 2, 1], [5, 1, 2, 1], [2, 2, 4, 1], [3, 3, 2, 2], [2, 5, 4, 1], [1, 6, 2, 1], [5, 6, 2, 1], [0, 7, 2, 1], [6, 7, 2, 1]],
+  },
   /** Lock — a mode that opens later (16×16: shackle on a body with a keyhole). */
   lock: {
     w: 16, h: 16,

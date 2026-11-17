@@ -39,8 +39,8 @@ const SKIP = new Set(['music', 'copysave']);
  */
 async function candidates(page) {
   return page.evaluate((skip, menuActions) => {
-    const modalOpen = !document.getElementById('modal').hidden;
-    const root = modalOpen ? document.getElementById('modal') : document.getElementById('app');
+    const root = __layer();
+    const modalOpen = root.id !== 'app';
     const out = [...root.querySelectorAll('[data-a]')]
       .filter(b => !b.disabled && !b.hidden && b.offsetParent !== null && !skip.includes(b.dataset.a))
       .map(b => ({ a: b.dataset.a, v: b.dataset.v ?? null }));
@@ -99,9 +99,7 @@ async function act(page, c, r) {
   }
   return page.evaluate(c => {
     const sel = `[data-a="${c.a}"]` + (c.v !== null ? `[data-v="${c.v}"]` : '');
-    const modalOpen = !document.getElementById('modal').hidden;
-    const root = modalOpen ? document.getElementById('modal') : document.getElementById('app');
-    root.querySelector(sel).click();
+    __layer().querySelector(sel).click();
   }, c).then(() => c.a === 'loadsave'
     // the load is asynchronous since Patch A: wait until the window closes or says no
     ? waitInPage(page, () => document.getElementById('modal').hidden || !!document.getElementById('savemsg')?.textContent)

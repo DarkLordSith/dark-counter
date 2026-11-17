@@ -38,6 +38,13 @@
   <!-- HUD at the bottom (V1.4 fix): the world on top, the console below -->
   <footer class="hud" id="hud"></footer>
 </div>
+<!-- window component (V2.2, src/window.ts): a mini window over the scene (mouse) or a sheet above the action bar (finger) -->
+<div class="win-back" id="winback" hidden></div>
+<section class="win" id="win" role="dialog" aria-modal="true" aria-labelledby="wintitle" tabindex="-1" hidden>
+  <header class="win-head"><h2 id="wintitle"></h2><button class="ib win-x" id="winx" type="button"></button></header>
+  <div class="win-body" id="winbody"></div>
+  <div class="mbtns" id="winbtns"></div>
+</section>
 <div class="modal" id="modal" hidden><div class="mbox" id="mbox"></div></div>
 
 <script type="module" src="/src/main.ts"></script>
