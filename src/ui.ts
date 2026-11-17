@@ -584,9 +584,10 @@ const PANES: Record<Tab, () => string> = { deal: dealPane, inv: inventoryPane, c
 export function renderPane(): void {
   const pane = byId('pane');
   const scrollTop = pane.scrollTop;
+  // the bench first: when its item is gone it moves on (ui.sel), and the shelf lights the new tile
+  refreshBench();
   pane.innerHTML = (PANES[ui.tab] || dealPane)();
   pane.scrollTop = scrollTop;
-  refreshBench();
   renderActionBar();
   paintIcons();
   updateChanceMeter();

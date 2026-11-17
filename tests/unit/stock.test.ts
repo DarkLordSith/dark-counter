@@ -132,7 +132,7 @@ describe('"Предложить клиенту"', () => {
 describe('the bench window in ui.ts', () => {
   it('a tile opens the bench; it is refreshed in place after every render', () => {
     expect(uiTs).toContain("sel: value => openBench(Number(value))");
-    expect(uiTs).toMatch(/pane\.scrollTop = scrollTop;\s*refreshBench\(\);/);
+    expect(uiTs).toMatch(/refreshBench\(\);\s*pane\.innerHTML = /);
     expect(uiTs).toContain('updateWindow(benchSpec(item))');
     expect(uiTs).toContain("id: 'bench'");
     expect(uiTs).toContain('cover: true');
