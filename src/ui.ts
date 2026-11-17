@@ -577,8 +577,10 @@ function showMorningReport(report: MorningReport): void {
   if (report.expenses) {
     const bills = expenseLines(report.expenses, state.debt);
     lines.push(`<li>${bills.paid}</li>`);
-    if (bills.shortfall) {
+    if (bills.shortfall && report.expenses.toDebt) {
       lines.push(`<li class="m-risk">${bills.shortfall}</li>`); // short of money: onto the debt
+    } else if (bills.shortfall) {
+      lines.push(`<li>${bills.shortfall}</li>`); // the seat is bought: nothing onto the debt
     }
   }
   const body = `${expectedCustomers()}<ul>${lines.join('')}</ul>`;

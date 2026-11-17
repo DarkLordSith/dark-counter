@@ -229,7 +229,7 @@ export function migrate(data: SavedGame | null, rng: Rng = gameRng): GameState |
   // becomes the next payment (rent and owed stay as they are), the father's debt
   // starts in full, and the shuttle is at least three weeks away.
   if (data.debt == null) {
-    data.debt = DEBT.start;
+    data.debt = DEBT.legacyStart;
     data.seat = false;
     data.shuttleDay = Math.max(DEBT.shuttleDay, data.day + DEBT.legacyDaysLeft);
     data.ending = data.won ? 'left' : data.over ? 'evicted' : null;

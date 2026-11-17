@@ -51,7 +51,7 @@ describe('migrate', () => {
 
   it('adds the debt fields to a save made before the debt update', () => {
     const migrated = migrate({ ...legacySave(4), nextDue: 7, owed: 1000, rent: 1000 });
-    expect(migrated).toMatchObject({ debt: DEBT.start, seat: false, shuttleDay: DEBT.shuttleDay, ending: null, over: null, rent: 1000, owed: 1000 });
+    expect(migrated).toMatchObject({ debt: DEBT.legacyStart, seat: false, shuttleDay: DEBT.shuttleDay, ending: null, over: null, rent: 1000, owed: 1000 });
     expect(migrated).not.toHaveProperty('won');
   });
 
@@ -149,7 +149,7 @@ describe('saves of past versions (tests/fixtures)', () => {
     it('gets the father\'s debt and at least three weeks to the shuttle', () => {
       const original: SavedGame = JSON.parse(decodeURIComponent(escape(atob(code.replace(SAVE_CODE_PREFIX, '')))));
       const loaded = importSave(code)!;
-      expect(loaded).toMatchObject({ debt: DEBT.start, seat: false, ending: original.over ? 'evicted' : null });
+      expect(loaded).toMatchObject({ debt: DEBT.legacyStart, seat: false, ending: original.over ? 'evicted' : null });
       expect(loaded.shuttleDay).toBe(Math.max(DEBT.shuttleDay, original.day + DEBT.legacyDaysLeft));
       expect(loaded.shuttleDay - loaded.day).toBeGreaterThanOrEqual(DEBT.legacyDaysLeft);
       expect(loaded).not.toHaveProperty('won');
@@ -167,7 +167,7 @@ describe('saves of past versions (tests/fixtures)', () => {
       payRent(state);
       expect(state.nextDue).toBe(state.day + DEBT.periodDays);
       expect(state.rent).toBe((original.rent ?? 0) + DEBT.paymentStep);
-      expect(state.debt).toBe(DEBT.start - (original.owed ?? 0));
+      expect(state.debt).toBe(DEBT.legacyStart - (original.owed ?? 0));
     });
 
     it('can be played on: the next day starts and customers come', () => {

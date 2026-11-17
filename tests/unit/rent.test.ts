@@ -1,4 +1,4 @@
-// Weekly payment of the father's debt: Grobov comes on day 7, then every 7 days (400, 650, 900…).
+// Weekly payment of the father's debt: Grobov comes on day 7, then every 7 days (400, 550, 700…).
 import { gameRng } from '../../src/rng';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEBT, LANDLORD_SEED } from '../../src/data';
@@ -36,13 +36,13 @@ afterEach(() => {
 
 describe('payment schedule', () => {
   it('uses the weekly numbers', () => {
-    expect(DEBT).toMatchObject({ firstPayment: 400, paymentStep: 250, periodDays: 7 });
+    expect(DEBT).toMatchObject({ firstPayment: 400, paymentStep: 150, periodDays: 7 });
   });
 
   it('new game → the first payment of 400 is due on day 7', () => {
     seedRandom(3);
     newGame();
-    expect(state).toMatchObject({ day: 1, rent: 400, owed: 400, nextDue: 7, debt: 25000 });
+    expect(state).toMatchObject({ day: 1, rent: 400, owed: 400, nextDue: 7, debt: 20000 });
     expect(state.log.at(-1)).toContain('раз в 7 дней');
     while (state.day < 7) {
       expect(isLandlordDue(state)).toBe(false);
@@ -54,12 +54,12 @@ describe('payment schedule', () => {
     expect(state.cust).toMatchObject({ kind: 'rent', seed: LANDLORD_SEED });
   });
 
-  it('after paying, the next visit is 7 days later and the payment grows by 250', () => {
+  it('after paying, the next visit is 7 days later and the payment grows by 150', () => {
     makeState({ day: 7, nextDue: 7, rent: 400, owed: 400, credits: 1000 });
     state.cust = { kind: 'rent', name: 'Гробов', seed: LANDLORD_SEED, msg: '', pat: 0, max: 0, done: {} };
     payRent(state);
-    expect(state).toMatchObject({ credits: 600, rent: 650, owed: 650, nextDue: 14, llDone: true });
-    expect(state.log[0]).toContain('650 кр. на день 14');
+    expect(state).toMatchObject({ credits: 600, rent: 550, owed: 550, nextDue: 14, llDone: true });
+    expect(state.log[0]).toContain('550 кр. на день 14');
   });
 });
 

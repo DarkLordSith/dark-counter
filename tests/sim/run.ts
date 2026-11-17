@@ -1,12 +1,12 @@
 // =====================================================================
 //  run.ts — `npm run sim -- --seeds 1000 --strategy careful`
 //  Plays N story games per strategy, prints a table, writes JSON.
-//  Options: --seeds N (default 1000), --strategy careful|greedy|all
+//  Options: --seeds N (default 1000), --strategy careful|owner|greedy|all
 //  (default all), --json path (default tests/sim/out/sim.json).
 // =====================================================================
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { runSim, STRATEGIES } from './sim';
+import { CHECK_DAY, runSim, STRATEGIES } from './sim';
 import type { SimSummary } from './sim';
 
 function option(name: string, fallback: string): string {
@@ -38,8 +38,12 @@ for (const name of names) {
     'выселен, %': summary.endings.evicted,
     'долг закрыт, % игр': summary.debtClosedShare,
     'день закрытия долга': show(summary.debtClosedDay),
+    'день закрытия, медиана': show(summary.debtClosedMedian),
     'день выселения': show(summary.evictedDay),
     'доход в неделю, кр.': show(summary.weeklyGain),
+    [`закрыто долга к дню ${CHECK_DAY}, %`]: show(summary.checkDayClosed),
+    [`темп к дню ${CHECK_DAY}, кр./день`]: show(summary.checkDayPace),
+    'покупок на 1 продажу': show(summary.buysPerSale),
   });
   console.table(summary.weeklyCredits.map((credits, i) => ({ неделя: i + 1, 'кр.': show(credits), долг: show(summary.weeklyDebt[i]) })));
 }

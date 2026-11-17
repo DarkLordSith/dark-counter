@@ -9,7 +9,7 @@
 // =====================================================================
 import {
   ACCEPT, HUNCH_VERDICT, HUNCH_VERDICT_TEXT, BENCH_COST, BUYER_COUNTER_LINES, BUYER_INSULTED_LINES, BUYER_LINES, COLLATERAL,
-  CRAFT_CONDITION_BONUS, CUSTOMER, DAY_TEXT, DEBT, DEBT_TEXT, ENDING_TEXT, EXPENSE_TEXT, EXPENSES, DIG_LOOT, DIG_ODDS, EVENING_HOURS, JUNK_TEXT, HAGGLE, HUMAN_NAMES,
+  buyerShare, CRAFT_CONDITION_BONUS, CUSTOMER, DAY_TEXT, DEBT, DEBT_TEXT, ENDING_TEXT, EXPENSE_TEXT, EXPENSES, DIG_LOOT, DIG_ODDS, EVENING_HOURS, JUNK_TEXT, HAGGLE, HUMAN_NAMES,
   INSPECT, ITEM_TYPES, JUNK, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
   RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SELLER_COUNTER_LINES, SELLER_INSULTED_LINES, SELLER_LINES,
   SELLER_STOLEN_LINE, SUPPLIER, VALUE,
@@ -118,7 +118,7 @@ function currentBuyer(state: GameState): BuyerCustomer | null {
  * as the original code, so saves stay byte-identical (parity tests).
  */
 function createCustomer(state: GameState, forceSeller: boolean, rng: Rng): void {
-  const isBuyer = !forceSeller && state.inv.length > 0 && rng() < CUSTOMER.buyerChance;
+  const isBuyer = !forceSeller && state.inv.length > 0 && rng() < buyerShare(state.inv.length);
   const seed = randomSeed(rng);
   const appearance = appearanceFor(seed);
   const name = pickRandom(rng, appearance.kind === 'human' ? HUMAN_NAMES : ROBOT_NAMES);
@@ -857,8 +857,10 @@ export interface ExpensesPaid {
   tier: number;
   /** Paid from the credits. */
   paid: number;
-  /** Not covered by the credits: went onto the debt. */
+  /** Not covered by the credits. */
   shortfall: number;
+  /** The part of the shortfall that went onto the debt: all of it, or 0 once the seat is bought. */
+  toDebt: number;
 }
 
 /** Today's bills: energy every day, the deck fee on the first day of the station week. The hook for Patch C events. */
@@ -869,7 +871,10 @@ export function expensesToday(state: GameState): Pick<ExpensesPaid, 'energy' | '
   };
 }
 
-/** The morning bills: from the credits, the rest onto the debt. */
+/**
+ * The morning bills: from the credits, the rest onto the debt. Once the seat on the shuttle is
+ * bought the rest is not written onto the debt (balance 17.11): the bought seat is never at risk.
+ */
 export function payExpenses(state: GameState): ExpensesPaid | null {
   if (isDebtClosed(state)) {
     return null; // calm after the debt: the shop goes on without payments
@@ -877,9 +882,10 @@ export function payExpenses(state: GameState): ExpensesPaid | null {
   const { energy, tier } = expensesToday(state);
   const paid = Math.min(state.credits, energy + tier);
   const shortfall = energy + tier - paid;
+  const toDebt = state.seat ? 0 : shortfall;
   state.credits -= paid;
-  state.debt += shortfall;
-  return { energy, tier, paid, shortfall };
+  state.debt += toDebt;
+  return { energy, tier, paid, shortfall, toDebt };
 }
 
 /** Lines of the morning bills for the log and the morning window; `debt` is the debt after them. */
@@ -889,9 +895,10 @@ export function expenseLines(expenses: ExpensesPaid, debt: number): { paid: stri
   if (expenses.tier) {
     items.push(fill(words.tier, { n: expenses.tier }));
   }
+  const shortfall = expenses.toDebt ? fill(words.shortfall, { n: expenses.shortfall, debt }) : fill(words.unpaid, { n: expenses.shortfall });
   return {
     paid: fill(words.paid, { items: items.join(', ') }),
-    shortfall: expenses.shortfall ? fill(words.shortfall, { n: expenses.shortfall, debt }) : null,
+    shortfall: expenses.shortfall ? shortfall : null,
   };
 }
 
