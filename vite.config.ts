@@ -63,7 +63,9 @@ export default defineConfig({
     paletteCss(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      // registered from main.ts (registerSW): the injected script only registered the
+      // worker, so an open page kept running the old build after an update
+      injectRegister: false,
       // the old hand-written worker was /dark-counter/sw.js — same URL, so
       // installed copies update to this one instead of keeping two workers
       filename: 'sw.js',
@@ -89,6 +91,12 @@ export default defineConfig({
         // woff2: Public Pixel (public/fonts/); the .ttf fallback is not needed by any target browser.
         globPatterns: ['**/*.{html,js,css,png,webmanifest,woff2}'],
         cleanupOutdatedCaches: true,
+        // autoUpdate in vite-plugin-pwa 2 does not turn these on: without them a new worker
+        // waits until every window of the game is closed, and iOS keeps an installed PWA
+        // alive for days, so it kept running an old build (task 25). With them the new worker
+        // takes over at once and registerSW in main.ts reloads the page onto the new build.
+        skipWaiting: true,
+        clientsClaim: true,
         // Google Fonts: serve from cache, refresh in background (as the old sw.js did)
         runtimeCaching: [
           {
