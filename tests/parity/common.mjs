@@ -46,11 +46,68 @@ export const deterministicInit = (seed, presetSave = null) => `(() => {
   window.requestAnimationFrame = cb => { queue.push(cb); return queue.length; };
   window.__step = n => { for (let i = 0; i < n; i++) { now += 1000 / 60; queue.splice(0).forEach(cb => cb(now)); } };
   window.__fx = [];
-  // the open dialog layer the bot plays in: the modal, else the window component (V2.2, #win), else the game
+  // The bot plays by meaning (data-a + data-v), not by where the markup lives (task 27):
+  // the same move in the pane of one version and in a window of the other is one move.
+  // Layers: the modal, else the workbench, else another window (#win, V2.2), else the game.
+  // The workbench is a mode, wherever it is drawn: before V2.3 the bench under the shelf
+  // with a lit tile, since V2.3 the window. In it the moves are the bench actions, the
+  // neighbour item (sel) and "__closebench" (the lit tile toggled off / the window's ✕).
+  // UI_ONLY moves have no twin in older builds and change no game state: never pressed.
+  const UI_ONLY = new Set(['filter', 'offerbench', 'benchnav']);
+  window.__benchView = () => {
+    const win = document.getElementById('win');
+    if (win && !win.hidden && win.querySelector('[data-a="bench"]')) {
+      const nav = [...win.querySelectorAll('[data-a="benchnav"]')].filter(b => !b.disabled).map(b => ({ v: b.dataset.v, el: b }));
+      return { root: win, nav, close: document.getElementById('winx') };
+    }
+    const pane = document.getElementById('pane');
+    const on = pane.querySelector('.tile.on[data-a="sel"]');
+    const bench = pane.querySelector('.bench');
+    if (!on || !bench) return null;
+    const tiles = [...pane.querySelectorAll('[data-a="sel"]')];
+    const i = tiles.indexOf(on);
+    return { root: bench, nav: [tiles[i - 1], tiles[i + 1]].filter(Boolean).map(t => ({ v: t.dataset.v, el: t })), close: on };
+  };
+  // the item on the bench: the lit tile of the shelf in both versions
+  window.__benchUid = () => document.querySelector('#pane .tile.on[data-a="sel"]')?.dataset.v ?? null;
   window.__layer = () => {
     const modal = document.getElementById('modal');
+    if (!modal.hidden) return modal;
+    const bench = __benchView();
+    if (bench) return bench.root;
     const win = document.getElementById('win');
-    return !modal.hidden ? modal : win && !win.hidden ? win : document.getElementById('app');
+    return win && !win.hidden ? win : document.getElementById('app');
+  };
+  window.__botActions = () => {
+    const root = __layer();
+    const out = [...root.querySelectorAll('[data-a]')]
+      .filter(b => !b.disabled && !b.hidden && b.offsetParent !== null && !UI_ONLY.has(b.dataset.a))
+      .map(b => ({ a: b.dataset.a, v: b.dataset.v ?? null }));
+    const bench = document.getElementById('modal').hidden ? __benchView() : null;
+    if (bench) out.push(...bench.nav.map(n => ({ a: 'sel', v: n.v })), { a: '__closebench', v: null });
+    return out;
+  };
+  // The bench is open only when a move of the bot opened it (sel, craft). Before V2.3 a purchase
+  // selected the new item and the bench showed up on the "Склад" tab by itself; since V2.3 the
+  // tile is only lit. One rule for both: a bench the bot did not open is closed after the move.
+  let botBench = false;
+  const press = c => {
+    const bench = document.getElementById('modal').hidden ? __benchView() : null;
+    if (bench && c.a === '__closebench') return bench.close.click();
+    if (bench && c.a === 'sel') return bench.nav.find(n => n.v === c.v).el.click();
+    const before = bench ? __benchUid() : null;
+    __layer().querySelector('[data-a="' + c.a + '"]' + (c.v !== null ? '[data-v="' + c.v + '"]' : '')).click();
+    if (c.a === 'sel' || c.a === 'craft') botBench = true;
+    // the item left the bench (scrapped): since V2.3 the window moves on to the next item,
+    // before it the bench was gone. One rule for both: the bench closes.
+    const after = __benchView();
+    if (before !== null && after && __benchUid() !== before) after.close.click();
+  };
+  window.__botPress = c => {
+    press(c);
+    const bench = document.getElementById('modal').hidden ? __benchView() : null;
+    if (bench && !botBench) bench.close.click();
+    botBench = !!(document.getElementById('modal').hidden ? __benchView() : botBench);
   };
   document.addEventListener('DOMContentLoaded', () => {
     new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => n.classList && n.classList.contains('fx') && __fx.push(n.outerHTML))))

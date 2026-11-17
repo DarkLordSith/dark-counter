@@ -10,7 +10,7 @@
 import { clickMenuItem, deterministicInit, launch, loadCodeThroughUi, passModeScreen, rng, savedCode, storySave } from './common.mjs';
 
 const [, , OLD, NEW] = process.argv;
-const W = { call: 8, offer: 6, ask: 6, accept: 4, take: 4, show: 5, insp: 4, closeshop: 6, sleep: 4, junk: 5, dig: 6, market: 3, close: 6, rentpay: 6, rentdefer: 3, rentitems: 3, sel: 3, bench: 4, craft: 4, parts: 2, tab: 1, refuse: 2 };
+const W = { call: 8, offer: 6, ask: 6, accept: 4, take: 4, show: 5, insp: 4, closeshop: 6, sleep: 4, junk: 5, dig: 6, market: 3, close: 6, rentpay: 6, rentdefer: 3, rentitems: 3, sel: 3, bench: 4, __closebench: 3, craft: 4, parts: 2, tab: 1, refuse: 2 };
 
 async function open(browser, url, seed, preset) {
   const ctx = await browser.createBrowserContext();
@@ -29,11 +29,9 @@ async function botSteps(page, n, seed) {
   const r = rng(seed);
   for (let i = 0; i < n; i++) {
     const cs = await page.evaluate(w => {
-      const root = __layer();
-      // sorted, like diff.mjs: moving a button in the DOM (V1.5: "call" from the scene to the action bar) changes nothing
+      // by meaning and sorted, like diff.mjs: moving a button in the DOM changes nothing
       const key = c => c.a + '\u0000' + (c.v ?? '');
-      return [...root.querySelectorAll('[data-a]')].filter(b => !b.disabled && !b.hidden && b.offsetParent && w[b.dataset.a])
-        .map(b => ({ a: b.dataset.a, v: b.dataset.v ?? null }))
+      return __botActions().filter(c => w[c.a])
         .sort((x, y) => key(x) < key(y) ? -1 : key(x) > key(y) ? 1 : 0);
     }, W);
     if (!cs.length) break;
@@ -41,7 +39,7 @@ async function botSteps(page, n, seed) {
     let x = r() * total, pick = cs.at(-1);
     for (const c of cs) { x -= W[c.a]; if (x <= 0) { pick = c; break; } }
     await page.evaluate(c => {
-      __layer().querySelector(`[data-a="${c.a}"]` + (c.v !== null ? `[data-v="${c.v}"]` : '')).click();
+      __botPress(c);
       __step(90);
     }, pick);
   }

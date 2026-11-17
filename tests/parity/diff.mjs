@@ -26,7 +26,7 @@ const OUT = new URL('./out/shots/', import.meta.url);
 fs.mkdirSync(OUT, { recursive: true });
 
 const WEIGHTS = { call: 8, offer: 6, ask: 6, accept: 4, take: 4, show: 5, insp: 4, adj: 3, refuse: 2, closeshop: 6, sleep: 4,
-  junk: 5, dig: 6, market: 3, home: 1, close: 6, rentpay: 6, rentdefer: 3, rentitems: 3, evict: 3, sel: 3, bench: 4, craft: 4,
+  junk: 5, dig: 6, market: 3, home: 1, close: 6, rentpay: 6, rentdefer: 3, rentitems: 3, evict: 3, sel: 3, bench: 4, __closebench: 3, craft: 4,
   parts: 2, tab: 1, log: 0.5, savemenu: 1.5, newgame: 0.3, 'newgame-yes': 1, debt: 1, early: 3, seat: 3, 'seat-yes': 3, loadsave: 2 };
 const SKIP = new Set(['music', 'copysave']);
 
@@ -39,11 +39,8 @@ const SKIP = new Set(['music', 'copysave']);
  */
 async function candidates(page) {
   return page.evaluate((skip, menuActions) => {
-    const root = __layer();
-    const modalOpen = root.id !== 'app';
-    const out = [...root.querySelectorAll('[data-a]')]
-      .filter(b => !b.disabled && !b.hidden && b.offsetParent !== null && !skip.includes(b.dataset.a))
-      .map(b => ({ a: b.dataset.a, v: b.dataset.v ?? null }));
+    const modalOpen = __layer().id !== 'app';
+    const out = __botActions().filter(c => !skip.includes(c.a));
     if (out.some(c => c.a === 'menu')) {
       out.splice(out.findIndex(c => c.a === 'menu'), 1, ...menuActions.map(a => ({ a, v: null })));
     }
@@ -97,10 +94,7 @@ async function act(page, c, r) {
     // "Сохранение": the code box is filled asynchronously since Patch A (DC2)
     return c.a === 'savemenu' ? savedCode(page) : undefined;
   }
-  return page.evaluate(c => {
-    const sel = `[data-a="${c.a}"]` + (c.v !== null ? `[data-v="${c.v}"]` : '');
-    __layer().querySelector(sel).click();
-  }, c).then(() => c.a === 'loadsave'
+  return page.evaluate(c => __botPress(c), c).then(() => c.a === 'loadsave'
     // the load is asynchronous since Patch A: wait until the window closes or says no
     ? waitInPage(page, () => document.getElementById('modal').hidden || !!document.getElementById('savemsg')?.textContent)
     : undefined);
@@ -114,7 +108,14 @@ async function snapshot(page, deep) {
     for (const animation of document.getAnimations()) {
       try { animation.finish(); } catch { /* an endless one has no end: left as it is */ }
     }
-    const canv = skipScene === 'all' ? [] : [...document.querySelectorAll('canvas')].filter(c => !(skipScene && c.id === 'scn')).map(c => c.toDataURL());
+    // the scene first, then the icons as a sorted set: an icon moved from the pane into a window
+    // (V2.3) is the same icon. The customer's mini portrait copies the scene sprite: left out.
+    const scene = document.getElementById('scn');
+    // Content left in a closed modal or window is not on screen: a closed window keeps its old
+    // markup, and since V2.2 opening a window empties the modal (an older build kept it).
+    const shown = el => !el.closest('#modal[hidden], #win[hidden]');
+    const icons = [...document.querySelectorAll('canvas:not(#scn):not([data-face])')].filter(shown).map(c => c.toDataURL()).sort();
+    const canv = skipScene === 'all' ? [] : [...(skipScene ? [] : [scene.toDataURL()]), ...icons];
     const app = document.getElementById('app').cloneNode(true);
     app.querySelectorAll('.fx').forEach(n => n.remove());
     const mbox = document.getElementById('mbox').cloneNode(true);
@@ -123,7 +124,7 @@ async function snapshot(page, deep) {
       save: localStorage.getItem('dark-counter-v3'),
       app: app.innerHTML.replace(/\s+/g, ' '),
       modal: document.getElementById('modal').hidden + '|' + mbox.innerHTML.replace(/\s+/g, ' '),
-      values: [...document.querySelectorAll('input,textarea')].map(i => i.id + '=' + i.value).join('\n'),
+      values: [...document.querySelectorAll('input,textarea')].filter(shown).map(i => i.id + '=' + i.value).join('\n'),
       canv: canv.join('|'),
       fx: __fx.splice(0).join(''),
     };
