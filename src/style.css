@@ -1109,6 +1109,86 @@ input:focus-visible {
   padding: 16px;
 }
 
+/* ==================== Window component (V2.2, src/window.ts) ==================== */
+
+/* A tap past the window closes it. The backdrop is clear: the scene, the action bar and
+   the HUD stay as they are, nothing jumps. */
+.win-back {
+  position: fixed;
+  inset: 0;
+  z-index: 14;
+}
+
+/* left / top / width / bottom / max-height come from window.ts (placement by the scene and the action bar). */
+.win {
+  position: fixed;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 12px 16px 16px;
+  background: var(--panel);
+  border: 1px solid var(--cyan);
+  box-shadow: 0 0 12px var(--neon-glow);
+  opacity: 0;
+  transition: opacity 160ms ease-out, transform 160ms ease-out;
+}
+
+.win[hidden] {
+  display: none;
+}
+
+.win:focus {
+  outline: none;
+}
+
+/* Phone: a sheet over the pane, its bottom edge on the action bar. */
+.win-sheet {
+  border-width: 1px 0 0;
+  transform: translateY(16px);
+}
+
+/* Mac: a mini window at the side of the scene. */
+.win-float {
+  transform: translateY(-8px);
+}
+
+.win.win-on {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .win {
+    transition: none;
+  }
+}
+
+.win-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -4px -8px 0 0;
+}
+
+.win-x:hover,
+.win-x:focus-visible {
+  color: var(--fg);
+}
+
+.win-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.win .mbtns[hidden] {
+  display: none;
+}
+
 /* ☰ menu (V1.4): a sheet right under the HUD, at the menu button's side. */
 /* ☰ menu: a sheet sliding up from the bottom bar, at the menu button's side. */
 .modal.sheet {
@@ -1220,13 +1300,15 @@ input:focus-visible {
   gap: 10px;
 }
 
-.mbox h2 {
+.mbox h2,
+.win h2 {
   font-size: var(--fs-px-m);
   color: var(--cyan);
   margin: 0;
 }
 
-.mbox ul {
+.mbox ul,
+.win ul {
   margin: 0;
   padding-left: 16px;
   display: flex;
@@ -1235,11 +1317,13 @@ input:focus-visible {
 }
 
 /* Morning window (task 16): "Ожидается клиентов: N", the reasons right under it. */
-.mbox .expect {
+.mbox .expect,
+.win .expect {
   margin: 0;
 }
 
-.mbox .reasons {
+.mbox .reasons,
+.win .reasons {
   margin-top: -6px;
 }
 
@@ -1334,6 +1418,7 @@ input:focus-visible {
 .verdict,
 .nword,
 .mbox h2,
+.win h2,
 .mode-name,
 .diag h2 {
   font-family: var(--display);
@@ -1402,6 +1487,7 @@ html[data-fl-hud-case="upper"] .st b {
 }
 
 html[data-fl-headings="mono"] .mbox h2,
+html[data-fl-headings="mono"] .win h2,
 html[data-fl-headings="mono"] .opt b {
   font-family: var(--mono);
   font-size: var(--fs-l);
@@ -1410,6 +1496,7 @@ html[data-fl-headings="mono"] .opt b {
 }
 
 html[data-fl-headings-case="upper"] .mbox h2,
+html[data-fl-headings-case="upper"] .win h2,
 html[data-fl-headings-case="upper"] .opt b {
   text-transform: uppercase;
 }

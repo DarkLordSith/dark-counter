@@ -46,6 +46,12 @@ export const deterministicInit = (seed, presetSave = null) => `(() => {
   window.requestAnimationFrame = cb => { queue.push(cb); return queue.length; };
   window.__step = n => { for (let i = 0; i < n; i++) { now += 1000 / 60; queue.splice(0).forEach(cb => cb(now)); } };
   window.__fx = [];
+  // the open dialog layer the bot plays in: the modal, else the window component (V2.2, #win), else the game
+  window.__layer = () => {
+    const modal = document.getElementById('modal');
+    const win = document.getElementById('win');
+    return !modal.hidden ? modal : win && !win.hidden ? win : document.getElementById('app');
+  };
   document.addEventListener('DOMContentLoaded', () => {
     new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => n.classList && n.classList.contains('fx') && __fx.push(n.outerHTML))))
       .observe(document.getElementById('stage'), { childList: true });

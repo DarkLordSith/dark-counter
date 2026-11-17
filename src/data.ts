@@ -612,6 +612,8 @@ export const JUNK_TEXT = {
 /** The day (task 16): the morning window, the clock chip, the reasons for fewer or more customers. RU/EN. */
 export const DAY_TEXT = {
   ru: {
+    morningTitle: 'Утро. День {day}',
+    openShop: 'Открыть лавку',
     expected: 'Ожидается клиентов: {n}',
     reasons: {
       quiet: 'Начало недели, на ярусе тихо',
@@ -631,6 +633,8 @@ export const DAY_TEXT = {
     closed: 'ЗАКРЫТО',
   },
   en: {
+    morningTitle: 'Morning. Day {day}',
+    openShop: 'Open the shop',
     expected: 'Customers expected: {n}',
     reasons: {
       quiet: 'Start of the week, the deck is quiet',
@@ -652,5 +656,13 @@ export const DAY_TEXT = {
 } as const;
 /** Neon "ЛАВКА 7Б" sign with its dark frame, in scene pixels (160×100). The speech bubble and the queue chip keep clear of it (V1.6). */
 export const SHOP_SIGN = { x: 59, y: 3, w: 42, h: 11 };
+/** Where the customer stands at the counter (COUNTER_X = 80), scene x: the float window keeps clear of it (V2.2). */
+export const CUSTOMER_ZONE = { left: 64, right: 96 };
+
+/** The window component (V2.2): words of its frame. */
+export const WINDOW_TEXT = {
+  ru: { close: 'Закрыть окно' },
+  en: { close: 'Close window' },
+} as const;
 
 

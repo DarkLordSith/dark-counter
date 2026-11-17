@@ -29,8 +29,7 @@ async function botSteps(page, n, seed) {
   const r = rng(seed);
   for (let i = 0; i < n; i++) {
     const cs = await page.evaluate(w => {
-      const modal = !document.getElementById('modal').hidden;
-      const root = document.getElementById(modal ? 'modal' : 'app');
+      const root = __layer();
       // sorted, like diff.mjs: moving a button in the DOM (V1.5: "call" from the scene to the action bar) changes nothing
       const key = c => c.a + '\u0000' + (c.v ?? '');
       return [...root.querySelectorAll('[data-a]')].filter(b => !b.disabled && !b.hidden && b.offsetParent && w[b.dataset.a])
@@ -42,8 +41,7 @@ async function botSteps(page, n, seed) {
     let x = r() * total, pick = cs.at(-1);
     for (const c of cs) { x -= W[c.a]; if (x <= 0) { pick = c; break; } }
     await page.evaluate(c => {
-      const modal = !document.getElementById('modal').hidden;
-      document.getElementById(modal ? 'modal' : 'app').querySelector(`[data-a="${c.a}"]` + (c.v !== null ? `[data-v="${c.v}"]` : '')).click();
+      __layer().querySelector(`[data-a="${c.a}"]` + (c.v !== null ? `[data-v="${c.v}"]` : '')).click();
       __step(90);
     }, pick);
   }

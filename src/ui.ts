@@ -11,6 +11,8 @@ import {
 } from './data';
 import { byId, maybeById } from './dom';
 import { iconSvg } from './icons';
+import { closeWindow, initWindows, openWindow } from './window';
+import type { WindowSpec } from './window';
 import {
   askBuyer, availableOfType, buyFromSeller, buySeat, callNextCustomer, canBuySeat, canCraft, hasShuttle, isDebtClosed, canVisitMarket, closeShop,
   collateralHeatRelief, craft, customerLeaves, deferredDebt, deferRent, dig, digsPerVisit, estimatedValue, evict, feedback,
@@ -522,6 +524,7 @@ function flushFeedback(): void {
 }
 
 function openModal(title: string, body: string, buttons: string, footer = ''): void {
+  closeWindow('replaced'); // one window at a time
   byId('mbox').innerHTML = `<h2>${title}</h2>${body}<div class="mbtns">${buttons}</div>${footer}`;
   byId('modal').classList.remove('sheet');
   byId('modal').hidden = false;
@@ -536,8 +539,19 @@ function openMenu(): void {
     <button class="btn menu-item" data-a="sounds" aria-pressed="${audio.sfx}">${HUD.sounds}: ${audio.sfx ? HUD.on : HUD.off}</button>
     <button class="btn menu-item" data-a="savemenu">${HUD.save}</button>
     <div class="mbtns"><button class="btn" data-a="close">${HUD.close}</button></div>`;
+  closeWindow('replaced'); // one window at a time
   byId('modal').classList.add('sheet');
   byId('modal').hidden = false;
+}
+
+/**
+ * Opens a window of the component (V2.2). One window at a time: the modal closes and is emptied,
+ * so no stale content (the save window's fields) stays in the hidden markup.
+ */
+function showWindow(spec: WindowSpec): void {
+  closeModal();
+  byId('mbox').innerHTML = '';
+  openWindow(spec);
 }
 
 function closeModal(): void {
@@ -584,7 +598,13 @@ function showMorningReport(report: MorningReport): void {
     }
   }
   const body = `${expectedCustomers()}<ul>${lines.join('')}</ul>`;
-  openModal(`Утро. День ${state.day}`, body, '<button class="btn pri" data-a="close">Открыть лавку</button>');
+  // V2.2: the first window on the window component (a sheet on a phone, a mini window on a Mac)
+  showWindow({
+    id: 'morning',
+    title: fill(DAY_UI.morningTitle, { day: state.day }),
+    body,
+    buttons: `<button class="btn pri" data-a="close">${DAY_UI.openShop}</button>`,
+  });
 }
 
 /** Early payment buttons: the fixed steps and "everything you have" (up to the debt). */
@@ -1032,7 +1052,10 @@ const ACTIONS: Record<string, ActionHandler> = {
     openLog();
     return NO_RENDER;
   },
-  close: () => closeModal(),
+  close: () => {
+    closeModal();
+    closeWindow('close');
+  },
   // after an ending or a closed debt: a new game in the same mode, no questions
   'newgame-yes': () => {
     closeModal();
@@ -1150,6 +1173,7 @@ function onKeyDown(event: KeyboardEvent): void {
 }
 
 export function bindEvents(): void {
+  initWindows();
   document.addEventListener('click', onClick);
   document.addEventListener('input', event => {
     if (event.target instanceof HTMLElement && event.target.id === 'offer') {
