@@ -16,6 +16,7 @@ function fakeSurface(): WindowSurface & { calls: string[] } {
     show: (spec, view) => calls.push(`show ${spec.id} ${view}`),
     hide: () => calls.push('hide'),
     setView: view => calls.push(`view ${view}`),
+    update: (spec, view) => calls.push(`update ${spec.id} ${view}`),
   };
 }
 
@@ -57,6 +58,21 @@ describe('the window manager', () => {
     expect(windows.key('Escape')).toBe(false);
     expect(windows.outside()).toBe(false);
     expect(surface.calls).toEqual([]);
+  });
+
+  it('updates the open window in place: no close, no reopen; another window is not touched', () => {
+    const surface = fakeSurface();
+    const windows = new WindowManager(surface, 'sheet');
+    const closed: CloseReason[] = [];
+    expect(windows.update(spec('bench'))).toBe(false); // nothing open
+    windows.open(spec('bench', closed));
+    const fresh = { ...spec('bench', closed), body: 'repaired' };
+    expect(windows.update(fresh)).toBe(true);
+    expect(windows.current).toBe(fresh);
+    expect(windows.update(spec('morning'))).toBe(false);
+    expect(windows.isOpen('bench')).toBe(true);
+    expect(closed).toEqual([]);
+    expect(surface.calls).toEqual(['show bench sheet', 'update bench sheet']);
   });
 
   it('remembers the last window opened in the session, after it closes too', () => {

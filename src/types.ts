@@ -231,10 +231,15 @@ export type SavedGame = Omit<GameState, RentFields | DebtFields | DayFields | 'j
 
 export type Tab = 'deal' | 'inv' | 'craft';
 
+/** Stock filter chips (V2.3): everything, by the catalog's `electronic` flag, known stolen. */
+export type StockFilter = 'all' | 'tech' | 'gear' | 'stolen';
+
 export interface UiState {
   tab: Tab;
-  /** Selected inventory item uid. */
+  /** Selected inventory item uid: the one on the workbench window. */
   sel: number | null;
+  /** Stock filter chip; remembered for the session, not saved. */
+  filter: StockFilter;
 }
 
 /** The figure in the scene: 'empty' → 'in' → 'idle' → 'out' → 'empty'. */

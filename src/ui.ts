@@ -7,11 +7,12 @@ import { customersToday, formatHour, openingHour } from './day';
 import { audio, playSfx, setJunkAmbience, startSoundOnGesture, toggleMusic, toggleSfx } from './audio';
 import {
   ACTION_TEXT, BENCH_COST, DAY_TEXT, DEBT, JUNK, DEBT_TEXT, ENDING_TEXT, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, JUNK_TEXT, MARKET, MAX_HEAT, MODES, MODE_TEXT,
-  PLAYABLE_MODES, RECIPES, RENT, SAVE_TEXT, SUPPLIER,
+  PLAYABLE_MODES, RECIPES, RENT, SAVE_TEXT, STOCK_TEXT, SUPPLIER,
 } from './data';
 import { byId, maybeById } from './dom';
 import { iconSvg } from './icons';
-import { closeWindow, initWindows, openWindow } from './window';
+import { closeWindow, initWindows, isWindowOpen, openWindow, updateWindow } from './window';
+import { benchNav, benchOffer, benchOrder, filterStock, STOCK_FILTERS, successor } from './stock';
 import type { WindowSpec } from './window';
 import {
   askBuyer, availableOfType, buyFromSeller, buySeat, callNextCustomer, canBuySeat, canCraft, hasShuttle, isDebtClosed, canVisitMarket, closeShop,
@@ -26,7 +27,7 @@ import { isOnHeap, onSceneClick, paintIcons, playDigFx } from './scene';
 import {
   actor, actorAtCounter, actorEnter, actorReset, addLog, exportSaveCode, findItem, importSaveCode, newGame, persistence, readSlot, saveGame, setState, state, ui,
 } from './state';
-import type { BuyerCustomer, Customer, GameState, InspectCheck, Item, ItemType, Mode, Profile, Recipe, RentCustomer, SellerCustomer, Tab } from './types';
+import type { BuyerCustomer, Customer, GameState, InspectCheck, Item, ItemType, Mode, Profile, Recipe, RentCustomer, SellerCustomer, StockFilter, Tab } from './types';
 import { daysRu, fill, roundTo10 } from './util';
 import { VERSION_LABEL } from './version';
 import { gameRng } from './rng';
@@ -415,34 +416,144 @@ function dealPane(): string {
 }
 
 /* =====================================================================
-   Inventory pane (shelf + workbench)
+   Stock (pane) and the workbench window (V2.3)
    ===================================================================== */
 
-function benchButton(action: string, label: string, enabled: boolean): string {
-  const cost = BENCH_COST[action];
-  return `<button class="btn" data-a="bench" data-v="${action}" ${enabled && state.parts >= cost ? '' : 'disabled'}><span>${label}</span><span class="price">${cost}⚙</span></button>`;
+const STOCK_UI = STOCK_TEXT.ru;
+const isStockFilter = (value: string | undefined): value is StockFilter => (STOCK_FILTERS as readonly (string | undefined)[]).includes(value);
+
+/** Filter chips: one tap, the chosen one lit; an empty category is dim but stays where it is. */
+function filterChips(): string {
+  const chips = STOCK_FILTERS.map(filter => {
+    const count = filterStock(state.inv, filter).length;
+    const on = ui.filter === filter;
+    const tone = filter === 'stolen' ? 'm-risk' : '';
+    return `<button class="fchip ${on ? 'on' : ''} ${count ? tone : 'm-inactive'}" data-a="filter" data-v="${filter}" aria-pressed="${on}" ${disabledIf(!count && !on)}>${STOCK_UI.filters[filter]} <span class="cnt hint">${count}</span></button>`;
+  }).join('');
+  return `<div class="chips" role="group" aria-label="${STOCK_UI.filtersLabel}">${chips}</div>`;
 }
 
-function workbench(item: Item): string {
-  return `<div class="bench"><div class="card">${iconCanvas(item.t, 'bigico', showsInfection(item))}<div style="min-width:0"><div class="rn">${itemName(item.t)}</div><div class="hint">Оценка ${approx(estimatedValue(item))} кр.</div>${itemTags(item)}</div></div>
-    <div class="bgrid">${benchButton('diag', 'Диагностика', !isFullyKnown(item))}${benchButton('repair', 'Ремонт +25%', item.cond < 100)}
-    ${benchButton('fix', 'Убрать дефект', item.k.flaw && item.defect)}${benchButton('purge', 'Вычистить ИИ', item.k.flaw && item.infected)}
-    ${benchButton('wipe', 'Перебить №', item.k.serial && item.stolen)}
-    <button class="btn" data-a="bench" data-v="scrap" ${disabledIf(isOnCounter(state, item))}><span>Разобрать</span><span class="price">+${scrapValue(item)}⚙</span></button></div>
-    <div class="hint note">Перебитый серийник: +1 к розыску.</div></div>`;
+/** A compact shelf tile: icon and price, the marks in the corner; the name is for screen readers. */
+function stockTile(item: Item): string {
+  const label = `${itemName(item.t)}, ${conditionText(item)}, ${estimatedValue(item)} кр.`;
+  return `<button class="tile stile ${ui.sel === item.uid ? 'on' : ''}" data-a="sel" data-v="${item.uid}" aria-label="${label}">${itemDots(item)}${iconCanvas(item.t, '', showsInfection(item))}<span class="tv">${approx(estimatedValue(item))}</span></button>`;
 }
 
 function inventoryPane(): string {
   if (!state.inv.length) {
-    return '<div class="hint">Склад пуст. Покупайте у клиентов или копайте на свалке.</div>';
+    return `<div class="hint">${STOCK_UI.empty}</div>`;
   }
-  const tiles = state.inv
-    .map(item => `<button class="tile ${ui.sel === item.uid ? 'on' : ''}" data-a="sel" data-v="${item.uid}">${itemDots(item)}${iconCanvas(item.t, '', showsInfection(item))}<span>${itemName(item.t)}</span><span class="tv">${conditionText(item)} · ${approx(estimatedValue(item))}</span></button>`)
-    .join('');
-  const html = `<div class="shelf">${tiles}</div>
-  <div class="legend"><span>${DOT.unknown}не проверено</span><span>${DOT.risk}краденое / ИИ</span><span>${DOT.wear}дефект</span></div>`;
-  const selected = findItem(state, ui.sel);
-  return html + (selected ? workbench(selected) : '<div class="hint">Нажмите на предмет, чтобы открыть верстак.</div>');
+  const items = filterStock(state.inv, ui.filter);
+  const shelf = items.length ? `<div class="shelf stock">${items.map(stockTile).join('')}</div>` : `<div class="hint">${STOCK_UI.emptyFilter}</div>`;
+  const legend = STOCK_UI.legend;
+  return `${filterChips()}${shelf}
+  <div class="legend"><span>${DOT.unknown}${legend.unknown}</span><span>${DOT.risk}${legend.risk}</span><span>${DOT.wear}${legend.wear}</span></div>`;
+}
+
+function benchButton(action: keyof typeof BENCH_COST & keyof typeof STOCK_UI.actions, enabled: boolean): string {
+  const cost = BENCH_COST[action];
+  return `<button class="btn" data-a="bench" data-v="${action}" ${enabled && state.parts >= cost ? '' : 'disabled'}><span>${STOCK_UI.actions[action]}</span><span class="price">${cost}⚙</span></button>`;
+}
+
+/** The customer at the counter, on top of the bench: mini portrait and the request in one line. */
+function benchCustomer(): string {
+  const customer = state.cust;
+  if (!customer || actor.phase !== 'idle' || state.phase !== 'shop') {
+    return '';
+  }
+  let line: string;
+  if (customer.kind === 'buy') {
+    line = fill(STOCK_UI.wants, { item: `<b>${itemName(customer.want)}</b>` });
+  } else if (customer.kind === 'sell') {
+    line = fill(STOCK_UI.sells, { item: itemName(customer.item.t), ask: customer.ask });
+  } else {
+    line = fill(STOCK_UI.collects, { amount: state.owed });
+  }
+  return `<div class="bench-cust"><canvas class="face" width="24" height="24" data-face="${customer.seed}" aria-hidden="true"></canvas><div class="bc-text"><span class="cname">${customer.name}</span><span class="bc-line">${line}</span></div></div>`;
+}
+
+function benchOfferButton(item: Item): string {
+  const offer = benchOffer(state, item, actor.phase === 'idle');
+  if (offer === 'none') {
+    return '';
+  }
+  return offer === 'ready'
+    ? `<button class="btn pri bench-offer" data-a="offerbench" data-v="${item.uid}">${STOCK_UI.offer}</button>`
+    : `<button class="btn bench-offer" disabled>${STOCK_UI.shown}</button>`;
+}
+
+function benchBody(item: Item): string {
+  return `${benchCustomer()}
+    <div class="card bench-card">${iconCanvas(item.t, 'bigico', showsInfection(item))}<div class="bench-info"><div class="hint">${STOCK_UI.estimate} ${approx(estimatedValue(item))} кр.</div>${itemTags(item)}</div></div>
+    ${benchOfferButton(item)}
+    <div class="bgrid">${benchButton('diag', !isFullyKnown(item))}${benchButton('repair', item.cond < 100)}
+    ${benchButton('fix', item.k.flaw && item.defect)}${benchButton('purge', item.k.flaw && item.infected)}
+    ${benchButton('wipe', item.k.serial && item.stolen)}
+    <button class="btn" data-a="bench" data-v="scrap" ${disabledIf(isOnCounter(state, item))}><span>${STOCK_UI.actions.scrap}</span><span class="price">+${scrapValue(item)}⚙</span></button></div>
+    <div class="hint note">${STOCK_UI.wipeNote}</div>`;
+}
+
+/** ‹ n of total ›: pages through the filtered stock without closing the window. */
+function benchArrows(order: number[], uid: number): string {
+  const nav = benchNav(order, uid);
+  const arrow = (target: number | null, glyph: string, label: string): string =>
+    `<button class="btn bench-arrow" data-a="benchnav" data-v="${target ?? ''}" aria-label="${label}" ${disabledIf(target === null)}>${glyph}</button>`;
+  return `${arrow(nav.prev, '‹', STOCK_UI.prev)}<span class="bench-pos hint">${fill(STOCK_UI.position, { n: nav.n, total: nav.total })}</span>${arrow(nav.next, '›', STOCK_UI.next)}`;
+}
+
+/** What the open bench shows: the item and the order it pages through (to find the next one when the item is gone). */
+const bench = { uid: null as number | null, order: [] as number[] };
+
+function benchSpec(item: Item): WindowSpec {
+  bench.uid = item.uid;
+  bench.order = benchOrder(state.inv, ui.filter, item.uid);
+  return {
+    id: 'bench',
+    // the item's name is the title: one line less on an iPhone SE
+    title: itemName(item.t),
+    cover: true,
+    body: benchBody(item),
+    buttons: benchArrows(bench.order, item.uid),
+    onClose: reason => {
+      ui.sel = null;
+      bench.uid = null;
+      // closed by the player: the tile loses its highlight (a close by code is followed by a render anyway)
+      if (reason === 'close' || reason === 'outside' || reason === 'escape') {
+        renderPane();
+      }
+    },
+  };
+}
+
+function openBench(uid: number): void {
+  const item = findItem(state, uid);
+  if (!item) {
+    return;
+  }
+  showWindow(benchSpec(item));
+  // after showWindow: the bench it replaces clears the selection as it closes
+  ui.sel = uid;
+}
+
+/**
+ * Keeps the open bench in step with the game after any action: the same item redrawn in place,
+ * or, if it is gone, the next one of the order it showed (else the previous one), or the window closes.
+ */
+function refreshBench(): void {
+  if (!isWindowOpen('bench')) {
+    return;
+  }
+  let item = findItem(state, ui.sel);
+  if (!item && bench.uid !== null) {
+    const next = successor(bench.order, bench.uid, state.inv);
+    item = next === null ? undefined : findItem(state, next);
+  }
+  if (!item) {
+    closeWindow('code');
+    return;
+  }
+  ui.sel = item.uid;
+  updateWindow(benchSpec(item));
 }
 
 /* =====================================================================
@@ -475,6 +586,7 @@ export function renderPane(): void {
   const scrollTop = pane.scrollTop;
   pane.innerHTML = (PANES[ui.tab] || dealPane)();
   pane.scrollTop = scrollTop;
+  refreshBench();
   renderActionBar();
   paintIcons();
   updateChanceMeter();
@@ -989,16 +1101,30 @@ const ACTIONS: Record<string, ActionHandler> = {
       ui.tab = value;
     }
   },
-  sel: value => {
-    const uid = Number(value);
-    ui.sel = ui.sel === uid ? null : uid;
+  sel: value => openBench(Number(value)),
+  filter: value => {
+    if (isStockFilter(value)) {
+      ui.filter = value;
+    }
+  },
+  benchnav: value => {
+    if (value && findItem(state, Number(value))) {
+      ui.sel = Number(value);
+    }
   },
   bench: value => useWorkbench(state, ui.sel, value ?? ''),
+  // the buyer gets the item at once: the bench closes onto the counter, where the haggling is
+  offerbench: value => {
+    presentItem(state, Number(value));
+    closeWindow('code');
+    ui.tab = 'deal';
+  },
   craft: value => {
     const built = craft(state, Number(value), gameRng);
     if (built) {
-      ui.sel = built.uid;
       ui.tab = 'inv';
+      ui.filter = 'all';
+      openBench(built.uid);
     }
   },
   parts: () => orderParts(state),
@@ -1162,8 +1288,16 @@ function onSceneCanvasClick(event: MouseEvent): void {
   render();
 }
 
-/** Enter in the price box submits the offer / ask. */
+/** Enter in the price box submits the offer / ask; ← → page the open bench. */
 function onKeyDown(event: KeyboardEvent): void {
+  if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && isWindowOpen('bench')) {
+    const arrow = document.querySelectorAll<HTMLButtonElement>('#winbtns .bench-arrow')[event.key === 'ArrowLeft' ? 0 : 1];
+    if (arrow && !arrow.disabled) {
+      event.preventDefault();
+      arrow.click();
+    }
+    return;
+  }
   if (event.key === 'Enter' && event.target instanceof HTMLElement && event.target.id === 'offer') {
     const submit = document.querySelector<HTMLElement>('[data-a="offer"],[data-a="ask"]');
     if (submit) {

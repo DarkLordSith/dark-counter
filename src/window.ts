@@ -22,13 +22,18 @@ export type WindowView = 'float' | 'sheet';
 export type CloseReason = 'close' | 'outside' | 'escape' | 'replaced' | 'code';
 
 export interface WindowSpec {
-  /** Which window it is ('morning'; V2.3: 'stock', 'bench'); remembered as the last one. */
+  /** Which window it is ('morning', 'bench'); remembered as the last one. */
   id: string;
   title: string;
   /** HTML of the content. */
   body: string;
   /** HTML of the buttons row (data-a buttons), may be empty. */
   buttons?: string;
+  /**
+   * Sheet only: may rise over the scene when the room under it is too small (the bench, V2.3:
+   * it shows the customer at the counter itself). Without it the sheet stops at the scene.
+   */
+  cover?: boolean;
   onClose?: (reason: CloseReason) => void;
 }
 
@@ -40,6 +45,8 @@ export const viewFor = (coarse: boolean): WindowView => (coarse ? 'sheet' : 'flo
 /** Draws the windows the manager opens (the DOM in the game, a fake in tests). */
 export interface WindowSurface {
   show(spec: WindowSpec, view: WindowView): void;
+  /** New content of the open window, in place: no open animation, the focus stays on the same button. */
+  update(spec: WindowSpec, view: WindowView): void;
   hide(): void;
   setView(view: WindowView): void;
 }
@@ -56,6 +63,19 @@ export class WindowManager {
     this.current = spec;
     this.last = spec.id;
     this.surface.show(spec, this.view);
+  }
+
+  /**
+   * Redraws the open window with new content (after a repair, a sale…) without closing it.
+   * Only the same window: returns false when `spec.id` is not the one open.
+   */
+  update(spec: WindowSpec): boolean {
+    if (!this.current || this.current.id !== spec.id) {
+      return false;
+    }
+    this.current = spec;
+    this.surface.update(spec, this.view);
+    return true;
   }
 
   /** Closes the open window, if any; returns whether one was open. */
@@ -143,6 +163,10 @@ export function floatPlacement(stage: Box, viewport: { width: number; height: nu
 const TEXT = WINDOW_TEXT.ru;
 let manager: WindowManager | null = null;
 let returnFocus: HTMLElement | null = null;
+/** The spec on screen: place() reads its `cover`. */
+let shown: WindowSpec | null = null;
+/** A covering sheet stops this far below the top of the scene (the safe area and the iOS ceiling are above it). */
+const COVER_TOP = 8;
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -160,7 +184,8 @@ function place(view: WindowView): void {
     win.style.width = `${Math.round(app.width)}px`;
     win.style.top = '';
     win.style.bottom = `${Math.round(window.innerHeight - bar.top)}px`;
-    win.style.maxHeight = `${Math.max(0, Math.round(bar.top - stage.bottom))}px`;
+    const ceiling = shown?.cover ? stage.top + COVER_TOP : stage.bottom;
+    win.style.maxHeight = `${Math.max(0, Math.round(bar.top - ceiling))}px`;
     return;
   }
   const spot = floatPlacement(byId('stage').getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight });
@@ -172,14 +197,28 @@ function place(view: WindowView): void {
   win.style.maxHeight = `${spot.maxHeight}px`;
 }
 
+function fill(spec: WindowSpec): void {
+  shown = spec;
+  byId('wintitle').innerHTML = spec.title;
+  byId('winbody').innerHTML = spec.body;
+  const buttons = byId('winbtns');
+  buttons.innerHTML = spec.buttons ?? '';
+  buttons.hidden = !spec.buttons;
+}
+
+/** A selector that finds "the same" button in the new content: by its data-a and data-v. */
+function sameButton(element: Element | null): string | null {
+  if (!(element instanceof HTMLElement) || !element.dataset.a) {
+    return null;
+  }
+  const value = element.dataset.v;
+  return `[data-a="${CSS.escape(element.dataset.a)}"]${value === undefined ? ':not([data-v])' : `[data-v="${CSS.escape(value)}"]`}`;
+}
+
 const domSurface: WindowSurface = {
   show(spec, view) {
     const win = byId('win');
-    byId('wintitle').innerHTML = spec.title;
-    byId('winbody').innerHTML = spec.body;
-    const buttons = byId('winbtns');
-    buttons.innerHTML = spec.buttons ?? '';
-    buttons.hidden = !spec.buttons;
+    fill(spec);
     returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     place(view);
     byId('winback').hidden = false;
@@ -190,10 +229,26 @@ const domSurface: WindowSurface = {
     win.classList.add('win-on');
     (win.querySelector<HTMLElement>(`#winbtns ${FOCUSABLE}`) ?? win).focus({ preventScroll: true });
   },
+  update(spec, view) {
+    const win = byId('win');
+    const hadFocus = win.contains(document.activeElement);
+    const focused = hadFocus ? sameButton(document.activeElement) : null;
+    const scroll = win.scrollTop;
+    fill(spec);
+    place(view);
+    win.scrollTop = scroll;
+    if (hadFocus) {
+      // the button pressed is redrawn: focus its new copy (or the first one when it is gone or off)
+      const again = focused ? win.querySelector<HTMLElement>(focused) : null;
+      const target = again && !(again instanceof HTMLButtonElement && again.disabled) ? again : win.querySelector<HTMLElement>(FOCUSABLE) ?? win;
+      target.focus({ preventScroll: true });
+    }
+  },
   hide() {
     const win = byId('win');
     win.hidden = true;
     win.classList.remove('win-on');
+    shown = null;
     byId('winback').hidden = true;
     // the element that opened the window may be gone after a render (the action bar changes): then its successor
     const back = returnFocus?.isConnected ? returnFocus : byId('actionbar').querySelector<HTMLElement>(FOCUSABLE);
@@ -261,6 +316,8 @@ function windows(): WindowManager {
 
 /** Opens a window (closes the one open before). */
 export const openWindow = (spec: WindowSpec): void => windows().open(spec);
+/** New content for the open window `spec.id`, in place; returns false (nothing drawn) if it is not open. */
+export const updateWindow = (spec: WindowSpec): boolean => manager?.update(spec) ?? false;
 /** Closes the open window; returns whether one was open. */
 export const closeWindow = (reason: CloseReason = 'code'): boolean => windows().close(reason);
 export const isWindowOpen = (id?: string): boolean => manager?.isOpen(id) ?? false;
