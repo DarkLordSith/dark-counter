@@ -244,6 +244,8 @@ export interface UiState {
   sel: number | null;
   /** Stock filter chip; remembered for the session, not saved. */
   filter: StockFilter;
+  /** The morning window was shown and nobody is called yet (task 29): the bar says "Открыть лавку". */
+  morning: boolean;
 }
 
 /* ---------- hotspots (V2.1) ---------- */

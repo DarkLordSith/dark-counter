@@ -152,6 +152,19 @@ describe('contrast (WCAG)', () => {
     expect(new Set(CUSTOMER_TONES.jackets.map(([jacket]) => jacket)).size).toBe(CUSTOMER_TONES.jackets.length);
   });
 
+  it('Mac HUD tabs (task 29): idle fg at 0.7 on the --chip-bg plate (ink 0.8) reads ≥ 4.5 over any scene colour', () => {
+    const rgb = (hex: string): number[] => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+    const hex = (c: number[]): string => '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+    const over = (top: string, alpha: number, under: string): string => hex(rgb(top).map((v, i) => v * alpha + rgb(under)[i] * (1 - alpha)));
+    for (const under of Object.values(BASE)) {
+      const plate = over(BASE.ink, 0.8, under);
+      expect(contrast(over(BASE.fg, 0.7, plate), plate), `over ${under}`).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(SOURCES['src/style.css']).toMatch(/\.desk \.tabs \{[^}]*z-index: 1;/);
+    expect(SOURCES['src/style.css']).toMatch(/\.desk \.tab:not\(\.on\) \{\s*color: var\(--fg\);\s*opacity: 0\.7;/);
+    expect(CSS_TOKENS['--chip-bg']).toBe(withAlpha(BASE.ink, 0.8));
+  });
+
   it('the hunch verdict (16 px pixel font) passes the large-text 3:1 on panel', () => {
     expect(contrast(BASE.hunch, BASE.panel)).toBeGreaterThanOrEqual(3);
   });

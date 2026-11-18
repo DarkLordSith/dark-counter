@@ -3,6 +3,7 @@
 //  plus all click/keyboard handlers (buttons carry data-a="action").
 // =====================================================================
 import { barAction, chipIsNight, chipLines, mainAction } from './actionbar';
+import type { BarContext } from './actionbar';
 import { customersToday, formatHour, openingHour } from './day';
 import { audio, playSfx, setJunkAmbience, startSoundOnGesture, toggleMusic, toggleSfx } from './audio';
 import {
@@ -16,6 +17,8 @@ import type { StarKind } from './star';
 import { closeWindow, initWindows, isWindowOpen, openWindow, relayoutWindow, updateWindow } from './window';
 import { DESK_QUERY, stageFit } from './layout';
 import { benchNav, benchOffer, benchOrder, filterStock, STOCK_FILTERS, successor } from './stock';
+import { backpackFinds, backpackSlots, droneTrace } from './backpack';
+import type { BackpackSlot, DroneTrace } from './backpack';
 import type { WindowSpec } from './window';
 import {
   askBuyer, availableOfType, buyFromSeller, buySeat, callNextCustomer, canBuySeat, canCraft, hasShuttle, isDebtClosed, canVisitMarket, closeShop,
@@ -31,7 +34,7 @@ import { isOnHeap, onSceneClick, paintIcons, playDigFx, pressHotspot, scenePoint
 import {
   actor, actorAtCounter, actorEnter, actorReset, addLog, exportSaveCode, findItem, importSaveCode, newGame, persistence, readSlot, saveGame, setState, state, ui,
 } from './state';
-import type { BuyerCustomer, Customer, GameState, InspectCheck, Item, ItemType, Mode, Profile, Recipe, RentCustomer, SellerCustomer, StockFilter, Tab } from './types';
+import type { BuyerCustomer, Customer, GameState, InspectCheck, Item, ItemType, JunkVisit, Mode, Profile, Recipe, RentCustomer, SellerCustomer, StockFilter, Tab } from './types';
 import { daysRu, fill, roundTo10 } from './util';
 import { VERSION_LABEL } from './version';
 import { gameRng } from './rng';
@@ -291,6 +294,36 @@ function junkTimeNote(digsLeft: number): string {
   return lines.map(line => `<div class="hint m-wear">${line}</div>`).join('');
 }
 
+/**
+ * The backpack (task 29), screen memory only: the drone's trace until the visit ends, and the
+ * one-shot animations of the last dig (a new find, the drone's catch flying off).
+ */
+const backpack: { trace: DroneTrace | null; fresh: number | null; flying: boolean } = { trace: null, fresh: null, flying: false };
+
+function backpackSlot(slot: BackpackSlot): string {
+  if (slot.kind === 'empty') {
+    return '<div class="bp-slot"></div>';
+  }
+  if (slot.kind === 'gone') {
+    const fly = backpack.flying ? `<div class="bp-fly" aria-hidden="true">${iconCanvas(slot.type)}</div>` : '';
+    return `<div class="bp-slot bp-gone" title="${itemName(slot.type)}">${fly}</div>`;
+  }
+  const { item, mark } = slot;
+  const fresh = backpack.fresh === item.uid ? (mark === 'rare' ? ' bp-new-rare' : ' bp-new') : '';
+  const sign = mark === 'rare' ? starSvg('rare') : iconSvg('broken');
+  return `<div class="bp-slot bp-item${fresh}" title="${itemName(item.t)}">${iconCanvas(item.t, '', showsInfection(item))}<i class="bp-mark bp-${mark}">${sign}</i></div>`;
+}
+
+/** РЮКЗАК · N and one row of slots, under the noise scale. */
+function backpackRow(visit: JunkVisit): string {
+  const count = backpackFinds(visit, state.inv).length;
+  const cells = backpackSlots(visit, state.inv, backpack.trace, digsPerVisit(state)).map(backpackSlot).join('');
+  // the animations play once, on the render right after the dig
+  backpack.fresh = null;
+  backpack.flying = false;
+  return `<div class="bp"><div class="bp-head"><small>${JUNK_UI.backpack}</small><b class="rn">· ${count}</b></div><div class="bp-row">${cells}</div></div>`;
+}
+
 function junkyardPane(): string {
   const visit = state.junk;
   if (!visit) {
@@ -302,6 +335,7 @@ function junkyardPane(): string {
   const homeHint = visit.d > 0 ? `<div class="hint">${JUNK_UI.homeHint}</div>` : '';
   return `${junkTimeNote(visit.d)}<div class="junk-stats"><span>${JUNK_UI.digsLeft}: <b class="rn">${visit.d}</b> ${HUD.of} ${total}</span><span>${JUNK_UI.depth} <b class="rn">${visit.dp}</b></span></div>
       ${noiseMeter(visit.n)}
+      ${backpackRow(visit)}
       ${homeHint}
       ${homeButton}`;
 }
@@ -369,7 +403,7 @@ function rentPane(customer: RentCustomer): string {
  * its explanation stays as a line on top; "Нечем платить" is only in the bar.
  */
 function rentOptions(options: [action: string, title: string, html: string, description: string][]): string {
-  const main = barAction(state, actor, 'deal');
+  const main = barAction(state, actor, 'deal', barContext());
   const chosen = options.find(([action]) => action === main);
   const note = chosen ? `<div class="hint note">«${chosen[1]}» — кнопка внизу. ${chosen[3]}</div>` : '';
   return note + options.filter(([action]) => action !== main).map(([, , html]) => html).join('');
@@ -665,13 +699,16 @@ export function renderPane(): void {
   updateChanceMeter();
 }
 
+/** What the action bar rules need from the screen: the morning, the Mac layout. */
+const barContext = (): BarContext => ({ morning: ui.morning, desk: isDesk() });
+
 /** Main actions that read the price box. */
 const PRICE_ACTIONS = new Set(['offer', 'ask']);
 
 /** The action bar above the HUD: the screen's one main button, a dim hint, or nothing after the end. */
 function renderActionBar(): void {
   const bar = byId('actionbar');
-  const main = mainAction(state, actor, viewTab());
+  const main = mainAction(state, actor, viewTab(), barContext());
   bar.hidden = main.kind === 'none';
   if (main.kind === 'button') {
     let action = main.action;
@@ -802,12 +839,15 @@ function showMorningReport(report: MorningReport): void {
     }
   }
   const body = `${expectedCustomers()}<ul>${lines.join('')}</ul>`;
+  // task 29: one button for the morning, "Открыть лавку" in the action bar (it closes the window and
+  // calls the first customer); the window has only ✕, a tap past it only hides it
+  ui.morning = true;
   // V2.2: the first window on the window component (a sheet on a phone, a mini window on a Mac)
   showWindow({
     id: 'morning',
     title: fill(DAY_UI.morningTitle, { day: state.day }),
     body,
-    buttons: `<button class="btn pri" data-a="close">${DAY_UI.openShop}</button>`,
+    liveBar: true,
   });
 }
 
@@ -1143,6 +1183,7 @@ const ACTIONS: Record<string, ActionHandler> = {
   call: () => {
     // the next one waits until the last figure has left the scene
     if (actor.phase === 'empty' && callNextCustomer(state, gameRng) && state.cust) {
+      ui.morning = false;
       actorEnter(state.cust.seed);
       showTab('deal');
     }
@@ -1272,6 +1313,14 @@ const ACTIONS: Record<string, ActionHandler> = {
     maybeById<HTMLInputElement>('loadfilepick')?.click();
     return NO_RENDER;
   },
+  // the morning (task 29): the bar button closes the morning window and calls the first customer
+  openshop: () => {
+    if (isWindowOpen('morning')) {
+      closeWindow('close');
+    }
+    ui.morning = false;
+    return ACTIONS.call(undefined);
+  },
   log: () => {
     openLog();
     return NO_RENDER;
@@ -1373,9 +1422,20 @@ function followGame(game: GameState, visitor: Customer | null): void {
 
 /** "Копать" (the bar or a tap on the heap): one dig, its sound, the shovel and the ambience of the new noise. */
 function digAndShow(): void {
+  const before = state.junk ? backpackFinds(state.junk, state.inv).map(({ uid, t }) => ({ uid, t })) : [];
   const result = dig(state, gameRng);
   if (!result) {
     return;
+  }
+  // the backpack (task 29): light the new find, or leave the drone's trace in its slot
+  const visit = state.junk;
+  if (visit && (result.kind === 'broken' || result.kind === 'rare')) {
+    backpack.fresh = visit.f[visit.f.length - 1] ?? null;
+  }
+  const trace = visit && result.kind === 'drone' ? droneTrace(before, visit) : null;
+  if (trace) {
+    backpack.trace = trace;
+    backpack.flying = true;
   }
   playSfx('dig');
   playSfx(result.kind);

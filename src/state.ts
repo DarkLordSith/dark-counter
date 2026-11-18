@@ -23,7 +23,7 @@ import { daysRu, fill } from './util';
 export let state!: GameState;
 
 /** Screen state: open tab and selected inventory item uid. */
-export const ui: UiState = { tab: 'deal', sel: null, filter: 'all' };
+export const ui: UiState = { tab: 'deal', sel: null, filter: 'all', morning: false };
 
 /** The figure walking in the scene. */
 export const actor: Actor = { phase: 'empty', x: 140, seed: 0, scanStart: 0, doorOpen: 0 };
@@ -92,6 +92,7 @@ export function newGame(mode: Mode = 'story'): void {
   state = createGame(mode, gameRng);
   actorReset();
   ui.tab = 'deal';
+  ui.morning = false;
 }
 
 /* ---------- items ---------- */

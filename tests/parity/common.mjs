@@ -104,8 +104,13 @@ export const deterministicInit = (seed, presetSave = null) => `(() => {
       .map(b => ({ a: b.dataset.a, v: b.dataset.v ?? null }));
     const bench = document.getElementById('modal').hidden ? __benchView() : null;
     if (bench) out.push(...bench.nav.map(n => ({ a: 'sel', v: n.v })), { a: '__closebench', v: null });
-    return out;
+    // The morning (task 29): before it the window had "Открыть лавку" (close) and the bar "Позвать"
+    // (call); since then the window has only ✕ and the bar "Открыть лавку" (openshop = call).
+    // One rule for both: ✕ is "close", openshop is "call".
+    if (isMorning(root) && !out.some(c => c.a === 'close')) out.push({ a: 'close', v: null });
+    return out.map(c => (c.a === 'openshop' ? { a: 'call', v: c.v } : c));
   };
+  const isMorning = root => root.id === 'win' && root.dataset.id === 'morning';
   // The bench is open only when a move of the bot opened it (sel, craft). Before V2.3 a purchase
   // selected the new item and the bench showed up on the "Склад" tab by itself; since V2.3 the
   // tile is only lit. One rule for both: a bench the bot did not open is closed after the move.
@@ -115,6 +120,9 @@ export const deterministicInit = (seed, presetSave = null) => `(() => {
     if (bench && c.a === '__closebench') return bench.close.click();
     if (bench && c.a === 'sel') return bench.nav.find(n => n.v === c.v).el.click();
     const before = bench ? __benchUid() : null;
+    const layer = __layer();
+    if (c.a === 'close' && isMorning(layer) && !layer.querySelector('[data-a="close"]')) return document.getElementById('winx').click();
+    if (c.a === 'call' && !layer.querySelector('[data-a="call"]') && layer.querySelector('[data-a="openshop"]')) return layer.querySelector('[data-a="openshop"]').click();
     __layer().querySelector('[data-a="' + c.a + '"]' + (c.v !== null ? '[data-v="' + c.v + '"]' : '')).click();
     if (c.a === 'sel' || c.a === 'craft') botBench = true;
     // the item left the bench (scrapped): since V2.3 the window moves on to the next item,

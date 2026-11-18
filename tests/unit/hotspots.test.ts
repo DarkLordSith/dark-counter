@@ -129,6 +129,11 @@ describe('hitTest', () => {
     expect(spot('wanted').action).toBeNull();
   });
 
+  it('the terminal is at least 44 pt tall on a 375 pt phone (task 29: 18 → 19 px)', () => {
+    expect(spot('terminal').h).toBe(19);
+    expect(spot('terminal').h * 375 / 160).toBeGreaterThanOrEqual(44);
+  });
+
   it('runs the same actions as the buttons', () => {
     expect(spot('shelves').action).toEqual({ a: 'tab', v: 'inv' });
     expect(spot('terminal').action).toEqual({ a: 'tab', v: 'craft' });

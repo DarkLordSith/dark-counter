@@ -51,12 +51,20 @@ function landlordAction(state: GameState): MainAction {
   return button('evict', TEXT.evict, 'risk');
 }
 
+/** What the screen adds to the rules (not in the save): ui.ts passes it. */
+export interface BarContext {
+  /** The morning window was shown and nobody has been called yet (task 29): "Позвать" reads "Открыть лавку". */
+  morning?: boolean;
+  /** The Mac layout (V2.4): the customer is on the scene, a click on them opens the counter. */
+  desk?: boolean;
+}
+
 /**
  * The main action of the screen. Only "Позвать следующего" works from any tab
  * (as the scene button did); the others need the "Прилавок" / evening pane,
  * so on the other tabs the bar says where to go.
  */
-export function mainAction(state: GameState, actor: SceneFigure, tab: Tab): MainAction {
+export function mainAction(state: GameState, actor: SceneFigure, tab: Tab, context: BarContext = {}): MainAction {
   if (state.over) {
     return { kind: 'none' };
   }
@@ -71,7 +79,8 @@ export function mainAction(state: GameState, actor: SceneFigure, tab: Tab): Main
     return button('sleep', TEXT.sleep);
   }
   if (canCallNext(state, actor)) {
-    return button('call', TEXT.call);
+    // the morning: one button closes the window and calls the first customer
+    return context.morning ? button('openshop', TEXT.openShop) : button('call', TEXT.call);
   }
   if (actor.phase === 'in') {
     return hint(TEXT.approaching);
@@ -87,7 +96,8 @@ export function mainAction(state: GameState, actor: SceneFigure, tab: Tab): Main
     return state.slot >= state.cn && !isLandlordDue(state) ? button('closeshop', TEXT.closeShop) : hint(TEXT.wait);
   }
   if (tab !== 'deal') {
-    return hint(TEXT.toCounter);
+    // Mac: the stock or the bench window is open over the scene, the customer is right there
+    return hint(context.desk ? TEXT.toCounterDesk : TEXT.toCounter);
   }
   if (customer.kind === 'rent') {
     return landlordAction(state);
@@ -128,7 +138,7 @@ export function chipLines(state: GameState): string[] {
 export const chipIsNight = (state: GameState): boolean => !state.over && clockOf(state).night;
 
 /** The action the bar took from the pane on this screen, if any (the pane leaves it out). */
-export function barAction(state: GameState, actor: SceneFigure, tab: Tab): string | null {
-  const main = mainAction(state, actor, tab);
+export function barAction(state: GameState, actor: SceneFigure, tab: Tab, context: BarContext = {}): string | null {
+  const main = mainAction(state, actor, tab, context);
   return main.kind === 'button' ? main.action : null;
 }

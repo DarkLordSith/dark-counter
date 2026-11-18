@@ -144,7 +144,10 @@ describe('the morning window is on the component', () => {
     expect(uiTs).toMatch(/function showWindow[\s\S]*?openWindow\(spec\)/);
     expect(report).toContain("id: 'morning'");
     expect(report).toContain('DAY_UI.morningTitle');
-    expect(report).toContain('data-a="close">${DAY_UI.openShop}');
+    // task 29: no button inside, "Открыть лавку" is the action bar's; a tap on the bar goes through
+    expect(report).not.toContain('buttons:');
+    expect(report).toContain('liveBar: true');
+    expect(report).toContain('ui.morning = true');
     expect(report).not.toContain('openModal(');
   });
 

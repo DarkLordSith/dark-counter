@@ -273,6 +273,8 @@ export const ACTION_TEXT = {
     leaving: 'Уходит…',
     showItem: 'Выложите товар на прилавок',
     toCounter: 'Клиент ждёт — вкладка «Прилавок»',
+    toCounterDesk: 'Клиент ждёт — нажмите на него',
+    openShop: 'Открыть лавку',
     toEvening: 'Вечер — вкладка «Вечер»',
     toJunkyard: 'Свалка — вкладка «Свалка»',
     shiftOver: 'Смена окончена — вкладка «Прилавок»',
@@ -294,6 +296,8 @@ export const ACTION_TEXT = {
     leaving: 'Leaving…',
     showItem: 'Put an item on the counter',
     toCounter: 'A customer is waiting — "Counter" tab',
+    toCounterDesk: 'A customer is waiting — click on them',
+    openShop: 'Open the shop',
     toEvening: 'Evening — "Evening" tab',
     toJunkyard: 'Junkyard — "Junkyard" tab',
     shiftOver: 'The shift is over — "Counter" tab',
@@ -582,6 +586,7 @@ export const JUNK_TEXT = {
     noDigs: 'Куча перекопана. Пора домой.',
     home: 'Свалка: домой. Находок за визит: {n}.',
     homeHint: 'Уйти можно в любой момент.',
+    backpack: 'Рюкзак',
     lastFree: 'Ещё 1 раскопка — и уже за полночь.',
     pastMidnight: 'За полночь: завтра −1 клиент за каждую раскопку.',
     lateSoFar: 'Завтра клиентов меньше: −{n}.',
@@ -604,6 +609,7 @@ export const JUNK_TEXT = {
     noDigs: 'The heap is dug through. Time to go home.',
     home: 'Junkyard: home. Finds this visit: {n}.',
     homeHint: 'You can leave at any moment.',
+    backpack: 'Backpack',
     lastFree: 'One more dig and it is past midnight.',
     pastMidnight: 'Past midnight: −1 customer tomorrow for every dig.',
     lateSoFar: 'Fewer customers tomorrow: −{n}.',
@@ -613,7 +619,6 @@ export const JUNK_TEXT = {
 export const DAY_TEXT = {
   ru: {
     morningTitle: 'Утро. День {day}',
-    openShop: 'Открыть лавку',
     expected: 'Ожидается клиентов: {n}',
     reasons: {
       quiet: 'Начало недели, на ярусе тихо',
@@ -634,7 +639,6 @@ export const DAY_TEXT = {
   },
   en: {
     morningTitle: 'Morning. Day {day}',
-    openShop: 'Open the shop',
     expected: 'Customers expected: {n}',
     reasons: {
       quiet: 'Start of the week, the deck is quiet',
@@ -668,7 +672,7 @@ export const CUSTOMER_ZONE = { left: 64, right: 96 };
  */
 export const HOTSPOTS: readonly Hotspot[] = [
   { id: 'shelves', x: 7, y: 40, w: 52, h: 22, action: { a: 'tab', v: 'inv' }, when: 'shop' },
-  { id: 'terminal', x: 110, y: 50, w: 28, h: 18, action: { a: 'tab', v: 'craft' }, when: 'shop' },
+  { id: 'terminal', x: 110, y: 50, w: 28, h: 19, action: { a: 'tab', v: 'craft' }, when: 'shop' },
   { id: 'client', x: 64, y: 18, w: 32, h: 54, action: { a: 'tab', v: 'deal' }, when: 'customer' },
   { id: 'bell', x: 34, y: 62, w: 24, h: 18, action: { a: 'call' }, when: 'bell' },
   { id: 'wanted', x: 0, y: 3, w: 6, h: 58, action: null, when: 'mouse' },
