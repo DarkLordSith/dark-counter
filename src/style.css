@@ -330,6 +330,10 @@ input:focus-visible {
   border-left: 8px solid var(--panel);
 }
 
+.bubble.rare {
+  border-color: var(--m-rare);
+}
+
 .bubble.free::before,
 .bubble.free::after {
   display: none;
@@ -684,6 +688,16 @@ input:focus-visible {
   color: var(--m-hunch);
 }
 
+.m-rare {
+  color: var(--m-rare);
+}
+
+/* ★ rare (V2.6): an inline SVG drawn 2× from a 5×5 map, sits on the text line. */
+.star {
+  display: inline-block;
+  vertical-align: -1px;
+}
+
 .tools {
   display: flex;
   gap: 5px;
@@ -883,6 +897,22 @@ input:focus-visible {
   background: var(--m-wear);
 }
 
+/* The star mark is its own picture: no square behind it, 10×10 like the task's ×2. */
+.dots i.d-rare,
+.legend i.d-rare {
+  width: 10px;
+  height: 10px;
+  line-height: 0;
+}
+
+.d-rare .star {
+  vertical-align: top;
+}
+
+.legend i.d-rare {
+  vertical-align: -1px;
+}
+
 /* Unknown is a "?" mark, not just a grey square: it must not rely on color alone. */
 .dots i.d-unknown,
 .legend i.d-unknown {
@@ -964,6 +994,11 @@ input:focus-visible {
 
 .tag.m-unknown {
   color: var(--m-unknown);
+}
+
+.tag.m-rare {
+  border-color: var(--m-rare);
+  color: var(--m-rare);
 }
 
 /* ==================== Crafting recipes ==================== */

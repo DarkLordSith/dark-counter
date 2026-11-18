@@ -45,6 +45,8 @@ export interface Item {
   infected: boolean;
   /** Knowledge flags. */
   k: ItemKnowledge;
+  /** A rare junkyard find (V2.6, the ★ mark). Set only to true; absent (old saves, other items) = ordinary. */
+  rare?: true;
 }
 
 export interface Recipe {
