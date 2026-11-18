@@ -153,7 +153,7 @@ describe('calm "Без таймера"', () => {
 
 describe('player profile', () => {
   it('defaults: no endings, story and calm open, last = story', () => {
-    expect(loadProfile(memoryStore())).toEqual({ endings: {}, unlocked: ['story', 'calm'], last: 'story' });
+    expect(loadProfile(memoryStore())).toEqual({ endings: {}, unlocked: ['story', 'calm'], last: 'story', tapped: false });
   });
 
   it('records endings per mode once and survives a reload', () => {
@@ -164,7 +164,7 @@ describe('player profile', () => {
     expect(recordEnding(profile, 'calm', 'paid')).toBe(true);
     profile.last = 'calm';
     saveProfile(profile, store);
-    expect(loadProfile(store)).toEqual({ endings: { story: ['left'], calm: ['paid'] }, unlocked: ['story', 'calm'], last: 'calm' });
+    expect(loadProfile(store)).toEqual({ endings: { story: ['left'], calm: ['paid'] }, unlocked: ['story', 'calm'], last: 'calm', tapped: false });
   });
 
   it('"Новая игра" does not touch it', () => {
@@ -187,7 +187,7 @@ describe('player profile', () => {
     }
     const store = memoryStore();
     store.setItem(PROFILE_KEY, JSON.stringify({ endings: { story: ['left', 'nope', 7], moon: ['left'] }, unlocked: 'all', last: 'sandbox' }));
-    expect(loadProfile(store)).toEqual({ endings: { story: ['left'] }, unlocked: ['story', 'calm'], last: 'story' });
+    expect(loadProfile(store)).toEqual({ endings: { story: ['left'] }, unlocked: ['story', 'calm'], last: 'story', tapped: false });
   });
 
   it('no storage at all: defaults, saving does not throw', () => {

@@ -5,15 +5,17 @@
 //  anchor point.
 // =====================================================================
 import { appearanceFor, seededRandom } from './appearance';
-import { MAX_HEAT, SHOP_SIGN } from './data';
+import { BELL_AT, HOTSPOT_TEXT, HOTSPOTS, MAX_HEAT, SHOP_SIGN } from './data';
 import { clockOf } from './day';
 import { noiseLevel } from './economy';
 import type { DigResult } from './economy';
 import { heatMeterRects } from './heatmeter';
-import { CHARACTER, COLOR, GLOW, ITEM_COLORS, JUNKYARD, SHADE, SHOP } from './palette';
+import { BELL_IDLE_ALPHA, bellSprite, HINTED, hitTest, isLive, PRESS_MS } from './hotspots';
+import { CHARACTER, COLOR, GLOW, ITEM_COLORS, JUNKYARD, MEANING, SHADE, SHOP } from './palette';
 import { byId } from './dom';
 import { actor, COUNTER_X, DOOR_X, state } from './state';
-import type { Appearance, CustomerLook, ItemType, JunkVisit, LandlordLook } from './types';
+import type { Appearance, CustomerLook, Hotspot, HotspotId, ItemType, JunkVisit, LandlordLook } from './types';
+import { fill } from './util';
 
 /** A filled rectangle relative to a sprite's anchor: [x, y, width, height, color]. */
 type Rect = [number, number, number, number, string];
@@ -568,7 +570,7 @@ function drawSlidingDoor(): void {
   fillRect(132, 9, 12, 2, doorLightColor());
 }
 
-function drawCounter(seconds: number): void {
+function drawCounter(seconds: number, now: number): void {
   fillRect(0, 68, SCENE_W, 32, SHOP.counter);
   fillRect(0, 68, SCENE_W, 2, SHOP.panelEdge);
   fillRect(0, 68, SCENE_W, 1, SHOP.counterHighlight);
@@ -591,6 +593,17 @@ function drawCounter(seconds: number): void {
     fillRect(116, 56 + line * 3, 6 + ((seconds * 3 + line * 5) | 0) % 10, 1, COLOR.cyan);
   }
   fillRect(122, 67, 4, 1, COLOR.line);
+  drawBell(now);
+}
+
+/** The bell (V2.1): faded when there is no one to call, pressed for PRESS_MS after a tap. */
+function drawBell(now: number): void {
+  const bell = HOTSPOTS.find(spot => spot.id === 'bell');
+  const live = bell ? isLive(bell, state, actor, 'touch') : false;
+  ctx.save();
+  ctx.globalAlpha = live ? 1 : BELL_IDLE_ALPHA;
+  fillRects(BELL_AT.x, BELL_AT.y, [...bellSprite(isPressed('bell', now))]);
+  ctx.restore();
 }
 
 function drawScanLine(now: number): void {
@@ -616,7 +629,7 @@ function drawShop(now: number): void {
     drawWalkingActor(look, now);
   }
   drawSlidingDoor();
-  drawCounter(seconds);
+  drawCounter(seconds, now);
   if (look && actor.phase === 'idle') {
     drawHands(Math.round(actor.x), look);
     const customer = state.cust;
@@ -628,13 +641,102 @@ function drawShop(now: number): void {
   if (night) {
     fillRect(0, 0, SCENE_W, SCENE_H, SHOP.night);
   }
-  // after the night shade: the wanted level stays readable in the evening
+  // after the night shade: the wanted level and the hotspot hints stay readable in the evening
   drawHeatMeter(now);
+  drawHotspots(now);
 }
 
 /** Wanted level: a vertical meter on the left wall (shop) or the fence (junkyard). */
 function drawHeatMeter(now: number): void {
   fillRects(0, 0, heatMeterRects(state.heat, MAX_HEAT, now));
+}
+
+/* ---------- hotspots (V2.1): first-day hints, mouse outline, tap flash, tooltip ---------- */
+
+/** Last tapped hotspot: it flashes and (the bell) stays pressed for PRESS_MS. */
+const press = { id: null as HotspotId | null, at: -Infinity };
+/** Mouse over the scene: scene point and stage pixels (for the tooltip); null when the mouse is away. */
+let hover: { x: number; y: number; px: number; py: number } | null = null;
+/** First-day hints are on until the first hotspot tap (the profile flag, set by ui.ts). */
+let hintsOn = false;
+
+const isPressed = (id: HotspotId, now: number): boolean => press.id === id && now - press.at < PRESS_MS;
+
+/** ui.ts after a hotspot tap: the object flashes, the bell goes down. */
+export function pressHotspot(id: HotspotId): void {
+  press.id = id;
+  press.at = performance.now();
+}
+
+/** ui.ts from the profile: pulse the hotspots on day 1 until the first tap. */
+export function setHotspotHints(on: boolean): void {
+  hintsOn = on;
+}
+
+function strokeBox(x: number, y: number, w: number, h: number, color: string): void {
+  fillRect(x, y, w, 1, color);
+  fillRect(x, y + h - 1, w, 1, color);
+  fillRect(x, y + 1, 1, h - 2, color);
+  fillRect(x + w - 1, y + 1, 1, h - 2, color);
+}
+
+/** The live hotspot under the mouse, if any. */
+const hovered = (): Hotspot | null => hover ? hitTest(hover.x, hover.y, state, actor, 'mouse') : null;
+
+function drawHotspots(now: number): void {
+  if (hintsOn && state.day === 1) {
+    const alpha = 0.12 + 0.09 * (1 + Math.sin(now / 450));
+    HOTSPOTS.filter(spot => HINTED.includes(spot.id) && isLive(spot, state, actor, 'touch'))
+      .forEach(spot => strokeBox(spot.x, spot.y, spot.w, spot.h, GLOW.hotspotHint(alpha)));
+  }
+  const spot = hovered();
+  if (spot?.action) {
+    strokeBox(spot.x, spot.y, spot.w, spot.h, MEANING.action);
+  }
+  const tapped = HOTSPOTS.find(zone => zone.id === press.id);
+  if (tapped && isPressed(tapped.id, now)) {
+    fillRect(tapped.x, tapped.y, tapped.w, tapped.h, GLOW.hotspotFlash);
+  }
+}
+
+const hotTip = byId('hottip');
+
+/** Tooltip and cursor under the mouse; DOM is touched only when they change. */
+function updatePointerUi(): void {
+  const spot = state.where === 'junk' ? null : hovered();
+  const onHeap = state.where === 'junk' && hover !== null && isOnHeapAt(hover.x, hover.y);
+  const cursor = spot?.action || onHeap ? 'pointer' : '';
+  if (sceneCanvas.style.cursor !== cursor) {
+    sceneCanvas.style.cursor = cursor;
+  }
+  const text = spot && hover ? fill(HOTSPOT_TEXT.ru[spot.id], { n: state.heat, max: MAX_HEAT }) : '';
+  hotTip.hidden = !text;
+  if (!text || !hover) {
+    return;
+  }
+  if (hotTip.textContent !== text) {
+    hotTip.textContent = text;
+  }
+  // next to the cursor, inside the stage
+  const stage = sceneCanvas.getBoundingClientRect();
+  const left = Math.max(0, Math.min(hover.px + 12, stage.width - hotTip.offsetWidth));
+  const top = hover.py + 16 + hotTip.offsetHeight > stage.height ? hover.py - hotTip.offsetHeight - 4 : hover.py + 16;
+  hotTip.style.left = `${Math.round(left)}px`;
+  hotTip.style.top = `${Math.round(Math.max(0, top))}px`;
+}
+
+function trackMouse(): void {
+  sceneCanvas.addEventListener('pointermove', event => {
+    if (event.pointerType !== 'mouse') {
+      return;
+    }
+    const rect = sceneCanvas.getBoundingClientRect();
+    const point = scenePoint(event.clientX, event.clientY);
+    hover = { ...point, px: event.clientX - rect.left, py: event.clientY - rect.top };
+  });
+  sceneCanvas.addEventListener('pointerleave', () => {
+    hover = null;
+  });
 }
 
 /* ---------- junkyard ---------- */
@@ -790,12 +892,19 @@ function drawJunkyard(visit: JunkVisit, now: number): void {
   drawHeatMeter(now);
 }
 
+/** A page point (clientX / clientY) in scene pixels (160×100). */
+export function scenePoint(clientX: number, clientY: number): { x: number; y: number } {
+  const rect = sceneCanvas.getBoundingClientRect();
+  return { x: (clientX - rect.left) / rect.width * SCENE_W, y: (clientY - rect.top) / rect.height * SCENE_H };
+}
+
+const isOnHeapAt = (x: number, y: number): boolean =>
+  Math.abs(x - HEAP.x) < HEAP.w / 2 && y > HEAP.y - HEAP.heights[0] - 8 && y < HEAP.y + 4;
+
 /** True when a click lands on the junk heap (a tap there digs, like "Копать"). */
 export function isOnHeap(clientX: number, clientY: number): boolean {
-  const rect = sceneCanvas.getBoundingClientRect();
-  const x = (clientX - rect.left) / rect.width * SCENE_W;
-  const y = (clientY - rect.top) / rect.height * SCENE_H;
-  return Math.abs(x - HEAP.x) < HEAP.w / 2 && y > HEAP.y - HEAP.heights[0] - 8 && y < HEAP.y + 4;
+  const { x, y } = scenePoint(clientX, clientY);
+  return isOnHeapAt(x, y);
 }
 
 export function onSceneClick(handler: (event: MouseEvent) => void): void {
@@ -842,11 +951,13 @@ function frame(now: number): void {
   } else {
     drawShop(now);
   }
+  updatePointerUi();
   requestAnimationFrame(frame);
 }
 
 /** Starts the loop; `settled` is called when a customer arrives or leaves. */
 export function startScene(settled: () => void): void {
   onActorSettled = settled;
+  trackMouse();
   requestAnimationFrame(frame);
 }
