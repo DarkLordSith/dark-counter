@@ -11,6 +11,7 @@ import { noiseLevel } from './economy';
 import type { DigResult } from './economy';
 import { heatMeterRects } from './heatmeter';
 import { BELL_IDLE_ALPHA, bellSprite, HINTED, hitTest, isLive, PRESS_MS } from './hotspots';
+import { patienceBarRects } from './patiencebar';
 import { CHARACTER, COLOR, GLOW, ITEM_COLORS, JUNKYARD, MEANING, SHADE, SHOP } from './palette';
 import { byId } from './dom';
 import { actor, COUNTER_X, DOOR_X, state } from './state';
@@ -637,6 +638,9 @@ function drawShop(now: number): void {
       drawItem(customer.item.t, COUNTER_X, 68, now, customer.item.k.flaw && customer.item.infected);
       drawScanLine(now);
     }
+    if (customer && customer.kind !== 'rent') {
+      fillRects(0, 0, patienceBarRects(customer.pat, customer.max, Math.round(actor.x), now, reducedMotion()));
+    }
   }
   if (night) {
     fillRect(0, 0, SCENE_W, SCENE_H, SHOP.night);
@@ -645,6 +649,10 @@ function drawShop(now: number): void {
   drawHeatMeter(now);
   drawHotspots(now);
 }
+
+/** prefers-reduced-motion (V2.5): low patience does not blink then. Read every frame, so it follows the system setting live. */
+const motionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+const reducedMotion = (): boolean => motionQuery?.matches ?? false;
 
 /** Wanted level: a vertical meter on the left wall (shop) or the fence (junkyard). */
 function drawHeatMeter(now: number): void {

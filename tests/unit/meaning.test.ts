@@ -1,6 +1,7 @@
 // Color dictionary (V1.2): where a color carries meaning, it comes from MEANING / --m-*,
 // never from a base color like --red or COLOR.amber.
 import { describe, expect, it } from 'vitest';
+import { patienceBarRects } from '../../src/patiencebar';
 import { COLOR, CSS_TOKENS, MEANING } from '../../src/palette';
 import { heatMeterCells } from '../../src/heatmeter';
 import styleCss from '../../src/style.css?raw';
@@ -60,7 +61,8 @@ describe('the interface uses meanings, not base colors', () => {
     // the wanted level is drawn on the scene wall (V1.4 fix): filled cells are MEANING.risk
     expect(heatMeterCells(10, 10, 0).every(cell => cell[4] === MEANING.risk)).toBe(true);
     expect(heatMeterCells(0, 10, 0).every(cell => cell[4] === COLOR.line)).toBe(true);
-    expect(rule('.pips i.on')).toContain('var(--m-wear)');
+    // patience is drawn over the customer's head on the scene (V2.5): the filled part is MEANING.wear
+    expect(patienceBarRects(3, 6, 80, 0, false).at(-1)?.[4]).toBe(MEANING.wear);
     expect(rule('.cbar i')).toContain('var(--m-hunch)');
     expect(rule('.chance span')).toContain('var(--m-hunch)');
     expect(uiTs).not.toMatch(/cbar'\)\.style\.background/);
