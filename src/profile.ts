@@ -12,7 +12,7 @@ const isProfileEnding = (value: unknown): value is ProfileEnding =>
   value === 'paid' || (typeof value === 'string' && Object.hasOwn(ENDING_TEXT.ru, value));
 
 export function defaultProfile(): Profile {
-  return { endings: {}, unlocked: [...PLAYABLE_MODES], last: 'story' };
+  return { endings: {}, unlocked: [...PLAYABLE_MODES], last: 'story', tapped: false };
 }
 
 /** The game's localStorage, or null where there is none (Vitest in node, blocked storage). */
@@ -51,6 +51,7 @@ export function loadProfile(store: KeyValueStore | null = browserStore()): Profi
   if (isMode(raw.last) && isPlayable(profile, raw.last)) {
     profile.last = raw.last;
   }
+  profile.tapped = raw.tapped === true;
   return profile;
 }
 
@@ -73,5 +74,14 @@ export function recordEnding(profile: Profile, mode: Mode, ending: ProfileEnding
     return false;
   }
   profile.endings[mode] = [...seen, ending];
+  return true;
+}
+
+/** The first tap on a scene hotspot; returns true if it is the first one (then the profile needs saving). */
+export function recordHotspotTap(profile: Profile): boolean {
+  if (profile.tapped) {
+    return false;
+  }
+  profile.tapped = true;
   return true;
 }

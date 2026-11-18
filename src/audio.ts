@@ -349,8 +349,8 @@ export function startSoundOnGesture(): boolean {
 
 /* ---------- junkyard sound effects (generated, no files) ---------- */
 
-/** Effects of the junkyard: a dig, its find by rarity, the noise tick, the drone, going home. */
-export type SfxName = 'dig' | 'empty' | 'parts' | 'broken' | 'rare' | 'tick' | 'hum' | 'drone' | 'home';
+/** Effects: the junkyard (a dig, its find by rarity, the noise tick, the drone, going home) and the counter bell (V2.1). */
+export type SfxName = 'dig' | 'empty' | 'parts' | 'broken' | 'rare' | 'tick' | 'hum' | 'drone' | 'home' | 'bell';
 
 function sfxBus(eng: Engine): GainNode {
   if (!eng.sfx) {
@@ -410,6 +410,10 @@ const SFX: Record<SfxName, (eng: Engine, time: number, bus: AudioNode) => void> 
   // going home: a short calm falling triad
   home: (eng, time, bus) => {
     [67, 64, 60].forEach((note, i) => tone(eng, time + i * 0.14, midiToFrequency(note), 'sine', 0.1, 0.01, 0.5, bus));
+  },
+  // the counter bell, "дзынь": a bright strike with bell-like (inharmonic) partials, a short ring
+  bell: (eng, time, bus) => {
+    [1, 2.4, 4.1].forEach((ratio, i) => tone(eng, time, 1760 * ratio, 'sine', 0.12 / (i + 1), 0.002, 0.45 - i * 0.12, bus));
   },
 };
 

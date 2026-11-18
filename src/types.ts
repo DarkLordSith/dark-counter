@@ -205,6 +205,8 @@ export interface Profile {
   unlocked: Mode[];
   /** Mode played last: the game continues it on launch. */
   last: Mode;
+  /** A scene hotspot was tapped once (V2.1): the first-day hints never pulse again. */
+  tapped: boolean;
 }
 
 /** Endings: left, stayed, evicted; betray and takeover are stubs for Patch C. */
@@ -241,6 +243,30 @@ export interface UiState {
   /** Stock filter chip; remembered for the session, not saved. */
   filter: StockFilter;
 }
+
+/* ---------- hotspots (V2.1) ---------- */
+
+export type HotspotId = 'shelves' | 'terminal' | 'client' | 'bell' | 'wanted';
+
+/**
+ * When a hotspot is live: 'shop' — in the shop by day and in the evening; 'customer' — someone stands
+ * at the counter; 'bell' — "Позвать следующего" is possible; 'mouse' — only under a mouse (a tooltip).
+ */
+export type HotspotWhen = 'shop' | 'customer' | 'bell' | 'mouse';
+
+/** A clickable object of the scene, in scene pixels; `action` is the data-a / data-v of the same button. */
+export interface Hotspot {
+  id: HotspotId;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  action: { a: string; v?: string } | null;
+  when: HotspotWhen;
+}
+
+/** Pointer that asks: a mouse hovers (tooltips), a finger only taps. */
+export type PointerKind = 'mouse' | 'touch';
 
 /** The figure in the scene: 'empty' → 'in' → 'idle' → 'out' → 'empty'. */
 export interface Actor {

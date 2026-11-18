@@ -151,6 +151,10 @@ export const GLOW = {
   junkLamp: (brightness: number): string => withAlpha(BASE.wear, 0.07 * brightness),
   /** Guard drone searchlight over the junk heap (v2). */
   droneBeam: (brightness: number): string => withAlpha(BASE.risk, 0.12 * brightness),
+  /** Hotspots (V2.1): first-day hint outline, alpha pulses softly. */
+  hotspotHint: (alpha: number): string => withAlpha(BASE.action, alpha),
+  /** Hotspots: a ~150 ms lighter flash of the tapped object. */
+  hotspotFlash: withAlpha(BASE.fg, 0.22),
 };
 
 /* =====================================================================
@@ -186,6 +190,13 @@ export const SHOP = {
   /** Terminal screen and the box robot's face. */
   screenDark: BASE.ink,
   night: withAlpha(BASE.ink, 0.5),
+  /** The bell on the counter (V2.1): neutral metal, light from the top left. The action is the hotspot outline, not the bell. */
+  bellCap: BASE.fg,
+  bellShine: BASE.lamp,
+  bellBody: BASE.dim,
+  bellShade: BASE.line,
+  bellBase: BASE.rust,
+  bellBaseShade: BASE.rustDark,
 };
 
 /* =====================================================================

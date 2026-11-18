@@ -3,7 +3,7 @@
 //  New goods are added with one line in ITEM_TYPES (plus a sprite in
 //  scene.ts → ITEM_SPRITES if you want an icon).
 // =====================================================================
-import type { ItemType, ItemTypeInfo, Recipe } from './types';
+import type { Hotspot, ItemType, ItemTypeInfo, Recipe } from './types';
 
 // ---------- persistence ----------
 /** Save slot of the "Начало конца" mode; old saves live here, so the key never changes. */
@@ -658,6 +658,43 @@ export const DAY_TEXT = {
 export const SHOP_SIGN = { x: 59, y: 3, w: 42, h: 11 };
 /** Where the customer stands at the counter (COUNTER_X = 80), scene x: the float window keeps clear of it (V2.2). */
 export const CUSTOMER_ZONE = { left: 64, right: 96 };
+
+/**
+ * Hotspots (V2.1): objects of the shop scene that act like buttons, in scene pixels (160×100).
+ * Each one runs the same data-a / data-v as a button in the panel, so the rules stay the same.
+ * `when` — when the zone is live (see hotspots.ts → isLive); the junk heap has its own zone in scene.ts.
+ * Decor is not clickable: the window with the stars, the sign, the lamp, the door, the card reader (18, 63).
+ * On a phone every zone is at least HOTSPOT_MIN_SIDE scene px (≈ 44 pt); the wanted meter is mouse-only.
+ */
+export const HOTSPOTS: readonly Hotspot[] = [
+  { id: 'shelves', x: 7, y: 40, w: 52, h: 22, action: { a: 'tab', v: 'inv' }, when: 'shop' },
+  { id: 'terminal', x: 110, y: 50, w: 28, h: 18, action: { a: 'tab', v: 'craft' }, when: 'shop' },
+  { id: 'client', x: 64, y: 18, w: 32, h: 54, action: { a: 'tab', v: 'deal' }, when: 'customer' },
+  { id: 'bell', x: 34, y: 62, w: 24, h: 18, action: { a: 'call' }, when: 'bell' },
+  { id: 'wanted', x: 0, y: 3, w: 6, h: 58, action: null, when: 'mouse' },
+];
+/** Smallest side of a phone hotspot, scene px: 18 × 375/160 ≈ 42–44 pt. */
+export const HOTSPOT_MIN_SIDE = 18;
+/** The bell on the counter (8×5 sprite): top-left corner, its foot on the counter top (y 68). */
+export const BELL_AT = { x: 40, y: 63 };
+
+/** Hotspot tooltips (mouse) and their screen-reader names. RU/EN. */
+export const HOTSPOT_TEXT = {
+  ru: {
+    shelves: 'Склад',
+    terminal: 'Сборка',
+    client: 'Торг',
+    bell: 'Позвать следующего',
+    wanted: 'Розыск {n}/{max} — растёт от краденого',
+  },
+  en: {
+    shelves: 'Stock',
+    terminal: 'Crafting',
+    client: 'Haggle',
+    bell: 'Call the next one',
+    wanted: 'Wanted {n}/{max} — grows with stolen goods',
+  },
+} as const;
 
 /** The window component (V2.2): words of its frame. */
 export const WINDOW_TEXT = {

@@ -22,8 +22,9 @@ import {
   expenseLines, recipeNeeds, scrapValue, seatPrice, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
 } from './economy';
 import type { CollateralPlan, MorningReport } from './economy';
-import { isPlayable, loadProfile, recordEnding, saveProfile } from './profile';
-import { isOnHeap, onSceneClick, paintIcons, playDigFx } from './scene';
+import { isPlayable, loadProfile, recordEnding, recordHotspotTap, saveProfile } from './profile';
+import { hitTest } from './hotspots';
+import { isOnHeap, onSceneClick, paintIcons, playDigFx, pressHotspot, scenePoint, setHotspotHints } from './scene';
 import {
   actor, actorAtCounter, actorEnter, actorReset, addLog, exportSaveCode, findItem, importSaveCode, newGame, persistence, readSlot, saveGame, setState, state, ui,
 } from './state';
@@ -1006,6 +1007,7 @@ function showDebtClosed(): void {
  */
 export function startGame(): void {
   profile = loadProfile();
+  setHotspotHints(!profile.tapped);
   const order: Mode[] = [profile.last, ...PLAYABLE_MODES.filter(mode => mode !== profile.last)];
   for (const mode of order) {
     const saved = isPlayable(profile, mode) ? readSlot(mode) : null;
@@ -1222,13 +1224,17 @@ function onClick(event: MouseEvent): void {
   if (!button || (button instanceof HTMLButtonElement && button.disabled)) {
     return;
   }
-  const action = button.dataset.a ?? '';
+  runAction(button.dataset.a ?? '', button.dataset.v);
+}
+
+/** One action (a button's data-a / data-v, or a scene hotspot): the rule, then the screen follows it. */
+function runAction(action: string, value: string | undefined): void {
   const handler = Object.hasOwn(ACTIONS, action) ? ACTIONS[action] : null;
   const debtBefore = state.debt;
   const modeBefore = state.mode;
   const game = state;
   const visitor = state.cust;
-  const result = handler ? handler(button.dataset.v) : undefined;
+  const result = handler ? handler(value) : undefined;
   followGame(game, visitor);
   flushFeedback();
   if (isDebtClosed(state) && debtBefore > 0 && state.mode === modeBefore && !state.over) {
@@ -1277,16 +1283,35 @@ function digAndShow(): void {
   playDigFx(result.kind);
 }
 
-/** A tap on the junk heap digs, like "Копать" in the action bar. */
+/**
+ * A tap on the scene: in the junkyard the heap digs, like "Копать" in the action bar;
+ * in the shop a live hotspot (V2.1) runs the same action as its button.
+ */
 function onSceneCanvasClick(event: MouseEvent): void {
-  if (state.where !== 'junk' || !state.junk || !isOnHeap(event.clientX, event.clientY)) {
+  if (state.where === 'junk') {
+    if (state.junk && isOnHeap(event.clientX, event.clientY)) {
+      const game = state;
+      digAndShow();
+      followGame(game, null);
+      flushFeedback();
+      render();
+    }
     return;
   }
-  const game = state;
-  digAndShow();
-  followGame(game, null);
-  flushFeedback();
-  render();
+  const { x, y } = scenePoint(event.clientX, event.clientY);
+  const spot = hitTest(x, y, state, actor);
+  if (!spot?.action) {
+    return;
+  }
+  pressHotspot(spot.id);
+  if (spot.id === 'bell') {
+    playSfx('bell');
+  }
+  if (recordHotspotTap(profile)) {
+    saveProfile(profile);
+    setHotspotHints(false);
+  }
+  runAction(spot.action.a, spot.action.v);
 }
 
 /** Enter in the price box submits the offer / ask; ← → page the open bench. */
