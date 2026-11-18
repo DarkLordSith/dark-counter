@@ -106,7 +106,7 @@ function itemDots(item: Item): string {
   return `<span class="dots">${dots.join('')}</span>`;
 }
 
-/** Row of cells, the first `filled` of them lit (heat bar, patience pips). */
+/** Row of cells, the first `filled` of them lit (the junkyard noise bar). */
 function meterCells(total: number, filled: number): string {
   return Array.from({ length: total }, (_, i) => `<i class="${i < filled ? 'on' : ''}"></i>`).join('');
 }
@@ -357,8 +357,8 @@ function rentOptions(options: [action: string, title: string, html: string, desc
 }
 
 function customerHeader(customer: SellerCustomer | BuyerCustomer): string {
-  return `<div class="thead"><div><span class="cname">${customer.name}</span><span class="kind ${customer.kind}">${customer.kind === 'sell' ? 'продаёт' : 'покупает'}</span></div>
-  <div class="pips" title="Терпение">${meterCells(customer.max, customer.pat)}</div></div>`;
+  // V2.5: patience lives over the customer's head on the scene, not here
+  return `<div class="thead"><div><span class="cname">${customer.name}</span><span class="kind ${customer.kind}">${customer.kind === 'sell' ? 'продаёт' : 'покупает'}</span></div></div>`;
 }
 
 /**

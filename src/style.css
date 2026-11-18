@@ -550,21 +550,6 @@ input:focus-visible {
   color: var(--dim);
 }
 
-.pips {
-  display: flex;
-  gap: 3px;
-}
-
-.pips i {
-  width: 10px;
-  height: 5px;
-  background: var(--line);
-}
-
-.pips i.on {
-  background: var(--m-wear);
-}
-
 .card {
   display: flex;
   gap: 10px;
