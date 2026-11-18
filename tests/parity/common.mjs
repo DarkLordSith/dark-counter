@@ -53,7 +53,7 @@ export const deterministicInit = (seed, presetSave = null) => `(() => {
   // with a lit tile, since V2.3 the window. In it the moves are the bench actions, the
   // neighbour item (sel) and "__closebench" (the lit tile toggled off / the window's ✕).
   // UI_ONLY moves have no twin in older builds and change no game state: never pressed.
-  const UI_ONLY = new Set(['filter', 'offerbench', 'benchnav']);
+  const UI_ONLY = new Set(['filter', 'offerbench', 'benchnav', 'benchback']);
   window.__benchView = () => {
     const win = document.getElementById('win');
     if (win && !win.hidden && win.querySelector('[data-a="bench"]')) {
@@ -70,15 +70,34 @@ export const deterministicInit = (seed, presetSave = null) => `(() => {
   };
   // the item on the bench: the lit tile of the shelf in both versions
   window.__benchUid = () => document.querySelector('#pane .tile.on[data-a="sel"]')?.dataset.v ?? null;
+  // The Mac layout (V2.4, html.desk): no pane, its tabs open as the window "pane". That window
+  // is the pane, not a layer over the game: with it the game layer is the whole page (#app + the
+  // window). The pane is always shown in the other version, so a closed pane window (replaced by
+  // the bench or the morning window, or not opened yet) is reopened on the lit tab before a move;
+  // a tab is not a save change.
+  const isPaneWindow = win => win && !win.hidden && win.dataset.id === 'pane';
   window.__layer = () => {
     const modal = document.getElementById('modal');
     if (!modal.hidden) return modal;
     const bench = __benchView();
     if (bench) return bench.root;
     const win = document.getElementById('win');
+    if (isPaneWindow(win)) return document.body;
     return win && !win.hidden ? win : document.getElementById('app');
   };
+  /** The game layer (not a modal or a window over it): #app, or the page with the Mac pane window. */
+  window.__inGame = () => {
+    const layer = __layer();
+    return layer.id === 'app' || layer === document.body;
+  };
+  const showPane = () => {
+    if (!document.documentElement.classList.contains('desk')) return;
+    const win = document.getElementById('win');
+    if (!document.getElementById('modal').hidden || (win && !win.hidden)) return;
+    document.querySelector('#tabs .tab.on')?.click();
+  };
   window.__botActions = () => {
+    showPane();
     const root = __layer();
     const out = [...root.querySelectorAll('[data-a]')]
       .filter(b => !b.disabled && !b.hidden && b.offsetParent !== null && !UI_ONLY.has(b.dataset.a))
@@ -104,10 +123,13 @@ export const deterministicInit = (seed, presetSave = null) => `(() => {
     if (before !== null && after && __benchUid() !== before) after.close.click();
   };
   window.__botPress = c => {
+    showPane();
     press(c);
     const bench = document.getElementById('modal').hidden ? __benchView() : null;
     if (bench && !botBench) bench.close.click();
     botBench = !!(document.getElementById('modal').hidden ? __benchView() : botBench);
+    // the snapshot after the move sees the pane, as in the other version
+    showPane();
   };
   document.addEventListener('DOMContentLoaded', () => {
     new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => n.classList && n.classList.contains('fx') && __fx.push(n.outerHTML))))

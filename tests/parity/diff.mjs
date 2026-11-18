@@ -39,7 +39,7 @@ const SKIP = new Set(['music', 'copysave']);
  */
 async function candidates(page) {
   return page.evaluate((skip, menuActions) => {
-    const modalOpen = __layer().id !== 'app';
+    const modalOpen = !__inGame();
     const out = __botActions().filter(c => !skip.includes(c.a));
     if (out.some(c => c.a === 'menu')) {
       out.splice(out.findIndex(c => c.a === 'menu'), 1, ...menuActions.map(a => ({ a, v: null })));
@@ -114,7 +114,11 @@ async function snapshot(page, deep) {
     // Content left in a closed modal or window is not on screen: a closed window keeps its old
     // markup, and since V2.2 opening a window empties the modal (an older build kept it).
     const shown = el => !el.closest('#modal[hidden], #win[hidden]');
-    const icons = [...document.querySelectorAll('canvas:not(#scn):not([data-face])')].filter(shown).map(c => c.toDataURL()).sort();
+    // With the bench open only its own icons count: under it a phone shows the shelf, on a Mac
+    // (V2.4) the bench took the stock's place in the window and the shelf is gone.
+    const bench = document.getElementById('modal').hidden ? __benchView() : null;
+    const inBench = el => !bench || bench.root.contains(el);
+    const icons = [...document.querySelectorAll('canvas:not(#scn):not([data-face])')].filter(shown).filter(inBench).map(c => c.toDataURL()).sort();
     const canv = skipScene === 'all' ? [] : [...(skipScene ? [] : [scene.toDataURL()]), ...icons];
     const app = document.getElementById('app').cloneNode(true);
     app.querySelectorAll('.fx').forEach(n => n.remove());
