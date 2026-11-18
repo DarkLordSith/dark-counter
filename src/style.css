@@ -1614,6 +1614,108 @@ input:focus-visible {
   top: -2px;
 }
 
+/* ==================== Mac layout (V2.4, src/layout.ts) ====================
+   html.desk: a mouse and a window at least 900px wide (DESK_QUERY). The scene takes the
+   whole browser window at a whole scale; #app gets the scene's box from ui.ts (trackDesk),
+   the empty margins are the body's `bg`. The action bar and the HUD lie over the bottom
+   edge of the scene on a translucent plate; there is no pane: its tabs open as mini windows
+   (window.ts places them inside the scene, clear of the sign and the customer). */
+html.desk body {
+  padding: 0;
+}
+
+.desk #app {
+  position: fixed;
+  max-width: none;
+  margin: 0;
+  display: block;
+}
+
+.desk .ceiling,
+.desk .pane {
+  display: none;
+}
+
+.desk .scene {
+  position: absolute;
+  inset: 0;
+}
+
+.desk .stage {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+/* Bottom row: the stats on the left, the tabs and ☰ on the right. */
+.desk .hud {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 4px 0 12px;
+  background: var(--chip-bg);
+  border-top: 1px solid var(--line);
+}
+
+/* The row above it: the log line on the left, the main button in the middle. */
+.desk .actionbar {
+  position: absolute;
+  left: 50%;
+  bottom: var(--hud-height);
+  width: min(360px, 40%);
+  transform: translateX(-50%);
+  border-top: 0;
+}
+
+.desk .ticker {
+  position: absolute;
+  left: 12px;
+  right: calc(50% + min(180px, 20%) + 12px);
+  bottom: var(--hud-height);
+  height: var(--bar-height);
+  border-bottom: 0;
+  padding: 0 8px;
+  background: var(--chip-bg);
+}
+
+.desk .ticker:hover {
+  color: var(--fg);
+}
+
+/* The tabs, a second way to the windows besides the hotspots and the 1/2/3 keys. */
+.desk .tabs {
+  position: absolute;
+  right: 52px;
+  bottom: 0;
+  height: var(--hud-height);
+  border-bottom: 0;
+  gap: 4px;
+}
+
+.desk .tab {
+  flex: none;
+  padding: 0 8px;
+  font-size: var(--fs-s);
+  margin-bottom: 0;
+  border-bottom-width: 2px;
+}
+
+.desk .tab:hover {
+  color: var(--fg);
+}
+
+/* The window is the pane: its own content, without the pane's padding. */
+.pane-body {
+  container: pane / inline-size;
+}
+
+.bench-back {
+  flex: none;
+  min-height: 40px;
+  padding: 0 10px;
+}
+
 /* ==================== Font lab (src/fontlab.ts, debug) ====================
    Per-group overrides from the font lab, set as data-fl-* attributes on <html>.
    Without the attributes nothing here applies. */

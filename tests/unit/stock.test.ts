@@ -125,14 +125,14 @@ describe('"Предложить клиенту"', () => {
   });
 
   it('presents the item and goes to the counter, where the haggling is', () => {
-    expect(uiTs).toMatch(/offerbench: value => \{\s*presentItem\(state, Number\(value\)\);\s*closeWindow\('code'\);\s*ui\.tab = 'deal';/);
+    expect(uiTs).toMatch(/offerbench: value => \{\s*presentItem\(state, Number\(value\)\);\s*closeWindow\('code'\);\s*showTab\('deal'\);/);
   });
 });
 
 describe('the bench window in ui.ts', () => {
   it('a tile opens the bench; it is refreshed in place after every render', () => {
     expect(uiTs).toContain("sel: value => openBench(Number(value))");
-    expect(uiTs).toMatch(/refreshBench\(\);\s*pane\.innerHTML = /);
+    expect(uiTs).toMatch(/refreshBench\(\);\s*const html = \(PANES\[ui\.tab\]/);
     expect(uiTs).toContain('updateWindow(benchSpec(item))');
     expect(uiTs).toContain("id: 'bench'");
     expect(uiTs).toContain('cover: true');

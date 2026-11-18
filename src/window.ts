@@ -15,6 +15,10 @@
 import { CUSTOMER_ZONE, WINDOW_TEXT } from './data';
 import { byId } from './dom';
 import { iconSvg } from './icons';
+import { deskWindowPlacement } from './layout';
+import type { Box } from './layout';
+
+export type { Box } from './layout';
 
 export type WindowView = 'float' | 'sheet';
 
@@ -34,6 +38,12 @@ export interface WindowSpec {
    * it shows the customer at the counter itself). Without it the sheet stops at the scene.
    */
   cover?: boolean;
+  /**
+   * false: a window that does not block the game (the Mac layout, V2.4: the stock, the counter, the bench):
+   * no backdrop, the scene, the action bar and the HUD keep working under it; ✕ and Esc close it.
+   * Default true: a tap past it closes it, Tab stays inside.
+   */
+  modal?: boolean;
   onClose?: (reason: CloseReason) => void;
 }
 
@@ -117,13 +127,6 @@ export class WindowManager {
 
 /* ---------- placement of the float window ---------- */
 
-export interface Box {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
-
 export interface FloatPlace {
   left: number;
   top: number;
@@ -170,8 +173,31 @@ const COVER_TOP = 8;
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/** The Mac layout (V2.4): ui.ts sets html.desk, the scene is the whole browser window. */
+const isDesk = (): boolean => document.documentElement.classList.contains('desk');
+
+/** Where the overlay over the bottom of the scene begins: the top of the action bar row and the HUD. */
+function deskFloor(): number {
+  const tops = ['hud', 'actionbar', 'ticker'].map(id => byId(id).getBoundingClientRect()).filter(rect => rect.height > 0).map(rect => rect.top);
+  return tops.length ? Math.min(...tops) : window.innerHeight;
+}
+
 function place(view: WindowView): void {
   const win = byId('win');
+  if (view === 'float' && isDesk()) {
+    // V2.4: inside the scene, below the sign, above the action bar; at its right or left edge
+    const spot = deskWindowPlacement(byId('stage').getBoundingClientRect(), deskFloor());
+    win.classList.remove('win-sheet');
+    win.classList.add('win-float');
+    win.dataset.view = view;
+    win.dataset.side = spot.side;
+    win.style.left = `${spot.left}px`;
+    win.style.width = `${spot.width}px`;
+    win.style.top = `${spot.top}px`;
+    win.style.bottom = '';
+    win.style.maxHeight = `${spot.height}px`;
+    return;
+  }
   win.classList.toggle('win-sheet', view === 'sheet');
   win.classList.toggle('win-float', view === 'float');
   win.dataset.view = view;
@@ -199,6 +225,11 @@ function place(view: WindowView): void {
 
 function fill(spec: WindowSpec): void {
   shown = spec;
+  const win = byId('win');
+  // the bot of the parity stand and the CSS tell the windows apart by it
+  win.dataset.id = spec.id;
+  win.setAttribute('aria-modal', String(spec.modal !== false));
+  byId('winback').hidden = spec.modal === false;
   byId('wintitle').innerHTML = spec.title;
   byId('winbody').innerHTML = spec.body;
   const buttons = byId('winbtns');
@@ -221,7 +252,6 @@ const domSurface: WindowSurface = {
     fill(spec);
     returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     place(view);
-    byId('winback').hidden = false;
     win.hidden = false;
     // the open animation starts from the state without .win-on (CSS, ≤ 200 ms, off with reduced motion)
     win.classList.remove('win-on');
@@ -295,7 +325,7 @@ export function initWindows(): void {
     }
     if (manager.key(event.key)) {
       event.preventDefault();
-    } else if (event.key === 'Tab') {
+    } else if (event.key === 'Tab' && manager.current?.modal !== false) {
       trapTab(event);
     }
   });
@@ -314,6 +344,12 @@ function windows(): WindowManager {
   return manager;
 }
 
+/** Places the open window again (the scene was resized). */
+export const relayoutWindow = (): void => {
+  if (manager?.isOpen()) {
+    place(manager.view);
+  }
+};
 /** Opens a window (closes the one open before). */
 export const openWindow = (spec: WindowSpec): void => windows().open(spec);
 /** New content for the open window `spec.id`, in place; returns false (nothing drawn) if it is not open. */

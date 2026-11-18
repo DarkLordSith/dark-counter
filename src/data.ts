@@ -716,6 +716,8 @@ export const STOCK_TEXT = {
     offer: 'Предложить клиенту',
     shown: 'Уже на прилавке',
     prev: 'Предыдущая вещь',
+    /** Mac (V2.4): the bench took the stock's place in the window; this brings the stock back. */
+    back: '‹ Склад',
     next: 'Следующая вещь',
     position: '{n} из {total}',
     wants: 'Ищет: {item}',
@@ -734,6 +736,7 @@ export const STOCK_TEXT = {
     offer: 'Offer to the customer',
     shown: 'On the counter',
     prev: 'Previous item',
+    back: '‹ Stock',
     next: 'Next item',
     position: '{n} of {total}',
     wants: 'Looking for: {item}',

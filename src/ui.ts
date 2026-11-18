@@ -11,7 +11,8 @@ import {
 } from './data';
 import { byId, maybeById } from './dom';
 import { iconSvg } from './icons';
-import { closeWindow, initWindows, isWindowOpen, openWindow, updateWindow } from './window';
+import { closeWindow, initWindows, isWindowOpen, openWindow, relayoutWindow, updateWindow } from './window';
+import { DESK_QUERY, stageFit } from './layout';
 import { benchNav, benchOffer, benchOrder, filterStock, STOCK_FILTERS, successor } from './stock';
 import type { WindowSpec } from './window';
 import {
@@ -193,10 +194,14 @@ export function renderSceneOverlay(): void {
   }
 }
 
-function renderTabs(): void {
+/** Tab names; on a Mac (V2.4) they are also the titles of the windows that replaced the pane. */
+function tabLabels(): [Tab, string][] {
   const firstTab = state.phase === 'shop' ? 'ПРИЛАВОК' : state.where === 'junk' ? 'СВАЛКА' : 'ВЕЧЕР';
-  const tabs: [Tab, string][] = [['deal', firstTab], ['inv', `СКЛАД · ${state.inv.length}`], ['craft', 'СБОРКА']];
-  byId('tabs').innerHTML = tabs
+  return [['deal', firstTab], ['inv', `СКЛАД · ${state.inv.length}`], ['craft', 'СБОРКА']];
+}
+
+function renderTabs(): void {
+  byId('tabs').innerHTML = tabLabels()
     .map(([key, label]) => `<button class="tab ${ui.tab === key ? 'on' : ''}" data-a="tab" data-v="${key}">${label}</button>`)
     .join('');
 }
@@ -513,8 +518,10 @@ function benchSpec(item: Item): WindowSpec {
     // the item's name is the title: one line less on an iPhone SE
     title: itemName(item.t),
     cover: true,
+    // Mac: the bench took the stock's place in the window, the game goes on under it
+    modal: !isDesk(),
     body: benchBody(item),
-    buttons: benchArrows(bench.order, item.uid),
+    buttons: (isDesk() ? `<button class="btn bench-back" data-a="benchback">${STOCK_UI.back}</button>` : '') + benchArrows(bench.order, item.uid),
     onClose: reason => {
       ui.sel = null;
       bench.uid = null;
@@ -582,26 +589,80 @@ function craftPane(): string {
 
 const PANES: Record<Tab, () => string> = { deal: dealPane, inv: inventoryPane, craft: craftPane };
 
+/* ---------- the Mac layout (V2.4): no pane, its tabs open as mini windows over the scene ---------- */
+
+/** html.desk: a mouse and a wide window (DESK_QUERY); set by trackDesk(). */
+const isDesk = (): boolean => document.documentElement.classList.contains('desk');
+
+/** A move asked for the pane window to open (a tab, a hotspot, a customer called): renderPane opens it. */
+let wantPane = false;
+
+/** Goes to a tab: on a phone the pane switches, on a Mac its window opens (or shows the tab). */
+function showTab(tab: Tab): void {
+  ui.tab = tab;
+  if (isDesk()) {
+    wantPane = true;
+  }
+}
+
+/** The tab the action bar follows: on a Mac with no tab window open the scene itself is the counter. */
+const viewTab = (): Tab => (isDesk() && !isWindowOpen('pane') ? 'deal' : ui.tab);
+
+function paneSpec(html: string): WindowSpec {
+  return {
+    id: 'pane',
+    title: tabLabels().find(([tab]) => tab === ui.tab)?.[1] ?? '',
+    body: `<div class="pane-body">${html}</div>`,
+    modal: false,
+    // closed by the player: the action bar is back to the counter (viewTab)
+    onClose: reason => {
+      if (reason === 'close' || reason === 'outside' || reason === 'escape') {
+        renderActionBar();
+      }
+    },
+  };
+}
+
 export function renderPane(): void {
   const pane = byId('pane');
   const scrollTop = pane.scrollTop;
   // the bench first: when its item is gone it moves on (ui.sel), and the shelf lights the new tile
   refreshBench();
-  pane.innerHTML = (PANES[ui.tab] || dealPane)();
-  pane.scrollTop = scrollTop;
+  const html = (PANES[ui.tab] || dealPane)();
+  if (isDesk()) {
+    pane.innerHTML = '';
+    if (isWindowOpen('pane')) {
+      updateWindow(paneSpec(html));
+    } else if (wantPane) {
+      showWindow(paneSpec(html));
+    }
+  } else {
+    pane.innerHTML = html;
+    pane.scrollTop = scrollTop;
+  }
+  wantPane = false;
   renderActionBar();
   paintIcons();
   updateChanceMeter();
 }
 
+/** Main actions that read the price box. */
+const PRICE_ACTIONS = new Set(['offer', 'ask']);
+
 /** The action bar above the HUD: the screen's one main button, a dim hint, or nothing after the end. */
 function renderActionBar(): void {
   const bar = byId('actionbar');
-  const main = mainAction(state, actor, ui.tab);
+  const main = mainAction(state, actor, viewTab());
   bar.hidden = main.kind === 'none';
   if (main.kind === 'button') {
-    const value = main.value !== undefined ? ` data-v="${main.value}"` : '';
-    bar.innerHTML = `<button class="btn pri act-main ${main.tone === 'risk' ? 'act-risk' : ''}" data-a="${main.action}"${value}>${main.label}</button>`;
+    let action = main.action;
+    let value = main.value !== undefined ? ` data-v="${main.value}"` : '';
+    // Mac: the price is typed in the counter window; with it closed the button opens it first
+    if (PRICE_ACTIONS.has(action) && !maybeById('offer')) {
+      action = 'tab';
+      value = ' data-v="deal"';
+    }
+    bar.innerHTML = `<button class="btn pri act-main ${main.tone === 'risk' ? 'act-risk' : ''}" data-a="${action}"${value}>${main.label}</button>`;
   } else if (main.kind === 'hint') {
     bar.innerHTML = `<div class="act-hint m-inactive">${main.text}</div>`;
   }
@@ -637,8 +698,15 @@ function flushFeedback(): void {
   feedback.floats.splice(0).forEach(({ text, color }) => showFloatingText(text, color));
 }
 
+/** One window at a time; the Mac tab window (non-modal, the game itself) stays under a modal. */
+function closeWindowForModal(): void {
+  if (!isWindowOpen('pane')) {
+    closeWindow('replaced');
+  }
+}
+
 function openModal(title: string, body: string, buttons: string, footer = ''): void {
-  closeWindow('replaced'); // one window at a time
+  closeWindowForModal();
   byId('mbox').innerHTML = `<h2>${title}</h2>${body}<div class="mbtns">${buttons}</div>${footer}`;
   byId('modal').classList.remove('sheet');
   byId('modal').hidden = false;
@@ -653,7 +721,7 @@ function openMenu(): void {
     <button class="btn menu-item" data-a="sounds" aria-pressed="${audio.sfx}">${HUD.sounds}: ${audio.sfx ? HUD.on : HUD.off}</button>
     <button class="btn menu-item" data-a="savemenu">${HUD.save}</button>
     <div class="mbtns"><button class="btn" data-a="close">${HUD.close}</button></div>`;
-  closeWindow('replaced'); // one window at a time
+  closeWindowForModal();
   byId('modal').classList.add('sheet');
   byId('modal').hidden = false;
 }
@@ -1054,7 +1122,7 @@ const ACTIONS: Record<string, ActionHandler> = {
     // the next one waits until the last figure has left the scene
     if (actor.phase === 'empty' && callNextCustomer(state, gameRng) && state.cust) {
       actorEnter(state.cust.seed);
-      ui.tab = 'deal';
+      showTab('deal');
     }
   },
   insp: value => {
@@ -1074,7 +1142,7 @@ const ACTIONS: Record<string, ActionHandler> = {
   take: () => sellToBuyer(state),
   closeshop: () => {
     closeShop(state);
-    ui.tab = 'deal';
+    showTab('deal');
   },
   // rent
   rentpay: () => payRent(state),
@@ -1101,7 +1169,7 @@ const ACTIONS: Record<string, ActionHandler> = {
   // tabs, inventory, crafting
   tab: value => {
     if (isTab(value)) {
-      ui.tab = value;
+      showTab(value);
     }
   },
   sel: value => openBench(Number(value)),
@@ -1116,11 +1184,16 @@ const ACTIONS: Record<string, ActionHandler> = {
     }
   },
   bench: value => useWorkbench(state, ui.sel, value ?? ''),
+  // Mac: "‹ Склад" — the stock comes back in the window the bench took
+  benchback: () => {
+    closeWindow('code');
+    showTab('inv');
+  },
   // the buyer gets the item at once: the bench closes onto the counter, where the haggling is
   offerbench: value => {
     presentItem(state, Number(value));
     closeWindow('code');
-    ui.tab = 'deal';
+    showTab('deal');
   },
   craft: value => {
     const built = craft(state, Number(value), gameRng);
@@ -1134,7 +1207,7 @@ const ACTIONS: Record<string, ActionHandler> = {
   // evening
   junk: () => {
     goToJunkyard(state, gameRng);
-    ui.tab = 'deal';
+    showTab('deal');
   },
   dig: () => digAndShow(),
   home: () => {
@@ -1181,9 +1254,13 @@ const ACTIONS: Record<string, ActionHandler> = {
     openLog();
     return NO_RENDER;
   },
+  // the top layer only: a modal over the Mac tab window leaves the window open
   close: () => {
-    closeModal();
-    closeWindow('close');
+    if (!byId('modal').hidden) {
+      closeModal();
+    } else {
+      closeWindow('close');
+    }
   },
   // after an ending or a closed debt: a new game in the same mode, no questions
   'newgame-yes': () => {
@@ -1314,8 +1391,25 @@ function onSceneCanvasClick(event: MouseEvent): void {
   runAction(spot.action.a, spot.action.v);
 }
 
+/** Mac: 1 / 2 / 3 open the counter, the stock, the crafting (like the hotspots), unless typing or a modal is up. */
+const TAB_KEYS: Record<string, Tab> = { 1: 'deal', 2: 'inv', 3: 'craft' };
+
+function deskTabKey(event: KeyboardEvent): boolean {
+  const tab = Object.hasOwn(TAB_KEYS, event.key) ? TAB_KEYS[event.key] : null;
+  const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+  if (!tab || !isDesk() || typing || event.metaKey || event.ctrlKey || event.altKey || !byId('modal').hidden || isWindowOpen('morning')) {
+    return false;
+  }
+  event.preventDefault();
+  runAction('tab', tab);
+  return true;
+}
+
 /** Enter in the price box submits the offer / ask; ← → page the open bench. */
 function onKeyDown(event: KeyboardEvent): void {
+  if (deskTabKey(event)) {
+    return;
+  }
   if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && isWindowOpen('bench')) {
     const arrow = document.querySelectorAll<HTMLButtonElement>('#winbtns .bench-arrow')[event.key === 'ArrowLeft' ? 0 : 1];
     if (arrow && !arrow.disabled) {
@@ -1349,6 +1443,45 @@ export function bindEvents(): void {
   onSceneClick(onSceneCanvasClick);
   startSoundOnFirstTouch();
   trackKeyboard();
+  trackDesk();
+}
+
+/**
+ * The Mac layout (V2.4): with a mouse and a wide window the scene takes the whole browser window
+ * at the largest whole scale (stageFit), centered; the action bar and the HUD lie over its bottom
+ * edge, the pane is gone (its tabs open as mini windows). html.desk switches the CSS, #app gets
+ * the box of the scene. Switching live (a window resized past 900px) re-renders the screen.
+ */
+function trackDesk(): void {
+  const query = window.matchMedia(DESK_QUERY);
+  const root = document.documentElement;
+  const app = byId('app');
+  const fit = (initial = false): void => {
+    const desk = query.matches;
+    const changed = !initial && desk !== root.classList.contains('desk');
+    root.classList.toggle('desk', desk);
+    if (desk) {
+      const box = stageFit({ width: window.innerWidth, height: window.innerHeight });
+      app.style.left = `${box.left}px`;
+      app.style.top = `${box.top}px`;
+      app.style.width = `${box.width}px`;
+      app.style.height = `${box.height}px`;
+    } else {
+      ['left', 'top', 'width', 'height'].forEach(side => app.style.removeProperty(side));
+    }
+    if (changed) {
+      // the tab window belongs to the Mac layout; the bench changes its kind (sheet / non-modal)
+      if (isWindowOpen('pane') || isWindowOpen('bench')) {
+        closeWindow('code');
+      }
+      render();
+    }
+    relayoutWindow();
+  };
+  // before startGame(): only the class and the box, the first render comes from the game
+  fit(true);
+  query.addEventListener('change', () => fit());
+  window.addEventListener('resize', () => fit());
 }
 
 /**
