@@ -34,6 +34,8 @@ const DECOR = [
   '.debt h3',
   // "шум" label of the junkyard noise scale: grey like the "Чуйка" row; the scale itself is risk
   '.noise',
+  // "РЮКЗАК" label of the junkyard backpack (task 29): grey like the HUD labels (.st small)
+  '.bp-head small',
   // customer kind label ("продаёт" / "покупает"): a type, not a state, so neutral grey (V1.3)
   '.kind',
   // font lab: a debug sheet (src/fontlab.ts)

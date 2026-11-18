@@ -44,6 +44,11 @@ export interface WindowSpec {
    * Default true: a tap past it closes it, Tab stays inside.
    */
   modal?: boolean;
+  /**
+   * A modal window over which the action bar stays live (the morning, task 29): a tap past the window
+   * on the bar's button hides the window and presses the button (one tap, not two).
+   */
+  liveBar?: boolean;
   onClose?: (reason: CloseReason) => void;
 }
 
@@ -290,6 +295,15 @@ const domSurface: WindowSurface = {
   },
 };
 
+/** The action bar button under the backdrop at this point, if any (liveBar). */
+function barButtonAt(x: number, y: number): HTMLElement | null {
+  const back = byId('winback');
+  back.hidden = true;
+  const under = document.elementFromPoint(x, y);
+  back.hidden = false;
+  return under instanceof Element ? under.closest<HTMLElement>('#actionbar [data-a]') : null;
+}
+
 /** Keeps Tab inside the open window (aria-modal). */
 function trapTab(event: KeyboardEvent): void {
   const win = byId('win');
@@ -318,7 +332,13 @@ export function initWindows(): void {
   close.innerHTML = iconSvg('close');
   close.setAttribute('aria-label', TEXT.close);
   close.addEventListener('click', () => manager?.close('close'));
-  byId('winback').addEventListener('click', () => manager?.outside());
+  byId('winback').addEventListener('click', event => {
+    const through = manager?.current?.liveBar ? barButtonAt(event.clientX, event.clientY) : null;
+    manager?.outside();
+    if (through?.isConnected) {
+      through.click();
+    }
+  });
   document.addEventListener('keydown', event => {
     if (!manager?.isOpen()) {
       return;

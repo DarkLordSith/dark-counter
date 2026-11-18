@@ -1123,6 +1123,149 @@ input:focus-visible {
   background: var(--m-risk);
 }
 
+/* The backpack (task 29): under the noise scale, one row of slots, one per dig of the visit. */
+.bp {
+  margin-bottom: 8px;
+}
+
+.bp-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 4px;
+  line-height: 1;
+}
+
+.bp-head small {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.bp-head .rn {
+  font-size: var(--fs-px-m);
+  color: var(--fg);
+}
+
+.bp-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* An empty slot: a 1px line outline. The tile of a find: the stock icon 56×32 on bg, no price. */
+.bp-slot {
+  position: relative;
+  box-sizing: border-box;
+  width: 60px;
+  height: 36px;
+  padding: 1px;
+  border: 1px solid var(--line);
+}
+
+.bp-item {
+  background: var(--bg);
+}
+
+.bp-slot canvas {
+  display: block;
+  width: 56px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+
+/* ★ rare (lamp) or ✕ broken (wear), 10×10 in the top right corner. */
+.bp-mark {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  line-height: 0;
+}
+
+.bp-mark .ico {
+  width: 10px;
+  height: 10px;
+}
+
+.bp-broken {
+  color: var(--m-wear);
+}
+
+/* A new find: the frame lights for ~300 ms (action; a rare one in lamp), then back to line. */
+.bp-new {
+  animation: bp-new 300ms steps(1, end);
+}
+
+.bp-new-rare {
+  animation: bp-new-rare 300ms steps(1, end);
+}
+
+@keyframes bp-new {
+  from {
+    border-color: var(--m-action);
+  }
+}
+
+@keyframes bp-new-rare {
+  from {
+    border-color: var(--m-rare);
+  }
+}
+
+/* The drone took it: the slot stays, outlined in risk at ≈ 0.43, until the visit ends. */
+.bp-gone {
+  border-color: transparent;
+}
+
+.bp-gone::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border: 1px solid var(--m-risk);
+  opacity: 0.43;
+}
+
+/* …and the find itself: its frame blinks risk twice, then it flies up and is gone. */
+.bp-fly {
+  position: absolute;
+  inset: -1px;
+  padding: 1px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  animation: bp-fly 900ms linear forwards;
+}
+
+@keyframes bp-fly {
+  0%,
+  19%,
+  40%,
+  59% {
+    border-color: var(--m-risk);
+    transform: none;
+    opacity: 1;
+  }
+  20%,
+  39% {
+    border-color: var(--line);
+  }
+  100% {
+    border-color: var(--m-risk);
+    transform: translateY(-48px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bp-new,
+  .bp-new-rare {
+    animation: none;
+  }
+
+  .bp-fly {
+    display: none;
+  }
+}
+
 .nword {
   font-size: var(--fs-px-m);
   font-weight: normal;
@@ -1706,6 +1849,7 @@ html.desk body {
 /* The tabs, a second way to the windows besides the hotspots and the 1/2/3 keys. */
 .desk .tabs {
   position: absolute;
+  z-index: 1;
   right: 52px;
   bottom: 0;
   height: var(--hud-height);
@@ -1721,8 +1865,15 @@ html.desk body {
   border-bottom-width: 2px;
 }
 
-.desk .tab:hover {
+/* Over the HUD plate (task 29: they were under it, z-index above), the idle ones in fg at 0.7:
+   contrast ≥ 4.5 on the plate even over the lightest scene colours (dim gives 3.5 there). */
+.desk .tab:not(.on) {
   color: var(--fg);
+  opacity: 0.7;
+}
+
+.desk .tab:hover {
+  opacity: 1;
 }
 
 /* The window is the pane: its own content, without the pane's padding. */

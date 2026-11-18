@@ -118,7 +118,9 @@ async function snapshot(page, deep) {
     // (V2.4) the bench took the stock's place in the window and the shelf is gone.
     const bench = document.getElementById('modal').hidden ? __benchView() : null;
     const inBench = el => !bench || bench.root.contains(el);
-    const icons = [...document.querySelectorAll('canvas:not(#scn):not([data-face])')].filter(shown).filter(inBench).map(c => c.toDataURL()).sort();
+    // PARITY_IGNORE: an element new on purpose is left out of the icons too (the junkyard backpack, task 29)
+    const kept = el => !(ignore && el.closest(ignore));
+    const icons = [...document.querySelectorAll('canvas:not(#scn):not([data-face])')].filter(shown).filter(inBench).filter(kept).map(c => c.toDataURL()).sort();
     const canv = skipScene === 'all' ? [] : [...(skipScene ? [] : [scene.toDataURL()]), ...icons];
     const app = document.getElementById('app').cloneNode(true);
     app.querySelectorAll('.fx').forEach(n => n.remove());

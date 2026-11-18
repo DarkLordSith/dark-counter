@@ -34,6 +34,26 @@ describe('main action table', () => {
     }
   });
 
+  it('the morning (task 29): the same call reads "Открыть лавку" on any tab', () => {
+    makeState({ slot: 0 });
+    for (const tab of ['deal', 'inv', 'craft'] as const) {
+      expect(mainAction(state, actor, tab, { morning: true })).toEqual({ kind: 'button', action: 'openshop', label: ACTION_TEXT.ru.openShop, tone: 'action' });
+    }
+    // nobody to call (the counter is busy): no morning button
+    state.cust = makeSeller();
+    actorAtCounter(1);
+    expect(barAction(state, actor, 'deal', { morning: true })).toBe('offer');
+  });
+
+  it('a customer waits while a Mac window shows the stock: "нажмите на него" (task 29)', () => {
+    makeState();
+    state.cust = makeSeller();
+    actorAtCounter(1);
+    expect(mainAction(state, actor, 'inv', { desk: true })).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.toCounterDesk });
+    expect(mainAction(state, actor, 'craft', { desk: true })).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.toCounterDesk });
+    expect(mainAction(state, actor, 'inv')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.toCounter });
+  });
+
   it('the queue is over → "Закрыть лавку"', () => {
     makeState({ slot: CUSTOMERS_PER_DAY, day: 3, nextDue: 7 });
     expect(action()).toBe('closeshop');
@@ -128,7 +148,7 @@ describe('one main button per screen', () => {
       expect(indexHtml, moved).not.toMatch(asButton);
     }
     // Grobov's chosen option leaves the list (rentOptions), "Нет такого" leaves the buyer pane
-    expect(uiTs).toMatch(/function rentOptions[\s\S]*?barAction\(state, actor, 'deal'\)/);
+    expect(uiTs).toMatch(/function rentOptions[\s\S]*?barAction\(state, actor, 'deal', barContext\(\)\)/);
     expect(uiTs).not.toContain('Нет такого, до свидания');
     // junkyard v2: "Вернуться домой" is a secondary pane button only while "Копать" holds the bar
     expect(uiTs).toMatch(/const homeButton = visit\.d > 0 \? `<button class="btn" data-a="home">/);
