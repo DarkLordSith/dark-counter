@@ -11,6 +11,8 @@ import {
 } from './data';
 import { byId, maybeById } from './dom';
 import { iconSvg } from './icons';
+import { isRareItem, isRareLine, starSvg } from './star';
+import type { StarKind } from './star';
 import { closeWindow, initWindows, isWindowOpen, openWindow, relayoutWindow, updateWindow } from './window';
 import { DESK_QUERY, stageFit } from './layout';
 import { benchNav, benchOffer, benchOrder, filterStock, STOCK_FILTERS, successor } from './stock';
@@ -59,6 +61,9 @@ function iconCanvas(type: ItemType, cssClass = '', infected = false): string {
 
 function itemTags(item: Item): string {
   const tags: string[] = [];
+  if (isRareItem(item)) {
+    tags.push(`<span class="tag m-rare">${starSvg('rare')} ${STOCK_TEXT.ru.legend.rare}</span>`);
+  }
   tags.push(item.k.cond ? `<span class="tag ${item.cond < 40 ? 'm-wear' : ''}">${item.cond}%</span>` : '<span class="tag m-unknown">сост. ?</span>');
   if (item.k.serial) {
     tags.push(item.stolen ? '<span class="tag m-risk">краденое</span>' : '<span class="tag m-action">чистый №</span>');
@@ -84,6 +89,8 @@ function itemTags(item: Item): string {
 /** Colored corner dots on an inventory tile. */
 /** Status marks on a shelf tile; the legend under the shelf uses the same ones. */
 const DOT = {
+  /** ★ 5×5 drawn 2× (10×10 px): a rare junkyard find (V2.6). */
+  rare: `<i class="d-rare">${starSvg('rare')}</i>`,
   unknown: '<i class="d-unknown">?</i>',
   risk: '<i class="d-risk"></i>',
   wear: '<i class="d-wear"></i>',
@@ -91,6 +98,9 @@ const DOT = {
 
 function itemDots(item: Item): string {
   const dots: string[] = [];
+  if (isRareItem(item)) {
+    dots.push(DOT.rare);
+  }
   if (!isFullyKnown(item)) {
     dots.push(DOT.unknown);
   }
@@ -154,6 +164,9 @@ function renderHud(): void {
 /** Screen-reader text of the wanted-level meter drawn on the scene ("розыск 3 из 10"). */
 const heatText = (): string => `${HUD.heat} ${state.heat} ${HUD.of} ${MAX_HEAT}`;
 
+/** A log line as shown: a rare find gets the star (the saved log stays plain text). */
+const logLine = (line: string): string => isRareLine(line) ? `${starSvg('rare')} ${line}` : line;
+
 /** The log the ticker showed last: a different array means a new line (see renderSceneOverlay). */
 let shownLog: string[] | null = null;
 
@@ -166,8 +179,14 @@ export function renderSceneOverlay(): void {
     bubble.hidden = false;
     bubble.textContent = state.jmsg;
     bubble.classList.add('free');
+    // a rare find: the star and a lamp frame instead of the turquoise one (V2.6)
+    const rare = isRareLine(state.jmsg);
+    bubble.classList.toggle('rare', rare);
+    if (rare) {
+      bubble.insertAdjacentHTML('afterbegin', `${starSvg('rare')} `);
+    }
   } else {
-    bubble.classList.remove('free');
+    bubble.classList.remove('free', 'rare');
     bubble.hidden = !atCounter;
     if (atCounter) {
       bubble.textContent = customer.msg;
@@ -177,7 +196,7 @@ export function renderSceneOverlay(): void {
   const night = chipIsNight(state);
   byId('chip').innerHTML = chipLines(state).map((line, i) => `<span${i === 0 && night ? ' class="m-wear"' : ''}>${line}</span>`).join('');
   const ticker = byId('ticker');
-  ticker.innerHTML = `<b>›</b> ${state.log[0] || ''}`;
+  ticker.innerHTML = `<b>›</b> ${logLine(state.log[0] || '')}`;
   // addLog(state, ) makes a new array: a new line arrived, even if its text repeats the last one
   if (state.log !== shownLog) {
     if (shownLog) {
@@ -453,7 +472,7 @@ function inventoryPane(): string {
   const shelf = items.length ? `<div class="shelf stock">${items.map(stockTile).join('')}</div>` : `<div class="hint">${STOCK_UI.emptyFilter}</div>`;
   const legend = STOCK_UI.legend;
   return `${filterChips()}${shelf}
-  <div class="legend"><span>${DOT.unknown}${legend.unknown}</span><span>${DOT.risk}${legend.risk}</span><span>${DOT.wear}${legend.wear}</span></div>`;
+  <div class="legend">${state.inv.some(isRareItem) ? `<span>${DOT.rare}${legend.rare}</span>` : ''}<span>${DOT.unknown}${legend.unknown}</span><span>${DOT.risk}${legend.risk}</span><span>${DOT.wear}${legend.wear}</span></div>`;
 }
 
 function benchButton(action: keyof typeof BENCH_COST & keyof typeof STOCK_UI.actions, enabled: boolean): string {
@@ -684,10 +703,13 @@ export function render(): void {
    ===================================================================== */
 
 /** Floating "+120" style number over the scene. */
-function showFloatingText(text: string, color: string): void {
+function showFloatingText(text: string, color: string, star?: StarKind): void {
   const element = document.createElement('div');
   element.className = 'fx';
   element.textContent = text;
+  if (star) {
+    element.insertAdjacentHTML('afterbegin', starSvg(star, 4)); // 20×20 px, the size of the 16 px numbers
+  }
   element.style.color = color;
   byId('stage').appendChild(element);
   setTimeout(() => element.remove(), FLOATING_TEXT_LIFETIME_MS);
@@ -695,7 +717,7 @@ function showFloatingText(text: string, color: string): void {
 
 /** Shows floating numbers queued by the game rules. */
 function flushFeedback(): void {
-  feedback.floats.splice(0).forEach(({ text, color }) => showFloatingText(text, color));
+  feedback.floats.splice(0).forEach(({ text, color, star }) => showFloatingText(text, color, star));
 }
 
 /** One window at a time; the Mac tab window (non-modal, the game itself) stays under a modal. */
@@ -907,7 +929,7 @@ async function loadSaveCode(): Promise<void> {
 }
 
 function openLog(): void {
-  openModal('Лента', `<ul>${state.log.map(line => `<li>${line}</li>`).join('')}</ul>`, CLOSE_BUTTON);
+  openModal('Лента', `<ul>${state.log.map(line => `<li>${logLine(line)}</li>`).join('')}</ul>`, CLOSE_BUTTON);
 }
 
 /* =====================================================================

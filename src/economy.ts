@@ -20,6 +20,7 @@ import { customersToday, formatHour, openingHour, weekdayOf } from './day';
 import { addLog, createItem, findItem, fullKnowledge, randomLandlordSlot } from './state';
 import { pickRandom, randomBetween, randomInt, randomSeed } from './rng';
 import type { Rng } from './rng';
+import type { StarKind } from './star';
 import type {
   BuyerCustomer, Ending, GameState, InspectCheck, Item, ItemType, JunkVisit, PresentedBuyer, Recipe, SellerCustomer,
 } from './types';
@@ -36,12 +37,14 @@ const DAY_WORDS = DAY_TEXT.ru;
 export interface FloatingText {
   text: string;
   color: string;
+  /** A pixel star drawn before the text (a rare find). */
+  star?: StarKind;
 }
 
 export const feedback: { floats: FloatingText[] } = { floats: [] };
 
-function floatText(text: string, color: string): void {
-  feedback.floats.push({ text, color });
+function floatText(text: string, color: string, star?: StarKind): void {
+  feedback.floats.push(star ? { text, color, star } : { text, color });
 }
 
 /* =====================================================================
@@ -731,10 +734,10 @@ function rollLoot(state: GameState, visit: JunkVisit, rng: Rng): DigResult {
   roll -= rareChance(visit.dp - 1);
   if (roll < 0) {
     const type = pickRandom(rng, RARE_FINDS);
-    const item = createItem(state, type, { cond: randomInt(rng, DIG_LOOT.rareCondMin, DIG_LOOT.rareCondMax), stolen: false }, rng);
+    const item = createItem(state, type, { cond: randomInt(rng, DIG_LOOT.rareCondMin, DIG_LOOT.rareCondMax), stolen: false, rare: true }, rng);
     state.inv.push(item);
     visit.f.push(item.uid);
-    floatText('★', MEANING.action); // a rare find
+    floatText('', MEANING.rare, 'rare'); // a rare find: the pixel ★, not a font glyph
     return { kind: 'rare', message: fill(JUNK_WORDS.rare, { name: itemName(type) }) };
   }
   return { kind: 'empty', message: JUNK_WORDS.empty };

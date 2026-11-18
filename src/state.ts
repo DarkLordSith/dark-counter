@@ -107,6 +107,8 @@ export interface ItemOverrides {
   infected?: boolean;
   /** Everything about the item is known. */
   known?: boolean;
+  /** A rare junkyard find: the item keeps the ★ mark. */
+  rare?: boolean;
 }
 
 /** New item of a game (takes its next uid); unspecified properties are rolled randomly (in this order). */
@@ -122,6 +124,10 @@ export function createItem(game: GameState, type: ItemType, overrides: ItemOverr
   };
   if (overrides.known) {
     item.k = fullKnowledge();
+  }
+  // only rare finds get the field: other items save exactly as before
+  if (overrides.rare) {
+    item.rare = true;
   }
   return item;
 }
@@ -256,6 +262,7 @@ export function migrate(data: SavedGame | null, rng: Rng = gameRng): GameState |
   // today keeps 6, the station week starts from the next morning.
   data.cn ??= CUSTOMERS_PER_DAY;
   data.late ??= 0;
+  // V2.6: items without `rare` are ordinary (the field is optional, nothing to fill in).
   // Before modes every save was the story; an unknown or locked mode is read as story too.
   if (!(PLAYABLE_MODES as readonly unknown[]).includes(data.mode)) {
     data.mode = 'story';

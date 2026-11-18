@@ -114,6 +114,8 @@ export const MEANING = {
   inactive: withAlpha(BASE.dim, 0.4),
   /** The gut feeling (Чуйка). */
   hunch: BASE.hunch,
+  /** Rare: rare junkyard finds, the ★ mark (V2.6). Turquoise no longer means "rare". */
+  rare: BASE.lamp,
 };
 
 /* =====================================================================
@@ -315,6 +317,7 @@ export const CSS_TOKENS: Readonly<Record<string, string>> = {
   '--m-unknown': MEANING.unknown,
   '--m-inactive': MEANING.inactive,
   '--m-hunch': MEANING.hunch,
+  '--m-rare': MEANING.rare,
 };
 
 /** `:root { --bg: #12151c; … }` for the <style> tag in index.html. */

@@ -41,8 +41,8 @@ const DECOR = [
 ];
 
 describe('meaning tokens', () => {
-  it('cover the seven meanings and reach CSS as --m-*', () => {
-    expect(Object.keys(MEANING).sort()).toEqual(['action', 'hunch', 'inactive', 'ok', 'risk', 'unknown', 'wear']);
+  it('cover the eight meanings and reach CSS as --m-*', () => {
+    expect(Object.keys(MEANING).sort()).toEqual(['action', 'hunch', 'inactive', 'ok', 'rare', 'risk', 'unknown', 'wear']);
     for (const [name, color] of Object.entries(MEANING)) {
       expect(CSS_TOKENS[`--m-${name}`]).toBe(color);
     }
