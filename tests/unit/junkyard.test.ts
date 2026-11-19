@@ -129,11 +129,13 @@ describe('what a dig gives (seeded)', () => {
     expect(condMax).toBeLessThanOrEqual(30);
   });
 
-  it('a visit before midnight brings about 6 items', () => {
+  it('a visit before midnight (four digs) brings about 5 items', () => {
     const visits = 1000;
     const { items } = tally(2, visits);
-    expect(items / visits).toBeGreaterThan(5.5);
-    expect(items / visits).toBeLessThan(6.5);
+    // 4 digs × (1 − empty) × the average 1–3 items (task 36: empty 20% → ≈ 5.3)
+    const expected = 4 * (1 - DIG_ODDS.empty) * DIG_ODDS.items.reduce((sum, odds, i) => sum + odds * (i + 1), 0);
+    expect(items / visits).toBeGreaterThan(expected - 0.5);
+    expect(items / visits).toBeLessThan(expected + 0.5);
   });
 
   it('★ — 4% a find, +2% for every dig deeper', () => {

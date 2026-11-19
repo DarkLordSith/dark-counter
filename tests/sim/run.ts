@@ -50,6 +50,7 @@ for (const name of names) {
     'находок продано за неделю, %': show(summary.junkSoldInWeek),
     'обычные продажи, кр./нед.': show(summary.saleIncomeWeek),
     'оптовик, кр./нед.': show(summary.bulkIncomeWeek),
+    'доля оптовика в доходе, %': show(summary.bulkShare),
     'оптовиков за игру': show(summary.bulkVisits),
     'вещей оптовику за игру': show(summary.bulkItems),
   });

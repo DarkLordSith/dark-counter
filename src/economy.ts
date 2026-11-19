@@ -11,7 +11,7 @@ import {
   ACCEPT, HUNCH_VERDICT, BENCH_COST, COLLATERAL,
   buyerShare, CRAFT_CONDITION_BONUS, CUSTOMER, DEBT, EXPENSES, DIG_LOOT, DIG_ODDS, EVENING_HOURS, HAGGLE, HUMAN_NAMES,
   INSPECT, ITEM_TYPES, itemGroup, JUNK, JUNK_WEIGHTS, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
-  RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SUPPLIER, VALUE, WHOLESALE, wholesaleShare,
+  RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SUPPLIER, VALUE, WHOLESALE, wholesaleChance,
 } from './data';
 import { itemRef, listLength, nameRef, say, tx } from './i18n';
 import type { ListKey, TextKey, Tx } from './i18n';
@@ -129,12 +129,6 @@ function currentBuyer(state: GameState): BuyerCustomer | null {
  */
 function createCustomer(state: GameState, forceSeller: boolean, rng: Rng): void {
   const isBuyer = !forceSeller && state.inv.length > 0 && rng() < buyerShare(state.inv.length);
-  // task 36: a share of the buyers to a full stock are wholesalers (no extra roll for a small stock: same games as before)
-  const share = isBuyer ? wholesaleShare(state.inv.length) : 0;
-  if (share > 0 && rng() < share) {
-    createWholesaler(state, rng);
-    return;
-  }
   const seed = randomSeed(rng);
   const appearance = appearanceFor(seed);
   const name = pickRandom(rng, appearance.kind === 'human' ? HUMAN_NAMES : ROBOT_NAMES);
@@ -295,6 +289,14 @@ export function callNextCustomer(state: GameState, rng: Rng): boolean {
   if (state.slot >= state.cn) {
     return false;
   }
+  // task 36: the wholesaler squeezes in between the customers once his turn comes; not a slot of the day
+  if (state.bk !== undefined && state.slot >= state.bk) {
+    delete state.bk;
+    if (state.inv.length >= WHOLESALE.minStock) {
+      createWholesaler(state, rng);
+      return true;
+    }
+  }
   // the very first visitor of a new game always sells, to teach the basics
   createCustomer(state, state.day === 1 && state.slot === 0, rng);
   return true;
@@ -325,9 +327,10 @@ function finishCustomer(state: GameState): void {
   if (!customer) {
     return;
   }
-  const wasLandlord = customer.kind === 'rent';
+  // Grobov and the wholesaler come on top of the day's customers: the queue and the clock stay
+  const extra = customer.kind === 'rent' || customer.kind === 'bulk';
   state.cust = null;
-  if (!wasLandlord) {
+  if (!extra) {
     state.slot++;
   }
 }
@@ -1016,6 +1019,18 @@ function spreadInfection(state: GameState, events: Tx[], rng: Rng): void {
   }
 }
 
+/**
+ * Task 36: will the wholesaler come today, and after how many customers. By the morning stock;
+ * no roll for a small stock (the games stay as before the wholesaler).
+ */
+function rollWholesaler(state: GameState, rng: Rng): void {
+  delete state.bk;
+  const chance = wholesaleChance(state.inv.length);
+  if (chance > 0 && rng() < chance) {
+    state.bk = randomInt(rng, 0, state.cn - 1);
+  }
+}
+
 function startNewDay(state: GameState, rng: Rng): void {
   state.day++;
   state.slot = 0;
@@ -1126,6 +1141,7 @@ export function sleepUntilMorning(state: GameState, rng: Rng): MorningReport {
   const expenses = payExpenses(state);
   // the morning's heat (after the night and a raid) and last night's digs decide today's customers
   state.cn = customersToday(state).count;
+  rollWholesaler(state, rng);
   // the late opening goes to the log only: the morning window already lists it as a reason
   if (state.late > 0) {
     addLog(state, tx('day.overslept', { n: state.late * JUNK.lateCustomerLoss }));

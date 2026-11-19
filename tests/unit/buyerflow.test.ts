@@ -13,8 +13,7 @@ function buyersAmong(stock: number, visits: number): number {
     const inv = Array.from({ length: stock }, (_, uid) => makeItem('battery', { uid: uid + 1 }));
     const game = makeState({ day: 3, slot: 0, cn: 6, llDone: true, inv });
     callNextCustomer(game, rng);
-    // task 36: a wholesaler is a buyer too (his share is taken out of the buyers)
-    buyers += game.cust?.kind === 'buy' || game.cust?.kind === 'bulk' ? 1 : 0;
+    buyers += game.cust?.kind === 'buy' ? 1 : 0;
   }
   return buyers / visits;
 }

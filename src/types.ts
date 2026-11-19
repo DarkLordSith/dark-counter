@@ -204,6 +204,9 @@ export interface GameState {
   llAt: number;
   /** Landlord already visited today ("landlord done"). */
   llDone: boolean;
+  /** Task 36: the wholesaler comes today after this many customers ("bulk"), on top of `cn`: rolled in the
+   *  morning, removed once he came (or the stock was too small by then). Absent = not today. */
+  bk?: number;
   /** Father's debt to Grobov left; weekly and early payments reduce it, deferral fines add to it. */
   debt: number;
   /** A shuttle seat is bought. */

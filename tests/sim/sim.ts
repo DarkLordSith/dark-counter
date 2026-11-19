@@ -398,6 +398,8 @@ export interface SimSummary {
   /** Task 36: average income a week from ordinary sales and from the wholesaler, credits. */
   saleIncomeWeek: number | null;
   bulkIncomeWeek: number | null;
+  /** The wholesaler's share of the income from sales (ordinary + wholesale), % (PM 19.11: ≤ ~25). */
+  bulkShare: number | null;
   /** Wholesaler visits and items sold to him per game. */
   bulkVisits: number | null;
   bulkItems: number | null;
@@ -443,6 +445,7 @@ export function summarize(strategy: string, results: GameResult[]): SimSummary {
     valuePerVisit: visits ? Math.round(results.reduce((sum, r) => sum + r.junkValue, 0) / visits) : null,
     saleIncomeWeek: mean(results.map(r => r.saleIncome * 7 / r.day)),
     bulkIncomeWeek: mean(results.map(r => r.bulkIncome * 7 / r.day)),
+    bulkShare: share(results.reduce((sum, r) => sum + r.bulkIncome, 0), results.reduce((sum, r) => sum + r.saleIncome + r.bulkIncome, 0)),
     bulkVisits: perUnit(results.reduce((sum, r) => sum + r.bulkVisits, 0), results.length),
     bulkItems: perUnit(results.reduce((sum, r) => sum + r.bulkSold, 0), results.length),
     junkSoldInWeek: finds ? share(results.reduce((sum, r) => sum + r.junkSoldInWeek, 0), finds) : null,
