@@ -363,6 +363,27 @@ export const EN: Dict = {
     wanted: 'Heat {n}/{max} — rises with stolen goods',
   },
   window: { close: 'Close window' },
+  /** The wholesaler (task 36). */
+  bulk: {
+    groups: { tech: 'electronics', gear: 'hardware' }, // draft
+    kind: 'bulk', // draft
+    head: 'Wholesaler · {group} · budget {n}', // draft
+    asIs: 'As is, no checks: {share}% of estimate, max {max} items.', // draft
+    total: 'Total {x} / {n}', // draft
+    heat: 'heat +{n}', // draft
+    sell: 'Sell for {n} cr.', // draft
+    pick: 'Pick items for the wholesaler', // draft
+    refuse: 'Turn down', // draft
+    noStock: 'None of his goods left in stock.', // draft
+    wants: 'Bulk: {group}, budget {n} cr.', // draft
+    tooMuch: "Nope, that's over my budget.", // draft
+    enough: "That's it. Can't carry more than {n}.", // draft
+    sold: 'Bulk sale: {items} for {n} cr. ({name}).{stolen}{ai}', // draft
+    greet: {
+      tech: ['Buying electronics in bulk. As is, no checks.', 'Load me up with electronics. Budget: {n} cr.', 'For parts: any electronics, by the lot.'], // draft
+      gear: ["Buying hardware in bulk. Condition doesn't matter.", 'Buying hardware for scrap. Budget: {n} cr.', "Any hardware you can spare — I'll take the lot."], // draft
+    },
+  },
   stock: {
     filters: { all: 'All', tech: 'Electronics', gear: 'Hardware', stolen: 'Stolen' },
     filtersLabel: 'Stock filter',

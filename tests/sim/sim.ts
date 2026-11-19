@@ -9,11 +9,12 @@ import {
   askBuyer, buySeat, callNextCustomer, canBuySeat, canCraft, canGoToJunkyard, craft, canVisitMarket, closeShop, customerLeaves, deferRent, dig,
   digIsLate, estimatedValue, evict, feedback, goHome, goToJunkyard, inspect, isPresentedBuyer, offerToSeller, payEarly, payRent,
   leaveWaiting, payWithCollateral, perceivedChance, planCollateral, presentItem, sleepUntilMorning, throwAway, useWorkbench, visitMarket, waitingFinds,
+  bulkPrice, bulkStock, canSellBatch, sellBatch, setDiscount, toggleCart,
 } from '../../src/economy';
 import { mulberry32 } from '../../src/rng';
 import type { Rng } from '../../src/rng';
 import { createGame } from '../../src/state';
-import type { BuyerCustomer, Ending, GameState, InspectCheck, Item, SellerCustomer } from '../../src/types';
+import type { BuyerCustomer, Ending, GameState, InspectCheck, Item, SellerCustomer, WholesaleCustomer } from '../../src/types';
 
 /** How a bot plays. */
 export interface Strategy {
@@ -73,13 +74,33 @@ export interface GameResult {
   junkVisits: number;
   junkFinds: number;
   junkValue: number;
+  /** Task 36: credits from ordinary sales and from the wholesaler, items sold to him, his visits. */
+  saleIncome: number;
+  bulkIncome: number;
+  bulkSold: number;
+  bulkVisits: number;
+  /** Junkyard finds sold (to anyone) within a week of being dug up. */
+  junkSoldInWeek: number;
 }
 
 /** The owner's playtest (16.11) stopped on day 36: the owner strategy is calibrated there. */
 export const CHECK_DAY = 36;
 
 /** What one game counts while it is played (the rules return the bought item; a sale empties a stock slot). */
-interface Tally { bought: number; sold: number; junkVisits: number; junkFinds: number; junkValue: number }
+interface Tally {
+  bought: number; sold: number; junkVisits: number; junkFinds: number; junkValue: number;
+  saleIncome: number; bulkIncome: number; bulkSold: number; bulkVisits: number; junkSoldInWeek: number;
+  /** Day each junkyard find was dug up, by uid (the "sold within a week" metric). */
+  dugOn: Map<number, number>;
+}
+
+/** An item left the stock as a sale: counts a junkyard find sold within a week. */
+function noteSale(state: GameState, item: Item, tally: Tally): void {
+  const day = tally.dugOn.get(item.uid);
+  if (day !== undefined && state.day - day <= 7) {
+    tally.junkSoldInWeek++;
+  }
+}
 
 const PRICE_STEP = 5;
 
@@ -141,13 +162,48 @@ function handleBuyer(state: GameState, customer: BuyerCustomer, strategy: Strate
   }
   presentItem(state, stock[0].uid);
   const stocked = state.inv.length;
+  const credits = state.credits;
   for (let tries = 0; state.cust === customer && tries < MAX_TRIES; tries++) {
     askBuyer(state, bestAsk(customer, strategy.sellChance), rng);
   }
   tally.sold += stocked - state.inv.length;
+  if (state.inv.length < stocked) {
+    tally.saleIncome += state.credits - credits;
+    noteSale(state, stock[0], tally);
+  }
   if (state.cust === customer) {
     customerLeaves(state);
   }
+}
+
+/** Fills the wholesaler's basket with `off` discount: the cheapest items first (the most items leave the shelf). */
+function fillCart(state: GameState, customer: WholesaleCustomer, off: number): void {
+  customer.cart.slice().forEach(uid => toggleCart(state, uid));
+  if (customer.off !== off) {
+    setDiscount(state, off || customer.off);
+  }
+  for (const item of bulkStock(state, customer).sort((a, b) => bulkPrice(a) - bulkPrice(b))) {
+    toggleCart(state, item.uid); // refuses what does not fit the budget or the batch
+  }
+}
+
+/** Task 36: sells a batch; takes −10% when fewer than two items fit without it. */
+function handleWholesaler(state: GameState, customer: WholesaleCustomer, tally: Tally): void {
+  tally.bulkVisits++;
+  fillCart(state, customer, 0);
+  if (customer.cart.length < 2) {
+    fillCart(state, customer, 10);
+  }
+  if (!canSellBatch(state)) {
+    customerLeaves(state);
+    return;
+  }
+  const credits = state.credits;
+  const items = sellBatch(state);
+  tally.bulkIncome += state.credits - credits;
+  tally.bulkSold += items.length;
+  tally.sold += items.length;
+  items.forEach(item => noteSale(state, item, tally));
 }
 
 function handleLandlord(state: GameState): void {
@@ -171,6 +227,8 @@ function playShop(state: GameState, strategy: Strategy, rng: Rng, tally: Tally):
       handleBuyer(state, customer, strategy, rng, tally);
     } else if (customer?.kind === 'rent') {
       handleLandlord(state);
+    } else if (customer?.kind === 'bulk') {
+      handleWholesaler(state, customer, tally);
     }
   }
   if (!state.over) {
@@ -233,6 +291,7 @@ function playEvening(state: GameState, strategy: Strategy, rng: Rng, tally: Tall
       keepBestFinds(state);
     }
     const finds = state.inv.filter(item => state.junk?.f.includes(item.uid));
+    finds.forEach(item => tally.dugOn.set(item.uid, state.day));
     tally.junkVisits++;
     tally.junkFinds += finds.length;
     tally.junkValue += finds.reduce((sum, item) => sum + realValue(item), 0);
@@ -261,12 +320,16 @@ export function playGame(seed: number, strategy: Strategy): GameResult {
 export function playGameWithState(seed: number, strategy: Strategy): { result: GameResult; state: GameState } {
   const rng = mulberry32(seed);
   const state = createGame('story', rng);
-  const result: GameResult = { seed, ending: null, day: 1, debtClosedDay: null, weeklyCredits: [], weeklyDebt: [], bought: 0, sold: 0, checkDay: null, morningStock: [], junkVisits: 0, junkFinds: 0, junkValue: 0 };
+  const result: GameResult = {
+    seed, ending: null, day: 1, debtClosedDay: null, weeklyCredits: [], weeklyDebt: [], bought: 0, sold: 0, checkDay: null, morningStock: [],
+    junkVisits: 0, junkFinds: 0, junkValue: 0, saleIncome: 0, bulkIncome: 0, bulkSold: 0, bulkVisits: 0, junkSoldInWeek: 0,
+  };
+  const tally: Tally = { ...result, dugOn: new Map() };
   while (!state.over && state.day <= DEBT.shuttleDay) {
     result.morningStock.push(state.inv.length);
-    playShop(state, strategy, rng, result);
+    playShop(state, strategy, rng, tally);
     if (!state.over) {
-      playEvening(state, strategy, rng, result);
+      playEvening(state, strategy, rng, tally);
     }
     if (result.debtClosedDay === null && state.debt === 0) {
       result.debtClosedDay = state.day;
@@ -282,6 +345,9 @@ export function playGameWithState(seed: number, strategy: Strategy): { result: G
       sleepUntilMorning(state, rng);
     }
     feedback.floats.length = 0; // nobody shows the floating numbers here
+  }
+  for (const key of ['bought', 'sold', 'junkVisits', 'junkFinds', 'junkValue', 'saleIncome', 'bulkIncome', 'bulkSold', 'bulkVisits', 'junkSoldInWeek'] as const) {
+    result[key] = tally[key];
   }
   result.ending = state.ending;
   result.day = state.day;
@@ -329,6 +395,14 @@ export interface SimSummary {
   /** Average junkyard visit: items brought home and their estimated value, credits. */
   findsPerVisit: number | null;
   valuePerVisit: number | null;
+  /** Task 36: average income a week from ordinary sales and from the wholesaler, credits. */
+  saleIncomeWeek: number | null;
+  bulkIncomeWeek: number | null;
+  /** Wholesaler visits and items sold to him per game. */
+  bulkVisits: number | null;
+  bulkItems: number | null;
+  /** Share of junkyard finds sold within a week of being dug up, %. */
+  junkSoldInWeek: number | null;
 }
 
 /** Credits earned plus debt paid off, per full week played. */
@@ -347,6 +421,7 @@ export function summarize(strategy: string, results: GameResult[]): SimSummary {
   const bought = results.reduce((sum, r) => sum + r.bought, 0);
   const sold = results.reduce((sum, r) => sum + r.sold, 0);
   const visits = results.reduce((sum, r) => sum + r.junkVisits, 0);
+  const finds = results.reduce((sum, r) => sum + r.junkFinds, 0);
   const week = (pick: (r: GameResult) => number[], i: number): number | null =>
     mean(results.filter(r => pick(r).length > i).map(r => pick(r)[i]));
   return {
@@ -366,6 +441,11 @@ export function summarize(strategy: string, results: GameResult[]): SimSummary {
     morningStock: perUnit(results.reduce((sum, r) => sum + r.morningStock.reduce((a, b) => a + b, 0), 0), results.reduce((sum, r) => sum + r.morningStock.length, 0)),
     findsPerVisit: perUnit(results.reduce((sum, r) => sum + r.junkFinds, 0), visits),
     valuePerVisit: visits ? Math.round(results.reduce((sum, r) => sum + r.junkValue, 0) / visits) : null,
+    saleIncomeWeek: mean(results.map(r => r.saleIncome * 7 / r.day)),
+    bulkIncomeWeek: mean(results.map(r => r.bulkIncome * 7 / r.day)),
+    bulkVisits: perUnit(results.reduce((sum, r) => sum + r.bulkVisits, 0), results.length),
+    bulkItems: perUnit(results.reduce((sum, r) => sum + r.bulkSold, 0), results.length),
+    junkSoldInWeek: finds ? share(results.reduce((sum, r) => sum + r.junkSoldInWeek, 0), finds) : null,
   };
 }
 

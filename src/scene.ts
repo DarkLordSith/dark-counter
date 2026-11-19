@@ -624,7 +624,8 @@ function drawShop(now: number): void {
   if (look && actor.phase === 'idle') {
     drawHands(Math.round(actor.x), look);
     const customer = state.cust;
-    if (customer && customer.kind !== 'rent' && customer.item) {
+    // the wholesaler (task 36) puts nothing on the counter: his batch is in the pane
+    if (customer && (customer.kind === 'sell' || customer.kind === 'buy') && customer.item) {
       drawItem(customer.item.t, COUNTER_X, 68, now, customer.item.k.flaw && customer.item.infected);
       drawScanLine(now);
     }

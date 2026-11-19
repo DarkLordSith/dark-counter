@@ -172,6 +172,45 @@ export function buyerShare(stock: number): number {
   return fewShare + (manyShare - fewShare) * t;
 }
 
+/**
+ * Item groups a wholesaler asks for (task 36). Until B1 there are two, by the catalog's `electronic`
+ * flag; B1 swaps this one function for the item categories. The stock filters use the same groups.
+ */
+export const ITEM_GROUPS = ['tech', 'gear'] as const;
+export type ItemGroup = (typeof ITEM_GROUPS)[number];
+export const itemGroup = (type: ItemType): ItemGroup => (ITEM_TYPES[type].electronic ? 'tech' : 'gear');
+
+/**
+ * The wholesaler (task 36, a piece of patch B2): takes a batch of one group "as is", at a share of the
+ * estimate, within a budget. Comes only to a full stock, as a share of the buyers (on top of BUYER_FLOW).
+ * Временный баланс 19.11, пересчитать после B1.
+ */
+export const WHOLESALE = {
+  /** Never comes to a smaller stock. */
+  minStock: 5,
+  /** Share among the buyers: `few` from minStock, `many` from `manyFrom` items (the task: 20% / 35%; the bot: 35% left 10.4 items in the morning). */
+  fewShare: 0.2,
+  manyFrom: 8,
+  manyShare: 0.4,
+  /** Price of an item: this share of its estimate (estimatedValue), no checks (the task: 75%; the bot: 80% gets the owner off in 60–80%). */
+  priceShare: 0.8,
+  /** Budget = budgetItems × the average estimate of the group in stock × priceShare, ± budgetSpread. */
+  budgetItems: 3,
+  budgetSpread: 0.25,
+  /** Items in one batch at most. */
+  maxItems: 5,
+  /** Discount buttons on the whole basket, %. */
+  discounts: [10, 20],
+} as const;
+
+/** Chance that a buyer is a wholesaler, by the number of items in stock. */
+export function wholesaleShare(stock: number): number {
+  if (stock < WHOLESALE.minStock) {
+    return 0;
+  }
+  return stock >= WHOLESALE.manyFrom ? WHOLESALE.manyShare : WHOLESALE.fewShare;
+}
+
 export const CUSTOMER = {
   buyerWantsStockedChance: 0.7,
   patienceMin: 4,

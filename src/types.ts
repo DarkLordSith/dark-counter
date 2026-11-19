@@ -5,7 +5,7 @@
 //  DC1: codes). Short field names are kept on purpose: renaming them
 //  would break old saves. When a field changes, upgrade it in migrate().
 // =====================================================================
-import type { ITEM_TYPES, MODES } from './data';
+import type { ITEM_TYPES, ItemGroup, MODES } from './data';
 import type { Lang } from './i18n';
 import type { RU } from './lang/ru';
 
@@ -110,7 +110,23 @@ export interface RentCustomer extends CustomerBase {
   kind: 'rent';
 }
 
-export type Customer = SellerCustomer | BuyerCustomer | RentCustomer;
+/**
+ * The wholesaler (task 36): buys a batch of one group at once, "as is", within a budget; no haggling.
+ * The basket and the discount are in the save, so a reload keeps the batch on the counter.
+ */
+export interface WholesaleCustomer extends CustomerBase {
+  kind: 'bulk';
+  /** Group of goods asked for ("group"): itemGroup() of data.ts. */
+  grp: ItemGroup;
+  /** Budget for the whole batch, credits ("budget"). */
+  bud: number;
+  /** Uids of the stocked items put in the basket. */
+  cart: number[];
+  /** Discount on the whole basket, % ("off"): 0 or one of WHOLESALE.discounts. */
+  off: number;
+}
+
+export type Customer = SellerCustomer | BuyerCustomer | RentCustomer | WholesaleCustomer;
 
 /* ---------- game state (= save format) ---------- */
 

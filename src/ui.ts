@@ -8,7 +8,7 @@ import { customersToday, formatHour, openingHour } from './day';
 import { audio, playSfx, setJunkAmbience, startSoundOnGesture, toggleMusic, toggleSfx } from './audio';
 import {
   BENCH_COST, DEBT, JUNK, HAGGLE, ITEM_TYPES, MARKET, MAX_HEAT, MODES,
-  PLAYABLE_MODES, RECIPES, RENT, SUPPLIER,
+  PLAYABLE_MODES, RECIPES, RENT, SUPPLIER, WHOLESALE,
 } from './data';
 import { customerNameText, detectLang, getLang, isLang, itemName, LANGS, setLang, t, text as textOf, tx } from './i18n';
 import type { Lang, Tx } from './i18n';
@@ -31,6 +31,7 @@ import {
   canGoToJunkyard, digIsLate, goHome, goToJunkyard, hunchVerdict, junkVisitHours, leaveWaiting, throwAway, waitingFinds, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer,
   nextRent, offerToSeller, orderParts, payEarly, payRent, payWithCollateral, perceivedChance, planCollateral, presentItem,
   expenseLines, recipeNeeds, scrapValue, seatPrice, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
+  bulkPrice, bulkStock, canSetDiscount, cartItems, cartTotal, fitsCart, sellBatch, setDiscount, toggleCart,
 } from './economy';
 import type { CollateralPlan, MorningReport } from './economy';
 import { isPlayable, loadProfile, recordEnding, recordHotspotTap, saveProfile } from './profile';
@@ -39,7 +40,7 @@ import { isOnHeap, onSceneClick, paintIcons, playDigFx, pressHotspot, scenePoint
 import {
   actor, actorAtCounter, actorEnter, actorReset, addLog, exportSaveCode, findItem, importSaveCode, newGame, persistence, readSlot, saveGame, setState, state, ui,
 } from './state';
-import type { BuyerCustomer, Customer, GameState, InspectCheck, Item, ItemType, JunkVisit, Mode, Profile, Recipe, RentCustomer, SellerCustomer, StockFilter, Tab } from './types';
+import type { BuyerCustomer, Customer, GameState, InspectCheck, Item, ItemType, JunkVisit, Mode, Profile, Recipe, RentCustomer, SellerCustomer, StockFilter, Tab, WholesaleCustomer } from './types';
 import { roundTo10 } from './util';
 import { VERSION_LABEL } from './version';
 import { gameRng } from './rng';
@@ -262,7 +263,7 @@ function updateChanceMeter(): void {
     return;
   }
   // the price box exists only for a seller or a buyer who was shown an item
-  if (customer.kind === 'rent' || (customer.kind === 'buy' && !isPresentedBuyer(customer))) {
+  if (customer.kind === 'rent' || customer.kind === 'bulk' || (customer.kind === 'buy' && !isPresentedBuyer(customer))) {
     return;
   }
   const chance = perceivedChance(customer, readOffer(input));
@@ -478,6 +479,39 @@ function buyerPane(customer: BuyerCustomer): string {
         <button class="btn" data-a="refuse">${t('deal.refuse')}</button></div></div>`;
 }
 
+/** A tile of the wholesaler's grid: the one item tile with his price under it; in the basket — the `action` frame. */
+function bulkTile(customer: WholesaleCustomer, item: Item): string {
+  const inCart = customer.cart.includes(item.uid);
+  const fits = inCart || fitsCart(state, customer, item);
+  const label = `${itemName(item.t)}, ${conditionText(item)}, ${money(bulkPrice(item))}`;
+  return `<button class="tile stile ${inCart ? 'on' : ''} ${fits ? '' : 'nofit'}" data-a="cart" data-v="${item.uid}" aria-pressed="${inCart}" aria-label="${label}">${tileFace(item)}<span class="tv">${bulkPrice(item)}</span></button>`;
+}
+
+/**
+ * The wholesaler (task 36, screen variant A "the stock in pick mode"): the request in one line, the grid of
+ * the stocked items of his group (a tap — into the basket, again — out), "Итого X / N" with the heat the known
+ * stolen and AI items will bring, −10% / −20% and "Отказать". "Продать" is the main action of the bar.
+ */
+function bulkPane(customer: WholesaleCustomer): string {
+  const items = bulkStock(state, customer);
+  const head = `<div class="thead"><div><span class="cname">${customerName(customer)}</span><span class="kind bulk">${t('bulk.head', { group: t(`bulk.groups.${customer.grp}`), n: `<b class="price">${customer.bud}</b>` })}</span></div></div>`;
+  if (!items.length) {
+    return head + `<div class="hint">${t('bulk.noStock')}</div>`;
+  }
+  const cart = cartItems(state, customer);
+  const total = cartTotal(cart, customer.off);
+  const heat = cart.filter(item => item.k.serial && item.stolen).length + 2 * cart.filter(showsInfection).length;
+  const discounts = WHOLESALE.discounts.map(off => {
+    const on = customer.off === off;
+    return `<button class="btn disc ${on ? 'on' : ''}" data-a="disc" data-v="${off}" aria-pressed="${on}" ${disabledIf(!canSetDiscount(state, customer, on ? 0 : off))}>−${off}%</button>`;
+  }).join('');
+  const refuse = barAction(state, actor, 'deal', barContext()) === 'refuse' ? '' : `<button class="btn" data-a="refuse">${t('bulk.refuse')}</button>`;
+  return head + `<div class="shelf stock bulk-grid">${items.map(item => bulkTile(customer, item)).join('')}</div>
+    <div class="bulk-total"><span class="hint">${t('bulk.total', { x: `<b class="price ${cart.length ? 'm-action' : ''}">${total}</b>`, n: `<b class="price">${customer.bud}</b>` })}</span>${heat ? `<span class="m-risk">${t('bulk.heat', { n: heat })}</span>` : ''}</div>
+    <div class="acts bulk-acts">${discounts}${refuse}</div>
+    <div class="hint note">${t('bulk.asIs', { share: Math.round(WHOLESALE.priceShare * 100), max: WHOLESALE.maxItems })}</div>`;
+}
+
 function dealPane(): string {
   if (state.phase === 'evening') {
     return state.where === 'junk' ? junkyardPane() : eveningPane();
@@ -488,6 +522,9 @@ function dealPane(): string {
   }
   if (customer.kind === 'rent') {
     return rentPane(customer);
+  }
+  if (customer.kind === 'bulk') {
+    return bulkPane(customer);
   }
   const body = customer.kind === 'sell' ? sellerPane(customer) : buyerPane(customer);
   return customerHeader(customer) + body;
@@ -538,6 +575,8 @@ function benchCustomer(): string {
     line = t('stock.wants', { item: `<b>${itemName(customer.want)}</b>` });
   } else if (customer.kind === 'sell') {
     line = t('stock.sells', { item: itemName(customer.item.t), ask: customer.ask });
+  } else if (customer.kind === 'bulk') {
+    line = t('bulk.wants', { group: t(`bulk.groups.${customer.grp}`), n: customer.bud });
   } else {
     line = t('stock.collects', { amount: state.owed });
   }
@@ -1231,6 +1270,16 @@ const ACTIONS: Record<string, ActionHandler> = {
   show: value => presentItem(state, Number(value)),
   ask: () => askBuyer(state, offerValue(), gameRng),
   take: () => sellToBuyer(state),
+  // the wholesaler (task 36): the basket, the discount, the batch sold
+  cart: value => {
+    toggleCart(state, Number(value));
+  },
+  disc: value => {
+    setDiscount(state, Number(value));
+  },
+  bulksell: () => {
+    sellBatch(state);
+  },
   closeshop: () => {
     closeShop(state);
     showTab('deal');
