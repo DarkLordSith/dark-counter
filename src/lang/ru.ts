@@ -17,6 +17,8 @@ export const RU = {
   },
   app: {
     title: 'Тёмный прилавок',
+    /** The neon sign over the counter (pixel font of sign.ts: only its glyphs). */
+    sign: 'ЛАВКА 7Б',
     scene: 'Сцена игры',
   },
   unit: {

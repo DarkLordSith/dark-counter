@@ -10,6 +10,7 @@ import { t } from './i18n';
 import { clockOf } from './day';
 import type { DigResult } from './economy';
 import { heatMeterRects } from './heatmeter';
+import { GLYPH_ADVANCE, GLYPHS, SIGN_TEXT_Y, signTextX } from './sign';
 import { BELL_IDLE_ALPHA, bellSprite, HINTED, hitTest, isLive, PRESS_MS } from './hotspots';
 import { patienceBarRects } from './patiencebar';
 import { CHARACTER, COLOR, GLOW, ITEM_COLORS, JUNKYARD, MEANING, SHADE, SHOP } from './palette';
@@ -328,18 +329,7 @@ function drawHands(centerX: number, look: Appearance): void {
   fillRects(centerX, 0, rects);
 }
 
-/* ---------- pixel font for the shop sign ---------- */
-const GLYPHS: Record<string, string[]> = {
-  'Л': ['011', '101', '101', '101', '101'],
-  'А': ['010', '101', '111', '101', '101'],
-  'В': ['110', '101', '110', '101', '110'],
-  'К': ['101', '110', '100', '110', '101'],
-  '7': ['111', '001', '010', '010', '010'],
-  'Б': ['111', '100', '110', '101', '110'],
-  ' ': ['000', '000', '000', '000', '000'],
-};
-const GLYPH_ADVANCE = 4;
-
+/* ---------- pixel font for the shop sign (glyphs: sign.ts) ---------- */
 function drawPixelText(text: string, x: number, y: number, color: string): void {
   [...text].forEach((char, index) => {
     const glyph = GLYPHS[char];
@@ -525,12 +515,13 @@ function drawDoorway(): void {
   fillRect(122, 12, 32, 2, GLOW.doorway);
 }
 
-/** Neon "ЛАВКА 7Б" sign and the ceiling lamp. Off at night, flickers by day. */
+/** Neon sign ("ЛАВКА 7Б" / "SHOP 7B", task 37) and the ceiling lamp. Off at night, flickers by day. */
 function drawSignAndLamp(night: boolean): void {
   const brightness = night ? 0 : (Math.random() < SIGN_FLICKER_CHANCE ? 0.3 : 1);
   fillRect(SHOP_SIGN.x, SHOP_SIGN.y, SHOP_SIGN.w, SHOP_SIGN.h, COLOR.ink);
   fillRect(SHOP_SIGN.x + 1, SHOP_SIGN.y + 1, SHOP_SIGN.w - 2, SHOP_SIGN.h - 2, GLOW.sign(brightness));
-  drawPixelText('ЛАВКА 7Б', 65, 6, night ? SHOP.signOff : brightness < 1 ? SHOP.signDim : COLOR.cyan);
+  const sign = t('app.sign');
+  drawPixelText(sign, signTextX(sign), SIGN_TEXT_Y, night ? SHOP.signOff : brightness < 1 ? SHOP.signDim : COLOR.cyan);
   fillRect(77, 0, 6, 2, COLOR.line);
   if (!night) {
     fillPolygon(GLOW.shopLamp, [[78, 2], [82, 2], [112, 68], [48, 68]]);
