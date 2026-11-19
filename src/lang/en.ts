@@ -5,8 +5,13 @@
 //  for task 34 and wait for the scriptwriter's read-through.
 // =====================================================================
 import type { Dict } from '../i18n';
+import { HUMAN_NAMES_EN, ROBOT_NAMES_EN } from './names';
 
 export const EN: Dict = {
+  names: {
+    human: HUMAN_NAMES_EN,
+    robot: ROBOT_NAMES_EN,
+  },
   app: {
     title: 'Dark Counter', // draft
     scene: 'Game scene', // draft
@@ -310,23 +315,30 @@ export const EN: Dict = {
   },
   junk: {
     title: 'Ring B junkyard',
-    about: 'Road — {hours} h, a dig — {dig} h. {digs} digs, deeper means rarer finds. Too loud and a guard drone comes. After midnight the shop opens later tomorrow.',
-    arrive: 'Ring B junkyard. One big heap. Dig while it is quiet.',
+    about: 'Road — {hours} h, a dig — {dig} h. Each dig gives up to three items and parts, deeper means rarer finds. The backpack holds {size}. After midnight the shop opens later tomorrow.', // draft
+    arrive: 'Ring B junkyard. One big heap. No guards — dig.', // draft
     dig: 'Dig',
-    digsLeft: 'Left',
     depth: 'depth',
-    noise: 'noise',
-    levels: ['quiet', 'audible', 'loud', 'drone near'],
     empty: 'Nothing. Just rusty bolts.',
     parts: 'Spare parts: +{n}.',
-    broken: 'Dug out: {name}, broken. Off to the workbench.',
+    found: 'Dug up: {list}. Broken — for the workbench.', // draft
     rare: 'Rare find: {name}!',
+    rareWith: '{r} Also: {list}.', // draft
+    andParts: '{m} Parts: +{n}.', // draft
+    full: '{m} Backpack full: no room for {list}.', // draft
+    broken: 'Dug out: {name}, broken. Off to the workbench.',
     droneTook: 'Guard drone! Had to run — the {name} stayed behind.',
     droneHeat: 'Guard drone! Had to run, it got my face (wanted +{n}).',
     noDigs: 'The heap is dug through. Time to go home.',
     home: 'Junkyard: home. Finds this visit: {n}.',
-    homeHint: 'You can leave at any moment.',
     backpack: 'Backpack',
+    packFull: 'Backpack full', // draft
+    waits: 'No room: {list}.', // draft
+    openPack: 'Throw something out', // draft
+    leave: 'Leave the find', // draft
+    throwAway: 'Throw out', // draft
+    keep: 'Keep', // draft
+    slotEmpty: 'empty slot', // draft
     lastFree: 'One more dig and it is past midnight.',
     pastMidnight: 'Past midnight: −1 customer tomorrow for every dig.',
     lateSoFar: 'Fewer customers tomorrow: −{n}.',
@@ -364,7 +376,7 @@ export const EN: Dict = {
     filtersLabel: 'Stock filter',
     empty: 'The stock is empty. Buy from customers or dig at the junkyard.',
     emptyFilter: 'Nothing fits this filter.',
-    legend: { rare: 'rare', unknown: 'not checked', risk: 'stolen / AI', wear: 'defect' },
+    legend: { rare: 'rare', unknown: 'not checked', ai: 'AI', stolen: 'stolen', fake: 'fake', broken: 'defect' }, // draft: ai, stolen, fake
     estimate: 'Estimate',
     actions: { diag: 'Diagnostics', repair: 'Repair +25%', fix: 'Fix defect', purge: 'Purge AI', wipe: 'Re-stamp №', scrap: 'Scrap' }, // short: one line on an iPhone SE
     wipeNote: 'A re-stamped serial: +1 to the wanted level.',

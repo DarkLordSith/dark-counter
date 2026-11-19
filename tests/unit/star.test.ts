@@ -1,12 +1,12 @@
 // The "rare" mark (V2.6): ★ from a 5×5 map in `rare` (= lamp), the fake ★̸ for Patch B1,
 // rare junkyard finds keep the flag, turquoise no longer means "rare".
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DIG_ODDS } from '../../src/data';
 
 import { dig, feedback, goToJunkyard } from '../../src/economy';
 import { BASE, COLOR, CSS_TOKENS, MEANING } from '../../src/palette';
 import { gameRng, mulberry32 } from '../../src/rng';
 import { createItem, state } from '../../src/state';
+import { tileMark } from '../../src/tile';
 import { isRareItem, isRareLine, STAR_MAPS, starRects, starSvg } from '../../src/star';
 import type { StarKind } from '../../src/star';
 import economyTs from '../../src/economy.ts?raw';
@@ -51,8 +51,10 @@ describe('star sprites', () => {
     expect(starSvg('rare', 4)).toContain('width="20" height="20"');
   });
 
-  it('the fake star is ready but not shown in the game yet', () => {
-    expect(uiTs).not.toContain("starSvg('fake'");
+  it('the fake star is ready but not shown in the game yet: only the tile mark table has it, no item gets it', () => {
+    expect(uiTs.match(/starSvg\('fake'/g)).toHaveLength(1);
+    expect(uiTs).toContain("fake: `<i class=\"tm\">${starSvg('fake')}</i>`");
+    expect(tileMark(makeItem('chip', { rare: true, stolen: true, infected: true, defect: true }))).not.toBe('fake');
   });
 });
 
@@ -69,8 +71,8 @@ describe('meaning "rare"', () => {
     makeState({ phase: 'evening', hours: 4 });
     goToJunkyard(state, gameRng);
     feedback.floats.length = 0;
-    // drone check (no), noise spread, loot roll into the rare band
-    const queue = [0.99, 0.5, DIG_ODDS.parts + DIG_ODDS.broken + 0.001];
+    // one find (0.5 → a single item), its rare roll under 4%
+    const queue = [0.5, 0.001];
     vi.spyOn(Math, 'random').mockImplementation(() => queue.length ? queue.shift()! : 0.5);
     expect(dig(state, gameRng)?.kind).toBe('rare');
     expect(feedback.floats.at(-1)).toMatchObject({ color: MEANING.rare, star: 'rare' });
@@ -81,7 +83,7 @@ describe('rare items', () => {
   it('a rare find keeps the flag; other items save without the field', () => {
     makeState({ phase: 'evening', hours: 4 });
     goToJunkyard(state, gameRng);
-    const queue = [0.99, 0.5, DIG_ODDS.parts + DIG_ODDS.broken + 0.001];
+    const queue = [0.5, 0.001];
     vi.spyOn(Math, 'random').mockImplementation(() => queue.length ? queue.shift()! : 0.5);
     dig(state, gameRng);
     const found = state.inv.at(-1)!;
@@ -99,9 +101,9 @@ describe('rare items', () => {
     expect(isRareLine('Свалка: ' + RU.junk.empty)).toBe(false);
   });
 
-  it('the shelf marks and the legend have "★ редкое"', () => {
+  it('the tile mark and the legend have "★ редкое"', () => {
     expect(RU.stock.legend.rare).toBe('редкое');
-    expect(uiTs).toContain("rare: `<i class=\"d-rare\">${starSvg('rare')}</i>`");
-    expect(uiTs).toContain("${DOT.rare}${t('stock.legend.rare')}");
+    expect(uiTs).toContain("rare: `<i class=\"tm\">${starSvg('rare')}</i>`");
+    expect(uiTs).toContain("${MARK_HTML[mark]}${t(`stock.legend.${mark}`)}");
   });
 });

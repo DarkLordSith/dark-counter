@@ -2,13 +2,14 @@
 // the log and the bubble stored as keys and translated when shown.
 import { afterEach, describe, expect, it } from 'vitest';
 import { HUMAN_NAMES, ITEM_TYPES, LANDLORD_NAME, ROBOT_NAMES } from '../../src/data';
+import { HUMAN_NAMES_EN, ROBOT_NAMES_EN } from '../../src/lang/names';
 import { mainAction, chipLines } from '../../src/actionbar';
 import {
   askBuyer, buyFromSeller, callNextCustomer, closeShop, customerLeaves, deferRent, dig, evict, goHome, goToJunkyard, inspect, offerToSeller,
   payRent, payWithCollateral,
   presentItem, sellToBuyer, sleepUntilMorning,
 } from '../../src/economy';
-import { DICTS, decode, detectLang, getLang, itemName, render, say, setLang, t, text, tx } from '../../src/i18n';
+import { customerNameText, DICTS, decode, detectLang, getLang, itemName, nameRef, render, say, setLang, t, text, tx } from '../../src/i18n';
 import { EN } from '../../src/lang/en';
 import { RU } from '../../src/lang/ru';
 import { loadProfile, saveProfile } from '../../src/profile';
@@ -292,8 +293,33 @@ function screenTexts(game: GameState): string[] {
   ];
 }
 
-const NAMES = [...HUMAN_NAMES, ...ROBOT_NAMES].sort((a, b) => b.length - a.length);
+// task 35: in English the customers have English names, so only those are taken out (a Russian name would fail)
+const NAMES = [...HUMAN_NAMES_EN, ...ROBOT_NAMES_EN].sort((a, b) => b.length - a.length);
 const withoutNames = (line: string): string => NAMES.reduce((rest, name) => rest.split(name).join(''), line);
+
+describe('customer names (task 35)', () => {
+  it('one list per language, the same length; the save keeps the Russian name, the screen translates it', () => {
+    expect(HUMAN_NAMES_EN).toHaveLength(HUMAN_NAMES.length);
+    expect(ROBOT_NAMES_EN).toHaveLength(ROBOT_NAMES.length);
+    expect(HUMAN_NAMES_EN[0]).toBe('Red Vic');
+    expect(ROBOT_NAMES_EN).toContain('TR-404');
+    expect(nameRef('Рыжий Вик')).toEqual({ k: 'names.human.0' });
+    expect(nameRef('ТР-404')).toEqual({ k: 'names.robot.2' });
+    setLang('en');
+    expect(customerNameText('Рыжий Вик')).toBe('Red Vic');
+    expect(customerNameText('Старый Гость')).toBe('Старый Гость'); // not in the lists: shown as it is
+    setLang('ru');
+    expect(customerNameText('Рыжий Вик')).toBe('Рыжий Вик');
+  });
+
+  it('the log keeps the name as a key: it follows the language', () => {
+    const entry = JSON.stringify({ d: 2, k: 'log.left', p: { name: nameRef('Болт'), reason: '' } });
+    setLang('en');
+    expect(text(entry)).toContain('Bolt');
+    setLang('ru');
+    expect(text(entry)).toContain('Болт');
+  });
+});
 
 describe('a new game in English', () => {
   it('plays days through (customers, inspection, haggling, Grobov, the junkyard, the night) without Russian words', () => {

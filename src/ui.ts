@@ -10,7 +10,7 @@ import {
   BENCH_COST, DEBT, JUNK, HAGGLE, ITEM_TYPES, MARKET, MAX_HEAT, MODES,
   PLAYABLE_MODES, RECIPES, RENT, SUPPLIER,
 } from './data';
-import { detectLang, getLang, isLang, itemName, LANGS, list, setLang, t, text as textOf, tx } from './i18n';
+import { customerNameText, detectLang, getLang, isLang, itemName, LANGS, setLang, t, text as textOf, tx } from './i18n';
 import type { Lang, Tx } from './i18n';
 import type { RU } from './lang/ru';
 import { byId, maybeById } from './dom';
@@ -20,13 +20,15 @@ import type { StarKind } from './star';
 import { closeWindow, initWindows, isWindowOpen, labelWindowFrame, openWindow, relayoutWindow, updateWindow } from './window';
 import { DESK_QUERY, stageFit } from './layout';
 import { benchNav, benchOffer, benchOrder, filterStock, STOCK_FILTERS, successor } from './stock';
-import { backpackFinds, backpackSlots, droneTrace } from './backpack';
-import type { BackpackSlot, DroneTrace } from './backpack';
+import { backpackFinds, backpackSlots } from './backpack';
+import type { BackpackSlot } from './backpack';
+import { tileCondition, tileMark, TILE_MARKS } from './tile';
+import type { TileMark } from './tile';
 import type { WindowSpec } from './window';
 import {
   askBuyer, availableOfType, buyFromSeller, buySeat, callNextCustomer, canBuySeat, canCraft, hasShuttle, isDebtClosed, canVisitMarket, closeShop,
-  collateralHeatRelief, craft, customerLeaves, deferredDebt, deferRent, dig, digsPerVisit, estimatedValue, evict, feedback,
-  canGoToJunkyard, digIsLate, goHome, goToJunkyard, hunchVerdict, junkVisitHours, noiseLevel, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer,
+  collateralHeatRelief, craft, customerLeaves, deferredDebt, deferRent, dig, estimatedValue, evict, feedback,
+  canGoToJunkyard, digIsLate, goHome, goToJunkyard, hunchVerdict, junkVisitHours, leaveWaiting, throwAway, waitingFinds, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer,
   nextRent, offerToSeller, orderParts, payEarly, payRent, payWithCollateral, perceivedChance, planCollateral, presentItem,
   expenseLines, recipeNeeds, scrapValue, seatPrice, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
 } from './economy';
@@ -62,7 +64,7 @@ const approx = (value: string | number): string => `<span class="approx">~</span
 /** "120 кр." / "120 cr." */
 const money = (n: number): string => t('unit.money', { n });
 /** The visitor's name: Grobov's is translated (the save keeps the Russian one), customers' names stay as they are. */
-const customerName = (customer: Customer): string => customer.kind === 'rent' ? t('landlord.name') : customer.name;
+const customerName = (customer: Customer): string => customer.kind === 'rent' ? t('landlord.name') : customerNameText(customer.name);
 const conditionText = (item: Item): string => item.k.cond ? item.cond + '%' : '?%';
 
 function iconCanvas(type: ItemType, cssClass = '', infected = false): string {
@@ -96,34 +98,45 @@ function itemTags(item: Item): string {
   return `<div class="tags">${tags.join('')}</div>`;
 }
 
-/** Colored corner dots on an inventory tile. */
-/** Status marks on a shelf tile; the legend under the shelf uses the same ones. */
-const DOT = {
-  /** ★ 5×5 drawn 2× (10×10 px): a rare junkyard find (V2.6). */
-  rare: `<i class="d-rare">${starSvg('rare')}</i>`,
-  unknown: '<i class="d-unknown">?</i>',
-  risk: '<i class="d-risk"></i>',
-  wear: '<i class="d-wear"></i>',
+/** Status marks of the item tile (task 35): pixel icons 5×5 drawn 2×, the legend under the stock uses the same ones. */
+const MARK_HTML: Record<TileMark, string> = {
+  ai: `<i class="tm m-risk">${iconSvg('ai')}</i>`,
+  stolen: `<i class="tm m-risk">${iconSvg('stolen')}</i>`,
+  fake: `<i class="tm">${starSvg('fake')}</i>`,
+  broken: `<i class="tm m-wear">${iconSvg('broken')}</i>`,
+  rare: `<i class="tm">${starSvg('rare')}</i>`,
 };
 
-function itemDots(item: Item): string {
-  const dots: string[] = [];
-  if (isRareItem(item)) {
-    dots.push(DOT.rare);
+/**
+ * The face of the one item tile (task 35): the icon ×2 in a 60×36 frame, the condition
+ * top left ("?" until checked), one status mark top right — the most dangerous known (tile.ts).
+ */
+function tileFace(item: Item, iconClass = ''): string {
+  const condition = tileCondition(item);
+  const corner = condition === null ? '<b class="tc tc-unknown">?</b>' : `<b class="tc">${condition}%</b>`;
+  const mark = tileMark(item);
+  return `<span class="tface">${iconCanvas(item.t, iconClass, showsInfection(item))}${corner}${mark ? MARK_HTML[mark] : ''}</span>`;
+}
+
+/** The whole tile: the face and the price under it; a button with its action, the name for screen readers. */
+function itemTile(item: Item, action: string, on: boolean, extraClass = ''): string {
+  const label = `${itemName(item.t)}, ${conditionText(item)}, ${money(estimatedValue(item))}`;
+  return `<button class="tile stile ${extraClass} ${on ? 'on' : ''}" data-a="${action}" data-v="${item.uid}" aria-label="${label}">${tileFace(item)}<span class="tv">${approx(estimatedValue(item))}</span></button>`;
+}
+
+/** The legend under the stock: only the marks that are on the shelf now, "?" while anything is unchecked. */
+function stockLegend(items: readonly Item[]): string {
+  const shown = new Set(items.map(tileMark));
+  const entries: string[] = [];
+  if (items.some(item => tileCondition(item) === null)) {
+    entries.push(`<span><b class="tc tc-unknown">?</b>${t('stock.legend.unknown')}</span>`);
   }
-  if (!isFullyKnown(item)) {
-    dots.push(DOT.unknown);
+  for (const mark of TILE_MARKS) {
+    if (shown.has(mark)) {
+      entries.push(`<span>${MARK_HTML[mark]}${t(`stock.legend.${mark}`)}</span>`);
+    }
   }
-  if (item.k.serial && item.stolen) {
-    dots.push(DOT.risk);
-  }
-  if (item.k.flaw && item.infected) {
-    dots.push(DOT.risk);
-  }
-  if (item.k.flaw && item.defect) {
-    dots.push(DOT.wear);
-  }
-  return `<span class="dots">${dots.join('')}</span>`;
+  return entries.length ? `<div class="legend">${entries.join('')}</div>` : '';
 }
 
 /** Row of cells, the first `filled` of them lit (the junkyard noise bar). */
@@ -266,15 +279,13 @@ function option(action: string, disabled: boolean, title: string, description: s
   return `<button class="opt" data-a="${action}" ${disabledIf(disabled)}><div><b>${title}</b><br><span>${description}</span></div><span${sideClass}>${side}</span></button>`;
 }
 
-/** Cells of the noise scale: 10 cells for 0…100. */
-const NOISE_CELLS = 10;
-
-/** Noise as a scale plus a word, like the hunch verdict: тихо / слышно / громко / дрон рядом. From "громко" on it reads as risk. */
-function noiseMeter(noise: number): string {
-  const level = noiseLevel(noise);
-  const word = list('junk.levels')[level];
-  const filled = Math.round(noise / 100 * NOISE_CELLS);
-  return `<div class="noise${level >= 2 ? ' loud' : ''}"><span>${t('junk.noise')}</span><div class="nbar">${meterCells(NOISE_CELLS, filled)}</div><b class="nword${level >= 2 ? ' m-risk' : ''}">${word}</b></div>`;
+/**
+ * Depth as a scale of the visit's digs (task 35, was the noise scale), in the backpack's head row:
+ * deeper means rarer finds. Neutral `fg`: depth itself is no risk, the ★ of a find says "rare".
+ */
+function depthMeter(visit: JunkVisit): string {
+  const total = visit.dp + visit.d;
+  return `<span class="noise depth"><span>${t('junk.depth')}</span><span class="nbar">${meterCells(total, visit.dp)}</span><b class="nword">${visit.dp}</b></span>`;
 }
 
 /** Time before "Копать" (task 16): the last dig before midnight, then each dig costs a customer tomorrow. Time reads as `wear`. */
@@ -292,55 +303,66 @@ function junkTimeNote(digsLeft: number): string {
 }
 
 /**
- * The backpack (task 29), screen memory only: the drone's trace until the visit ends, and the
- * one-shot animations of the last dig (a new find, the drone's catch flying off).
+ * The backpack (task 35), screen memory only: the find whose card is open, and the finds of the
+ * last dig (their frames light once, on the render right after it).
  */
-const backpack: { trace: DroneTrace | null; fresh: number | null; flying: boolean } = { trace: null, fresh: null, flying: false };
+const backpack: { pick: number | null; fresh: number[] } = { pick: null, fresh: [] };
 
 function backpackSlot(slot: BackpackSlot): string {
   if (slot.kind === 'empty') {
-    return '<div class="bp-slot"></div>';
+    return `<div class="bp-slot" aria-label="${t('junk.slotEmpty')}"></div>`;
   }
-  if (slot.kind === 'gone') {
-    const fly = backpack.flying ? `<div class="bp-fly" aria-hidden="true">${iconCanvas(slot.type)}</div>` : '';
-    return `<div class="bp-slot bp-gone" title="${itemName(slot.type)}">${fly}</div>`;
-  }
-  const { item, mark } = slot;
-  const fresh = backpack.fresh === item.uid ? (mark === 'rare' ? ' bp-new-rare' : ' bp-new') : '';
-  const sign = mark === 'rare' ? starSvg('rare') : iconSvg('broken');
-  return `<div class="bp-slot bp-item${fresh}" title="${itemName(item.t)}">${iconCanvas(item.t, '', showsInfection(item))}<i class="bp-mark bp-${mark}">${sign}</i></div>`;
+  const { item } = slot;
+  const fresh = backpack.fresh.includes(item.uid) ? (isRareItem(item) ? 'bp-new-rare' : 'bp-new') : '';
+  return itemTile(item, 'pick', backpack.pick === item.uid, `bp-tile ${fresh}`);
 }
 
-/** РЮКЗАК · N and one row of slots, under the noise scale. */
-function backpackRow(visit: JunkVisit): string {
+/** The card of a find (a tap on its tile): name and estimate, what is known; "Выбросить" frees the place. */
+function findCard(item: Item): string {
+  return `<div class="card bp-card">${tileFace(item, 'midico')}<div class="di-body"><div class="rn">${itemName(item.t)} <span class="tv">${approx(estimatedValue(item))}</span></div>${itemTags(item)}</div></div>
+    <div class="acts bp-acts"><button class="btn" data-a="throw" data-v="${item.uid}">${t('junk.throwAway')}</button><button class="btn" data-a="pick" data-v="${item.uid}">${t('junk.keep')}</button></div>`;
+}
+
+/** "Рюкзак полон": what did not fit, and the choice — throw something out (opens the cheapest find's card) or leave it. */
+function fullNote(waiting: readonly Item[]): string {
+  const names = waiting.map(item => itemName(item.t)).join(', ');
+  return `<div class="bp-full"><b class="m-wear">${t('junk.packFull')}.</b> <span class="hint">${t('junk.waits', { list: names })}</span></div>
+    <div class="acts bp-acts"><button class="btn" data-a="openpack">${t('junk.openPack')}</button><button class="btn" data-a="leavefind">${t('junk.leave')}</button></div>`;
+}
+
+/** РЮКЗАК N/8 with the depth scale in one row, and the 4×2 grid of the finds. */
+function backpackGrid(visit: JunkVisit): string {
   const count = backpackFinds(visit, state.inv).length;
-  const cells = backpackSlots(visit, state.inv, backpack.trace, digsPerVisit(state)).map(backpackSlot).join('');
-  // the animations play once, on the render right after the dig
-  backpack.fresh = null;
-  backpack.flying = false;
-  return `<div class="bp"><div class="bp-head"><small>${t('junk.backpack')}</small><b class="rn">· ${count}</b></div><div class="bp-row">${cells}</div></div>`;
+  const cells = backpackSlots(visit, state.inv).map(backpackSlot).join('');
+  backpack.fresh = []; // the frames light once, on the render right after the dig
+  return `<div class="bp"><div class="bp-head"><small>${t('junk.backpack')}</small><b class="rn">${count}/${JUNK.backpackSize}</b>${depthMeter(visit)}</div><div class="bp-grid">${cells}</div></div>`;
 }
 
+/**
+ * The junkyard (task 35): the backpack grid with the depth, then one of — the card of a find,
+ * "Рюкзак полон", or the time notes and "Вернуться домой". One at a time: an iPhone SE shows it all without scrolling.
+ */
 function junkyardPane(): string {
   const visit = state.junk;
   if (!visit) {
     return '';
   }
-  const total = visit.dp + visit.d;
+  if (backpack.pick !== null && !visit.f.includes(backpack.pick)) {
+    backpack.pick = null;
+  }
+  const picked = backpack.pick === null ? undefined : findItem(state, backpack.pick);
+  const waiting = waitingFinds(state);
   // "Копать" is the main action (the action bar), "Вернуться домой" is here until the digs run out — then it goes to the bar
-  const homeButton = visit.d > 0 ? `<button class="btn" data-a="home">${t('action.home')}</button>` : '';
-  const homeHint = visit.d > 0 ? `<div class="hint">${t('junk.homeHint')}</div>` : '';
-  return `${junkTimeNote(visit.d)}<div class="junk-stats"><span>${t('junk.digsLeft')}: <b class="rn">${visit.d}</b> ${t('hud.of')} ${total}</span><span>${t('junk.depth')} <b class="rn">${visit.dp}</b></span></div>
-      ${noiseMeter(visit.n)}
-      ${backpackRow(visit)}
-      ${homeHint}
-      ${homeButton}`;
+  const homeButton = visit.d > 0 ? `<button class="btn bp-home" data-a="home">${t('action.home')}</button>` : '';
+  const below = picked ? findCard(picked) : waiting.length ? fullNote(waiting) : junkTimeNote(visit.d) + homeButton;
+  return `${backpackGrid(visit)}
+      ${below}`;
 }
 
 function eveningPane(): string {
   return `<div class="hint" style="margin-bottom:8px">${t('evening.closed', { hours: `<b>${state.hours}</b>` })}</div>
     <div class="opts">
-      ${option('junk', !canGoToJunkyard(state), t('junk.title'), t('junk.about', { hours: junkVisitHours(), dig: JUNK.digHours, digs: digsPerVisit(state) }), '→')}
+      ${option('junk', !canGoToJunkyard(state), t('junk.title'), t('junk.about', { hours: junkVisitHours(), dig: JUNK.digHours, size: JUNK.backpackSize }), '→')}
       ${option('market', !canVisitMarket(state), t('evening.market'), t('evening.marketAbout', { hours: MARKET.hours, parts: MARKET.parts, price: MARKET.price }), MARKET.price)}
     </div>
     <div class="hint note">${t('evening.sleepNote')}</div>`;
@@ -408,7 +430,7 @@ function rentOptions(options: [action: string, title: string, html: string, desc
 
 function customerHeader(customer: SellerCustomer | BuyerCustomer): string {
   // V2.5: patience lives over the customer's head on the scene, not here
-  return `<div class="thead"><div><span class="cname">${customer.name}</span><span class="kind ${customer.kind}">${t(customer.kind === 'sell' ? 'deal.sells' : 'deal.buys')}</span></div></div>`;
+  return `<div class="thead"><div><span class="cname">${customerName(customer)}</span><span class="kind ${customer.kind}">${t(customer.kind === 'sell' ? 'deal.sells' : 'deal.buys')}</span></div></div>`;
 }
 
 /**
@@ -428,7 +450,7 @@ function sellerPane(customer: SellerCustomer): string {
   const serial = item.stolen ? `<span class="m-risk">${t('deal.filed')}</span>` : `<span class="m-action">${t('deal.clean')}</span>`;
   const insides = item.infected ? `<span class="m-risk">${t('deal.ai')}</span>` : item.defect ? `<span class="m-wear">${t('deal.defect')}</span>` : `<span class="m-action">${t('deal.ok')}</span>`;
   const defaultOffer = Math.min(state.credits, roundTo10(customer.ask * HAGGLE.sellerDefaultOfferShare));
-  return `<div class="card deal-item">${iconCanvas(item.t, 'midico', showsInfection(item))}<div class="di-body"><div class="rn">${itemName(item.t)}</div>
+  return `<div class="card deal-item">${tileFace(item, 'midico')}<div class="di-body"><div class="rn">${itemName(item.t)}</div>
       <div class="facts">${fact(customer, 'cond', t('deal.cond'), t('deal.condTitle'), condition)}${fact(customer, 'serial', t('deal.serial'), t('deal.serialTitle'), serial)}${fact(customer, 'flaw', t('deal.insides'), t('deal.insidesTitle'), insides)}</div></div></div>
     <div class="deal"><div class="ask">${t('deal.asks', { ask: `<b class="price">${customer.ask}</b>`, estimate: approx(estimatedValue(item)) })}</div>
       ${priceRow(defaultOffer)}
@@ -444,7 +466,7 @@ function buyerPane(customer: BuyerCustomer): string {
   }
   const tiles = matching.map(item => {
     const shown = customer.item && customer.item.uid === item.uid;
-    return `<button class="tile ${shown ? 'on' : ''}" data-a="show" data-v="${item.uid}">${itemDots(item)}${iconCanvas(item.t, '', showsInfection(item))}<span>${conditionText(item)} · <span class="tv">${approx(estimatedValue(item))}</span></span></button>`;
+    return `<button class="tile ${shown ? 'on' : ''}" data-a="show" data-v="${item.uid}">${tileFace(item)}<span class="tv">${approx(estimatedValue(item))}</span></button>`;
   }).join('');
   // compact row tiles (V1.6): the price and the gut feeling fit an iPhone SE without scrolling
   html += `<div class="shelf pick">${tiles}</div>`;
@@ -488,11 +510,8 @@ function filterChips(): string {
   return `<div class="chips" role="group" aria-label="${t('stock.filtersLabel')}">${chips}</div>`;
 }
 
-/** A compact shelf tile: icon and price, the marks in the corner; the name is for screen readers. */
-function stockTile(item: Item): string {
-  const label = `${itemName(item.t)}, ${conditionText(item)}, ${money(estimatedValue(item))}`;
-  return `<button class="tile stile ${ui.sel === item.uid ? 'on' : ''}" data-a="sel" data-v="${item.uid}" aria-label="${label}">${itemDots(item)}${iconCanvas(item.t, '', showsInfection(item))}<span class="tv">${approx(estimatedValue(item))}</span></button>`;
-}
+/** A shelf tile: the one item tile (task 35), a tap opens the workbench. */
+const stockTile = (item: Item): string => itemTile(item, 'sel', ui.sel === item.uid);
 
 function inventoryPane(): string {
   if (!state.inv.length) {
@@ -500,8 +519,7 @@ function inventoryPane(): string {
   }
   const items = filterStock(state.inv, ui.filter);
   const shelf = items.length ? `<div class="shelf stock">${items.map(stockTile).join('')}</div>` : `<div class="hint">${t('stock.emptyFilter')}</div>`;
-  return `${filterChips()}${shelf}
-  <div class="legend">${state.inv.some(isRareItem) ? `<span>${DOT.rare}${t('stock.legend.rare')}</span>` : ''}<span>${DOT.unknown}${t('stock.legend.unknown')}</span><span>${DOT.risk}${t('stock.legend.risk')}</span><span>${DOT.wear}${t('stock.legend.wear')}</span></div>`;
+  return `${filterChips()}${shelf}${stockLegend(state.inv)}`;
 }
 
 function benchButton(action: keyof typeof RU.stock.actions, enabled: boolean): string {
@@ -724,8 +742,8 @@ export function render(): void {
   renderSceneOverlay();
   renderTabs();
   renderPane();
-  // junkyard ambience follows the state: ticks from "громко" on, silent at home or after the drone
-  setJunkAmbience(state.where === 'junk' && state.junk && !state.junk.run ? noiseLevel(state.junk.n) : 0);
+  // junkyard v3 has no drone: the ticking of the noise stays silent (the drone moves to patch C1)
+  setJunkAmbience(0);
   saveGame();
   noteProgress();
 }
@@ -1283,7 +1301,23 @@ const ACTIONS: Record<string, ActionHandler> = {
     showTab('deal');
   },
   dig: () => digAndShow(),
+  // the backpack (task 35): a tap on a find opens its card, a second tap (or "Оставить") closes it
+  pick: value => {
+    backpack.pick = backpack.pick === Number(value) ? null : Number(value);
+  },
+  throw: value => {
+    throwAway(state, Number(value));
+    backpack.pick = null;
+    playSfx('empty');
+  },
+  openpack: () => {
+    const finds = state.junk ? backpackFinds(state.junk, state.inv) : [];
+    const cheapest = [...finds].sort((a, b) => estimatedValue(a) - estimatedValue(b))[0];
+    backpack.pick = cheapest?.uid ?? null;
+  },
+  leavefind: () => leaveWaiting(state),
   home: () => {
+    backpack.pick = null;
     goHome(state);
     playSfx('home');
   },
@@ -1439,23 +1473,14 @@ function followGame(game: GameState, visitor: Customer | null): void {
   }
 }
 
-/** "Копать" (the bar or a tap on the heap): one dig, its sound, the shovel and the ambience of the new noise. */
+/** "Копать" (the bar or a tap on the heap): one dig, its sound, the shovel; the new finds light up in the backpack. */
 function digAndShow(): void {
-  const before = state.junk ? backpackFinds(state.junk, state.inv).map(({ uid, t }) => ({ uid, t })) : [];
   const result = dig(state, gameRng);
   if (!result) {
     return;
   }
-  // the backpack (task 29): light the new find, or leave the drone's trace in its slot
-  const visit = state.junk;
-  if (visit && (result.kind === 'broken' || result.kind === 'rare')) {
-    backpack.fresh = visit.f[visit.f.length - 1] ?? null;
-  }
-  const trace = visit && result.kind === 'drone' ? droneTrace(before, visit) : null;
-  if (trace) {
-    backpack.trace = trace;
-    backpack.flying = true;
-  }
+  backpack.pick = null;
+  backpack.fresh = result.items.map(item => item.uid);
   playSfx('dig');
   playSfx(result.kind);
   playDigFx(result.kind);

@@ -72,12 +72,11 @@ describe('one seed → one and the same day', () => {
     expect(haggle(3)).toEqual(haggle(3));
   });
 
-  it('a junkyard visit with the drone: the same digs, finds and catch', () => {
+  it('a junkyard visit (v3): the same digs, finds and parts for the same seed', () => {
     const visit = (seed: number): { state: GameState; kinds: string[] } => {
       const rng = mulberry32(seed);
       const game = makeState({ phase: 'evening', hours: 5 });
       goToJunkyard(game, rng);
-      game.junk!.n = 80; // loud from the start: the drone is likely after the first dig
       const kinds: string[] = [];
       for (let result = dig(game, rng); result; result = dig(game, rng)) {
         kinds.push(result.kind);
@@ -85,9 +84,8 @@ describe('one seed → one and the same day', () => {
       goHome(game);
       return { state: game, kinds };
     };
-    const seed = [1, 2, 3, 4, 5, 6, 7, 8].find(s => visit(s).kinds.includes('drone'))!;
-    expect(seed).toBeDefined();
-    expect(visit(seed)).toEqual(visit(seed));
+    expect(visit(4).kinds).toHaveLength(6);
+    expect(visit(4)).toEqual(visit(4));
   });
 
   it('the night: infection, the raid and the morning are the same', () => {

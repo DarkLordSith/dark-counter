@@ -44,6 +44,9 @@ for (const name of names) {
     [`закрыто долга к дню ${CHECK_DAY}, %`]: show(summary.checkDayClosed),
     [`темп к дню ${CHECK_DAY}, кр./день`]: show(summary.checkDayPace),
     'покупок на 1 продажу': show(summary.buysPerSale),
+    'склад на утро, вещей': show(summary.morningStock),
+    'находок за визит': show(summary.findsPerVisit),
+    'ценность находок за визит, кр.': show(summary.valuePerVisit),
   });
   console.table(summary.weeklyCredits.map((credits, i) => ({ неделя: i + 1, 'кр.': show(credits), долг: show(summary.weeklyDebt[i]) })));
 }

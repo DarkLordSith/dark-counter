@@ -121,20 +121,26 @@ export interface JunkPile {
   seed: number;
 }
 
-/** A junkyard visit (v2): one heap, "Копать" until the digs run out or the drone comes. */
+/**
+ * A junkyard visit (v3, task 35): one heap, "Копать" until the evening or the backpack is full.
+ * The finds go into the stock at once (their uids are the backpack); what does not fit waits in `w`.
+ */
 export interface JunkVisit {
-  /** Digs left this visit ("digs"). */
+  /** Digs left this visit ("digs"): a safety cap, JUNK.maxDigs. */
   d: number;
-  /** Noise 0…100: each dig adds JUNK.noisePerDig ± spread, the drone chance grows with it. */
+  /** Noise of junkyard v2 (0…100). Kept in the save, not used since v3 (the drone is in guarddrone.ts). */
   n: number;
   /** Digs done this visit ("depth"): raises the rare chance, thins the heap on the scene. */
   dp: number;
-  /** Item uids found this visit ("found"): the drone takes one of them. */
+  /** Item uids found this visit ("found") = the backpack, at most JUNK.backpackSize. */
   f: number[];
   /** Seed of the heap's shape. */
   s: number;
-  /** The drone came: the visit is over, only "home" is left. */
+  /** v2: the drone came and the visit is over, only "home" is left. Old saves only. */
   run?: boolean;
+  /** v3: finds of the last dig that did not fit the full backpack ("waiting"); not in the stock.
+   *  Throwing an item out lets the first one in; the next dig or "home" leaves them. Absent = none. */
+  w?: Item[];
 }
 
 export interface GameState {

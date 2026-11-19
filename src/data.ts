@@ -242,11 +242,12 @@ export const EXPENSES = { energyPerDay: 20, tierFee: 50, tierFeeWeekday: 1 };
 
 
 
-// ---------- junkyard (v2, 15.11.2026: one heap, "Копать", noise → drone) ----------
+// ---------- junkyard (v3, task 35, 19.11.2026: several finds a dig, the backpack, no drone) ----------
 /**
- * A visit costs a fixed travelHours + visitHours of the evening (1 h is left for
- * the flea market, as before). Inside it the player digs up to digsBase + digBonus()
- * times; each dig adds noise, and the noise raises the drone chance.
+ * A visit costs travelHours of the evening, then each dig its digHours; past midnight each dig
+ * costs a customer tomorrow. The visit ends at home: the player goes when the evening (or the
+ * backpack) is full; maxDigs is only a safety cap. Numbers are a start, the bot tunes them
+ * (Временный баланс 19.11, пересчитать после B1).
  */
 export const JUNK = {
   /** Road to the junkyard, evening hours (task 16: digs pay their own time). */
@@ -255,30 +256,38 @@ export const JUNK = {
   digHours: 1,
   /** Customers lost the next day for each dig past midnight (the shop opens later). */
   lateCustomerLoss: 1,
-  digsBase: 5,
-  /** Noise added by one dig: noisePerDig ± noiseSpread (0…100 scale). */
-  noisePerDig: 13,
-  noiseSpread: 3,
-  /** Noise word thresholds: below [0] "тихо", below [1] "слышно", below [2] "громко", else "дрон рядом". */
-  noiseLevels: [20, 40, 60],
-  /** Drone chance of a dig = (noise before it / droneNoiseScale)²; never on the first dig. */
-  droneNoiseScale: 100,
-  /** Each dig of this visit adds this much to the rare-find chance (taken from "empty"). */
+  /** Digs a visit at most (v2 had digsBase 5 and the drone; now midnight and the backpack limit it). */
+  maxDigs: 6,
+  /** Places in the backpack (a 4×2 grid). */
+  backpackSize: 8,
+  /** Each dig deeper adds this much to the rare chance of every find (depth = digs before this one). */
   rarePerDepth: 0.02,
-  /** Wanted level added by the drone when it has no find of this visit to take. */
-  droneHeat: 1,
 };
-/** Chances of one dig (they sum to 1; the depth bonus moves chance from empty to rare). */
-export const DIG_ODDS = { parts: 0.4, broken: 0.34, rare: 0.05, empty: 0.21 };
+/**
+ * One dig: `empty` — no items (parts may still come); otherwise 1, 2 or 3 items by `items`.
+ * Parts are rolled on their own, partsMin…partsMax every dig.
+ */
+export const DIG_ODDS = { empty: 0.1, items: [0.5, 0.35, 0.15], rare: 0.04 };
 export const DIG_LOOT = {
-  partsMin: 1,
-  partsMax: 4,
+  partsMin: 0,
+  partsMax: 2,
   brokenCondMin: 5,
-  brokenCondMax: 40,
+  brokenCondMax: 30,
   brokenDefect: 0.5,
   brokenStolen: 0.1,
   rareCondMin: 40,
   rareCondMax: 80,
+};
+/** What the heap gives: weights of the item types for ordinary (broken) finds, cheap goods first. */
+export const JUNK_WEIGHTS: Record<ItemType, number> = {
+  battery: 5,
+  comm: 4,
+  servo: 4,
+  cutter: 1,
+  visor: 0.6,
+  drone: 0.3,
+  chip: 0.3,
+  arm: 0.1,
 };
 /** Neon "ЛАВКА 7Б" sign with its dark frame, in scene pixels (160×100). The speech bubble and the queue chip keep clear of it (V1.6). */
 export const SHOP_SIGN = { x: 59, y: 3, w: 42, h: 11 };

@@ -1,34 +1,27 @@
-// Junkyard v2 (15.11.2026): one heap, "Копать" up to digsBase + digBonus times, depth raises
-// the rare chance, noise raises the guard drone chance; "home" at any moment.
-import { gameRng } from '../../src/rng';
+// Junkyard v3 (task 35, 19.11.2026): one heap, "Копать" gives 0–3 finds and 0–2 parts, depth raises
+// the rare chance of each find, the backpack holds 8; no drone, no noise; "home" at any moment.
+import { gameRng, mulberry32 } from '../../src/rng';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DIG_ODDS, JUNK, MAX_HEAT, SAVE_KEY } from '../../src/data';
+import { DIG_LOOT, DIG_ODDS, JUNK, SAVE_KEY } from '../../src/data';
 
 import {
-  canGoToJunkyard, dig, digBonus, digsPerVisit, droneChance, goHome, goToJunkyard, junkVisitHours, noiseLevel, rareChance,
+  canGoToJunkyard, dig, digBonus, digsPerVisit, goHome, goToJunkyard, isBackpackFull, junkVisitHours, leaveWaiting, rareChance,
+  throwAway, waitingFinds,
 } from '../../src/economy';
+import { droneChance, noiseLevel } from '../../src/guarddrone';
 import { audio, MUSIC_KEY, playSfx, rememberSfx, SFX_KEY, SFX_NAMES, sfxWanted } from '../../src/audio';
 import { migrate, state } from '../../src/state';
-import type { JunkPile, SavedGame } from '../../src/types';
+import type { Item, JunkPile, SavedGame } from '../../src/types';
+import economyTs from '../../src/economy.ts?raw';
+import sceneTs from '../../src/scene.ts?raw';
 import uiTs from '../../src/ui.ts?raw';
 import { makeItem, makeState } from './helpers';
 import { RU } from '../../src/lang/ru';
 import { EN } from '../../src/lang/en';
 import { text } from '../../src/i18n';
 
-/** Math.random returns these values in turn (then 0.5). */
-function rolls(...values: number[]): void {
-  const queue = [...values];
-  vi.spyOn(Math, 'random').mockImplementation(() => queue.length ? queue.shift()! : 0.5);
-}
-
-function seedRandom(seed: number): void {
-  let value = seed;
-  vi.spyOn(Math, 'random').mockImplementation(() => (value = value * 16807 % 2147483647) / 2147483647);
-}
-
-const atJunkyard = (): void => {
-  makeState({ phase: 'evening', hours: 4 });
+const atJunkyard = (hours = 5): void => {
+  makeState({ phase: 'evening', hours });
   goToJunkyard(state, gameRng);
 };
 
@@ -48,135 +41,213 @@ describe('a visit', () => {
     expect(canGoToJunkyard(state)).toBe(false);
   });
 
-  it('gives exactly 5 digs without a bonus, then nothing more', () => {
-    seedRandom(7);
+  it('digs up to the safety cap of 6 (+ the bonus hook), then nothing more', () => {
     atJunkyard();
     expect(digBonus(state)).toBe(0);
-    expect(state.junk?.d).toBe(JUNK.digsBase);
-    let digs = 0;
-    // the drone may end the visit early: count until it says no more
-    while (dig(state, gameRng)) {
-      digs++;
-    }
-    expect(digs).toBeLessThanOrEqual(5);
-    expect(state.junk?.d).toBe(0);
-    expect(dig(state, gameRng)).toBeNull();
-  });
-
-  it('never meets the drone without noise: 5 quiet digs', () => {
-    atJunkyard();
-    // drone rolls 0.99 (no drone), noise spread 0.5, loot 0.99 (empty) …
-    vi.spyOn(Math, 'random').mockReturnValue(0.99);
-    const kinds = Array.from({ length: 6 }, () => dig(state, gameRng)?.kind);
-    expect(kinds).toEqual(['empty', 'empty', 'empty', 'empty', 'empty', undefined]);
-  });
-
-  it('a fresh visit gets digsBase + digBonus digs (the bonus is the hook for gear and events)', () => {
-    makeState({ phase: 'evening', hours: 4 });
-    expect(digsPerVisit(state)).toBe(JUNK.digsBase + digBonus(state));
-    goToJunkyard(state, gameRng);
+    expect(JUNK.maxDigs).toBe(6);
+    expect(digsPerVisit(state)).toBe(JUNK.maxDigs + digBonus(state));
     expect(state.junk?.d).toBe(digsPerVisit(state));
+    const rng = mulberry32(3);
+    let digs = 0;
+    while (dig(state, rng)) {
+      digs++;
+      state.junk!.f.forEach(uid => throwAway(state, uid)); // keep places free: the cap, not the backpack
+    }
+    expect(digs).toBe(6);
+    expect(dig(state, rng)).toBeNull();
   });
 
-  it('"home" works at any moment and ends the visit', () => {
+  it('"home" works at any moment and ends the visit; the finds stay in the stock', () => {
     atJunkyard();
     goHome(state);
     expect(state.where).toBe('home');
     expect(state.junk).toBeNull();
     expect(dig(state, gameRng)).toBeNull();
     atJunkyard();
-    dig(state, gameRng);
+    const rng = mulberry32(5);
+    dig(state, rng);
+    dig(state, rng);
+    const found = [...state.junk!.f];
     goHome(state);
     expect(state.where).toBe('home');
-  });
-});
-
-describe('depth and noise', () => {
-  it('each dig goes one level deeper; deeper means a higher rare chance', () => {
-    atJunkyard();
-    dig(state, gameRng);
-    dig(state, gameRng);
-    expect(state.junk?.dp).toBe(2);
-    expect(rareChance(4)).toBeGreaterThan(rareChance(0));
-    expect(rareChance(0)).toBe(DIG_ODDS.rare);
-    // never more than the "empty" share it takes from
-    expect(rareChance(1000)).toBeCloseTo(DIG_ODDS.rare + DIG_ODDS.empty);
+    expect(found.every(uid => state.inv.some(item => item.uid === uid))).toBe(true);
   });
 
-  it('the same loot roll turns rare deeper in the heap', () => {
-    // a roll just past parts + broken + the base rare chance: empty on the first dig, rare on the 5th
-    // (each dig rolls: drone check, noise spread, loot)
-    const roll = DIG_ODDS.parts + DIG_ODDS.broken + DIG_ODDS.rare + 0.01;
+  it('no drone and no noise any more: the noise field stays 0, the wanted level never moves', () => {
     atJunkyard();
-    rolls(0.99, 0.5, roll);
-    const first = dig(state, gameRng)?.kind;
-    vi.restoreAllMocks();
-    state.junk!.dp = 4;
-    state.junk!.n = 0; // quiet: no drone
-    rolls(0.99, 0.5, roll);
-    const deep = dig(state, gameRng)?.kind;
-    expect(first).toBe('empty');
-    expect(deep).toBe('rare');
-  });
-
-  it('noise grows with every dig and reads as тихо → слышно → громко → дрон рядом', () => {
-    atJunkyard();
-    vi.spyOn(Math, 'random').mockReturnValue(0.99);
-    const noise: number[] = [];
-    for (let i = 0; i < 5; i++) {
-      dig(state, gameRng);
-      noise.push(state.junk!.n);
+    state.heat = 3;
+    const rng = mulberry32(11);
+    for (let i = 0; i < 6; i++) {
+      dig(state, rng);
+      leaveWaiting(state);
     }
-    expect(noise.every((value, i) => i === 0 || value > noise[i - 1])).toBe(true);
-    expect([0, 25, 45, 70].map(noiseLevel)).toEqual([0, 1, 2, 3]);
-    expect(RU.junk.levels).toEqual(['тихо', 'слышно', 'громко', 'дрон рядом']);
-    expect(EN.junk.levels).toHaveLength(4);
-  });
-
-  it('the drone chance is (noise / 100)², and zero on the first dig', () => {
-    expect(droneChance({ d: 5, n: 90, dp: 0, f: [], s: 1 })).toBe(0);
-    expect(droneChance({ d: 3, n: 50, dp: 2, f: [], s: 1 })).toBeCloseTo(0.25);
-    expect(droneChance({ d: 1, n: 0, dp: 4, f: [], s: 1 })).toBe(0);
+    expect(state.junk?.n).toBe(0);
+    expect(state.junk?.run).toBeUndefined();
+    expect(state.heat).toBe(3);
+    expect(economyTs).not.toMatch(/droneCatches|noiseLevel|droneChance/);
+    expect(sceneTs).not.toContain('drawGuardDrone');
   });
 });
 
-describe('the guard drone', () => {
-  it('takes one find of this visit and ends the visit ("Пришлось бежать")', () => {
-    atJunkyard();
-    const old = makeItem('battery');
-    state.inv.push(old);
-    // first dig: the drone check cannot hit, loot roll just past parts → a broken find
-    rolls(0, 0.5, DIG_ODDS.parts + 0.01);
-    expect(dig(state, gameRng)?.kind).toBe('broken');
-    vi.restoreAllMocks();
-    const found = state.junk!.f[0];
-    expect(state.inv.some(item => item.uid === found)).toBe(true);
-    state.junk!.n = 100; // the drone surely comes
-    rolls(0);
-    const result = dig(state, gameRng);
-    expect(result?.kind).toBe('drone');
-    expect(result ? text(result.message) : '').toContain('Пришлось бежать');
-    expect(state.inv.some(item => item.uid === found)).toBe(false);
-    expect(state.inv).toContain(old); // older stock is safe
-    expect(state.junk).toMatchObject({ d: 0, run: true });
-    expect(dig(state, gameRng)).toBeNull();
+describe('what a dig gives (seeded)', () => {
+  /** Plays `visits` visits of four digs (the evening before midnight) with one seed; an unbounded backpack. */
+  function tally(seed: number, visits: number): { counts: number[]; parts: number; items: number; rare: number; condMin: number; condMax: number } {
+    const rng = mulberry32(seed);
+    const counts = [0, 0, 0, 0];
+    let parts = 0, items = 0, rare = 0, condMin = 100, condMax = 0;
+    for (let v = 0; v < visits; v++) {
+      atJunkyard();
+      for (let d = 0; d < 4; d++) {
+        const result = dig(state, rng)!;
+        counts[result.items.length]++;
+        parts += result.parts;
+        items += result.items.length;
+        for (const item of result.items) {
+          if (item.rare) {
+            rare++;
+          } else {
+            condMin = Math.min(condMin, item.cond);
+            condMax = Math.max(condMax, item.cond);
+          }
+        }
+        state.junk!.f = []; // the counts, not the backpack
+      }
+    }
+    return { counts, parts, items, rare, condMin, condMax };
+  }
+
+  it('1–3 items (50/35/15%) or none (10%), 0–2 parts a dig; cheap and broken: 5–30%', () => {
+    const digs = 4000;
+    const { counts, parts, condMin, condMax } = tally(1, digs / 4);
+    const share = counts.map(n => n / digs);
+    expect(share[0]).toBeCloseTo(DIG_ODDS.empty, 1);
+    expect(share[1]).toBeCloseTo(0.9 * 0.5, 1);
+    expect(share[2]).toBeCloseTo(0.9 * 0.35, 1);
+    expect(share[3]).toBeCloseTo(0.9 * 0.15, 1);
+    expect(parts / digs).toBeCloseTo((DIG_LOOT.partsMin + DIG_LOOT.partsMax) / 2, 1);
+    expect(condMin).toBeGreaterThanOrEqual(5);
+    expect(condMax).toBeLessThanOrEqual(30);
   });
 
-  it('with no find of this visit it raises the wanted level', () => {
+  it('a visit before midnight brings about 6 items', () => {
+    const visits = 1000;
+    const { items } = tally(2, visits);
+    expect(items / visits).toBeGreaterThan(5.5);
+    expect(items / visits).toBeLessThan(6.5);
+  });
+
+  it('★ — 4% a find, +2% for every dig deeper', () => {
+    expect(rareChance(0)).toBeCloseTo(0.04);
+    expect(rareChance(1)).toBeCloseTo(0.06);
+    expect(rareChance(5)).toBeCloseTo(0.14);
+    const { items, rare } = tally(3, 1000);
+    // four digs: depth 0…3, the average chance 7%
+    expect(rare / items).toBeGreaterThan(0.055);
+    expect(rare / items).toBeLessThan(0.085);
+  });
+
+  it('a find: the condition is seen at once (you dug it out), the serial and the insides are not', () => {
     atJunkyard();
-    state.heat = 2;
-    state.junk!.dp = 2;
-    state.junk!.n = 100;
-    rolls(0);
-    expect(dig(state, gameRng)?.kind).toBe('drone');
-    expect(state.heat).toBe(2 + JUNK.droneHeat);
-    state.heat = MAX_HEAT;
+    const rng = mulberry32(8);
+    let found: Item[] = [];
+    while (!found.length) {
+      found = dig(state, rng)!.items;
+    }
+    expect(found[0].k).toEqual({ cond: true, serial: false, flaw: false });
+  });
+
+  it('the message lists the finds and the parts; a rare one keeps the junk.rare key for the ★', () => {
     atJunkyard();
-    state.junk!.dp = 2;
-    state.junk!.n = 100;
-    state.heat = MAX_HEAT;
-    dig(state, gameRng);
-    expect(state.heat).toBe(MAX_HEAT);
+    const rng = mulberry32(4);
+    for (let i = 0; i < 6; i++) {
+      const result = dig(state, rng)!;
+      const line = text(result.message);
+      if (result.items.some(item => item.rare)) {
+        expect(line).toContain('Редкая находка');
+      } else if (result.items.length) {
+        expect(line).toContain('Откопал:');
+      }
+      if (result.parts && result.items.length) {
+        expect(line).toContain(`Запчасти: +${result.parts}`);
+      }
+      state.junk!.f = [];
+    }
+  });
+});
+
+describe('the backpack', () => {
+  /** A visit with a full backpack (8 broken batteries) and a dig that surely finds something. */
+  function fullBackpack(): Item[] {
+    atJunkyard();
+    const pack = Array.from({ length: JUNK.backpackSize }, (_, i) => makeItem('battery', { uid: 100 + i, cond: 10 }));
+    state.inv.push(...pack);
+    state.junk!.f = pack.map(item => item.uid);
+    return pack;
+  }
+
+  it('is full at 8: the dig still works, the finds that do not fit wait ("Рюкзак полон")', () => {
+    fullBackpack();
+    expect(isBackpackFull(state)).toBe(true);
+    const rng = mulberry32(9);
+    let result = dig(state, rng)!;
+    while (!result.items.length) {
+      result = dig(state, rng)!;
+    }
+    expect(result.left).toBe(result.items.length);
+    expect(waitingFinds(state)).toEqual(result.items);
+    expect(state.junk!.f).toHaveLength(JUNK.backpackSize);
+    expect(result.items.every(item => !state.inv.includes(item))).toBe(true);
+    expect(text(result.message)).toContain('Рюкзак полон');
+  });
+
+  it('"Выбросить" frees a place: the item is gone, a waiting find takes the place', () => {
+    const pack = fullBackpack();
+    const rng = mulberry32(9);
+    while (!dig(state, rng)!.items.length) {
+      // dig until something waits
+    }
+    const waiting = [...waitingFinds(state)];
+    const came = throwAway(state, pack[0].uid);
+    expect(came).toBe(waiting[0]);
+    expect(state.inv).not.toContain(pack[0]);
+    expect(state.inv).toContain(waiting[0]);
+    expect(state.junk!.f).toContain(waiting[0].uid);
+    expect(state.junk!.f).toHaveLength(JUNK.backpackSize);
+    expect(waitingFinds(state)).toEqual(waiting.slice(1));
+  });
+
+  it('"Оставить находку", the next dig or the road home leave the waiting finds behind', () => {
+    fullBackpack();
+    state.junk!.w = [makeItem('servo', { uid: 300 })];
+    leaveWaiting(state);
+    expect(waitingFinds(state)).toEqual([]);
+    expect('w' in state.junk!).toBe(false);
+    state.junk!.w = [makeItem('servo', { uid: 301 })];
+    dig(state, mulberry32(1));
+    expect(waitingFinds(state).some(item => item.uid === 301)).toBe(false);
+    state.junk!.w = [makeItem('servo', { uid: 302 })];
+    goHome(state);
+    expect(state.inv.some(item => item.uid === 302)).toBe(false);
+  });
+
+  it('throwing out with nothing waiting just frees the place; only finds of this visit can go', () => {
+    const pack = fullBackpack();
+    const old = makeItem('chip', { uid: 500 });
+    state.inv.push(old);
+    expect(throwAway(state, old.uid)).toBeNull();
+    expect(state.inv).toContain(old);
+    expect(throwAway(state, pack[3].uid)).toBeNull();
+    expect(state.junk!.f).toHaveLength(JUNK.backpackSize - 1);
+    expect(isBackpackFull(state)).toBe(false);
+  });
+});
+
+describe('the drone, put aside for patch C1 (guarddrone.ts)', () => {
+  it('keeps the v2 rules: the noise words and the chance (noise / 100)², zero on the first dig', () => {
+    expect([0, 25, 45, 70].map(noiseLevel)).toEqual([0, 1, 2, 3]);
+    expect(droneChance(90, 0)).toBe(0);
+    expect(droneChance(50, 2)).toBeCloseTo(0.25);
+    expect(droneChance(0, 4)).toBe(0);
   });
 });
 
@@ -201,6 +272,29 @@ describe('old saves in the middle of a junkyard visit', () => {
   it('a v2 visit is kept as it is', () => {
     const visit = { d: 3, n: 26, dp: 2, f: [5], s: 9 };
     expect(migrate({ ...makeState({ phase: 'evening', where: 'junk', hours: 1 }), junk: { ...visit } })?.junk).toEqual(visit);
+  });
+
+  it('a v2 visit with noise loads and plays on in v3: digs, no drone, home', () => {
+    const find = makeItem('battery', { uid: 5, cond: 12 });
+    const saved = { ...makeState({ phase: 'evening', where: 'junk', hours: 2, inv: [find] }), junk: { d: 3, n: 58, dp: 2, f: [5], s: 9 } };
+    const game = migrate(JSON.parse(JSON.stringify(saved)) as SavedGame)!;
+    expect(game.junk).toEqual({ d: 3, n: 58, dp: 2, f: [5], s: 9 });
+    const rng = mulberry32(6);
+    const result = dig(game, rng)!;
+    expect(result).not.toBeNull();
+    expect(game.junk!.n).toBe(58); // kept, not used
+    expect(game.junk!.dp).toBe(3);
+    expect(game.heat).toBe(saved.heat);
+    goHome(game);
+    expect(game.inv.some(item => item.uid === 5)).toBe(true);
+  });
+
+  it('a v2 visit after the drone (run) has no digs left: only "home"', () => {
+    const saved = { ...makeState({ phase: 'evening', where: 'junk', hours: 1 }), junk: { d: 0, n: 80, dp: 3, f: [], s: 9, run: true } };
+    const game = migrate(JSON.parse(JSON.stringify(saved)) as SavedGame)!;
+    expect(dig(game, mulberry32(1))).toBeNull();
+    goHome(game);
+    expect(game.where).toBe('home');
   });
 });
 
@@ -232,8 +326,8 @@ describe('junkyard sounds', () => {
     audio.sfx = before;
   });
 
-  it('cover every dig result, the noise, the drone and going home', () => {
-    expect(SFX_NAMES).toEqual(expect.arrayContaining(['dig', 'empty', 'parts', 'broken', 'rare', 'drone', 'tick', 'hum', 'home']));
+  it('cover every dig result and going home', () => {
+    expect(SFX_NAMES).toEqual(expect.arrayContaining(['dig', 'empty', 'parts', 'broken', 'rare', 'home']));
   });
 
   it('have their own menu item with RU/EN words', () => {
