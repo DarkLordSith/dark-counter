@@ -1304,6 +1304,48 @@ input:focus-visible {
   }
 }
 
+/* The wholesaler (task 36): the stock of his group in pick mode. Many items scroll inside the grid only,
+   so the total, the discounts and the bar stay on an iPhone SE screen. */
+.bulk-grid {
+  max-height: 112px;
+  overflow-y: auto;
+}
+
+.tile.nofit {
+  opacity: .45;
+}
+
+.bulk-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: var(--fs-m);
+}
+
+.bulk-total b {
+  color: var(--fg);
+}
+
+.bulk-total .m-action {
+  color: var(--m-action);
+}
+
+.bulk-acts {
+  grid-template-columns: 1fr 1fr 1.4fr;
+}
+
+.btn.disc.on {
+  border-color: var(--m-action);
+  color: var(--m-action);
+}
+
+.kind.bulk {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 /* The customer at the counter, on top of the bench. */
 .bench-cust {
   display: flex;

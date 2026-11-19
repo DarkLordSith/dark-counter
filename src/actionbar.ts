@@ -9,7 +9,7 @@
 // =====================================================================
 import { t } from './i18n';
 import { clockOf } from './day';
-import { isLandlordDue, isPresentedBuyer, planCollateral } from './economy';
+import { bulkStock, canSellBatch, cartItems, cartTotal, isLandlordDue, isPresentedBuyer, planCollateral } from './economy';
 import type { Actor, GameState, Tab } from './types';
 
 
@@ -101,6 +101,13 @@ export function mainAction(state: GameState, actor: SceneFigure, tab: Tab, conte
   }
   if (customer.kind === 'sell') {
     return button('offer', t('action.offer'));
+  }
+  if (customer.kind === 'bulk') {
+    // task 36: "Продать за N" once the basket holds something; no goods of his group left — turn him down
+    if (canSellBatch(state)) {
+      return button('bulksell', t('bulk.sell', { n: cartTotal(cartItems(state, customer), customer.off) }));
+    }
+    return bulkStock(state, customer).length ? hint(t('bulk.pick')) : button('refuse', t('bulk.refuse'));
   }
   if (!state.inv.some(item => item.t === customer.want)) {
     return button('refuse', t('action.noItem'));

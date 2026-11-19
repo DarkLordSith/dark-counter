@@ -4,18 +4,17 @@
 //  bench shows after its item is gone, and whether "Предложить клиенту"
 //  applies. No DOM, no globals: ui.ts passes the game and draws the result.
 // =====================================================================
-import { ITEM_TYPES } from './data';
+import { itemGroup } from './data';
 import type { GameState, Item, StockFilter } from './types';
 
-/** Chips in the order of the row. Categories come from the catalog's `electronic` flag (the only grouping in the data). */
+/** Chips in the order of the row. Categories are the item groups of data.ts (itemGroup, the wholesaler's too). */
 export const STOCK_FILTERS: readonly StockFilter[] = ['all', 'tech', 'gear', 'stolen'];
 
 export function matchesFilter(item: Item, filter: StockFilter): boolean {
   switch (filter) {
     case 'tech':
-      return !!ITEM_TYPES[item.t].electronic;
     case 'gear':
-      return !ITEM_TYPES[item.t].electronic;
+      return itemGroup(item.t) === filter;
     case 'stolen':
       // only what the player knows: an unchecked serial is not "stolen" yet
       return item.k.serial && item.stolen;

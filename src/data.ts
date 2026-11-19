@@ -172,6 +172,47 @@ export function buyerShare(stock: number): number {
   return fewShare + (manyShare - fewShare) * t;
 }
 
+/**
+ * Item groups a wholesaler asks for (task 36). Until B1 there are two, by the catalog's `electronic`
+ * flag; B1 swaps this one function for the item categories. The stock filters use the same groups.
+ */
+export const ITEM_GROUPS = ['tech', 'gear'] as const;
+export type ItemGroup = (typeof ITEM_GROUPS)[number];
+export const itemGroup = (type: ItemType): ItemGroup => (ITEM_TYPES[type].electronic ? 'tech' : 'gear');
+
+/**
+ * The wholesaler (task 36, a piece of patch B2): takes a batch of one group "as is", at a share of the
+ * estimate, within a budget. Comes on top of the day's customers (not in `cn`, not instead of a buyer),
+ * at most once a day and only to a full stock (PM 19.11, variant C).
+ * Временный баланс 19.11, пересчитать после B1.
+ */
+export const WHOLESALE = {
+  /** Never comes to a smaller stock (checked in the morning and again when his turn comes). */
+  minStock: 5,
+  /** Chance he comes today, by the morning stock: `few` from minStock, `many` from `manyFrom` items
+   *  (the bot: 0.9 keeps the morning stock ≤ 10 with his share of the sales income ≤ 25%). */
+  fewChance: 0.3,
+  manyFrom: 8,
+  manyChance: 0.9,
+  /** Price of an item: this share of its estimate (estimatedValue), no checks (the task: 75%). */
+  priceShare: 0.75,
+  /** Budget = budgetItems × the average estimate of the group in stock × priceShare, ± budgetSpread. */
+  budgetItems: 3,
+  budgetSpread: 0.25,
+  /** Items in one batch at most. */
+  maxItems: 5,
+  /** Discount buttons on the whole basket, %. */
+  discounts: [10, 20],
+} as const;
+
+/** Chance the wholesaler comes today, by the number of items in stock in the morning. */
+export function wholesaleChance(stock: number): number {
+  if (stock < WHOLESALE.minStock) {
+    return 0;
+  }
+  return stock >= WHOLESALE.manyFrom ? WHOLESALE.manyChance : WHOLESALE.fewChance;
+}
+
 export const CUSTOMER = {
   buyerWantsStockedChance: 0.7,
   patienceMin: 4,
@@ -266,14 +307,16 @@ export const JUNK = {
 /**
  * One dig: `empty` — no items (parts may still come); otherwise 1, 2 or 3 items by `items`.
  * Parts are rolled on their own, partsMin…partsMax every dig.
+ * Task 36: `empty` 0.1 → 0.2 and `brokenDefect` 0.5 → 0.6 (the bot: the stock and the owner's exits back in range).
+ * Временный баланс 19.11, пересчитать после B1.
  */
-export const DIG_ODDS = { empty: 0.1, items: [0.5, 0.35, 0.15], rare: 0.04 };
+export const DIG_ODDS = { empty: 0.2, items: [0.5, 0.35, 0.15], rare: 0.04 };
 export const DIG_LOOT = {
   partsMin: 0,
   partsMax: 2,
   brokenCondMin: 5,
   brokenCondMax: 30,
-  brokenDefect: 0.5,
+  brokenDefect: 0.6,
   brokenStolen: 0.1,
   rareCondMin: 40,
   rareCondMax: 80,

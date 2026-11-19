@@ -7,7 +7,7 @@ import { mainAction, chipLines } from '../../src/actionbar';
 import {
   askBuyer, buyFromSeller, callNextCustomer, closeShop, customerLeaves, deferRent, dig, evict, goHome, goToJunkyard, inspect, offerToSeller,
   payRent, payWithCollateral,
-  presentItem, sellToBuyer, sleepUntilMorning,
+  presentItem, sellToBuyer, sleepUntilMorning, bulkStock, sellBatch, toggleCart,
 } from '../../src/economy';
 import { customerNameText, DICTS, decode, detectLang, getLang, itemName, nameRef, render, say, setLang, t, text, tx } from '../../src/i18n';
 import { EN } from '../../src/lang/en';
@@ -355,6 +355,14 @@ describe('a new game in English', () => {
           } else {
             sellToBuyer(game);
           }
+        } else if (game.cust?.kind === 'bulk') {
+          seen.push(...screenTexts(game));
+          const first = bulkStock(game, game.cust)[0];
+          if (first && toggleCart(game, first.uid)) {
+            sellBatch(game);
+          } else {
+            customerLeaves(game);
+          }
         } else if (game.cust?.kind === 'rent') {
           seen.push(...screenTexts(game));
           if (game.credits >= game.owed) {
@@ -410,7 +418,10 @@ describe('EN v1', () => {
   });
 
   it('only the lines newer than EN v1 wait for the read-through (junkyard v3 and the stock legend, task 35)', () => {
-    const NEWER = ['about', 'arrive', 'found', 'rareWith', 'andParts', 'full', 'packFull', 'waits', 'openPack', 'leave', 'throwAway', 'keep', 'slotEmpty', 'legend'];
+    const NEWER = [
+      // the wholesaler (task 36)
+      'groups', 'kind', 'head', 'asIs', 'total', 'heat', 'sell', 'pick', 'refuse', 'noStock', 'wants', 'tooMuch', 'enough', 'sold', 'tech', 'gear',
+      'about', 'arrive', 'found', 'rareWith', 'andParts', 'full', 'packFull', 'waits', 'openPack', 'leave', 'throwAway', 'keep', 'slotEmpty', 'legend'];
     const drafts = enSource.split('\n').filter(line => /\/\/ draft/.test(line) && !line.trim().startsWith('//'));
     expect(drafts.map(line => line.trim().split(':')[0]).filter(key => !NEWER.includes(key))).toEqual([]);
   });

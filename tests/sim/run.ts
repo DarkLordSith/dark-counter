@@ -47,6 +47,12 @@ for (const name of names) {
     'склад на утро, вещей': show(summary.morningStock),
     'находок за визит': show(summary.findsPerVisit),
     'ценность находок за визит, кр.': show(summary.valuePerVisit),
+    'находок продано за неделю, %': show(summary.junkSoldInWeek),
+    'обычные продажи, кр./нед.': show(summary.saleIncomeWeek),
+    'оптовик, кр./нед.': show(summary.bulkIncomeWeek),
+    'доля оптовика в доходе, %': show(summary.bulkShare),
+    'оптовиков за игру': show(summary.bulkVisits),
+    'вещей оптовику за игру': show(summary.bulkItems),
   });
   console.table(summary.weeklyCredits.map((credits, i) => ({ неделя: i + 1, 'кр.': show(credits), долг: show(summary.weeklyDebt[i]) })));
 }
