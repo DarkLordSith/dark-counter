@@ -1,8 +1,10 @@
 // =====================================================================
 //  lang/en.ts — the English dictionary. Same keys and {params} as ru.ts
 //  (typecheck: a missing or extra key is an error; tests: params and
-//  list lengths). Lines marked `// draft` were written by Claude Code
-//  for task 34 and wait for the scriptwriter's read-through.
+//  list lengths). EN v1: read through by the scriptwriter (19.11.2026,
+//  task 37). Glossary: deck / Lower Deck, heat, S/N, moneylender,
+//  more time / grace period, Hunch, cr., Ring B. New lines are marked
+//  `// draft` until the next read-through.
 // =====================================================================
 import type { Dict } from '../i18n';
 import { HUMAN_NAMES_EN, ROBOT_NAMES_EN } from './names';
@@ -13,8 +15,9 @@ export const EN: Dict = {
     robot: ROBOT_NAMES_EN,
   },
   app: {
-    title: 'Dark Counter', // draft
-    scene: 'Game scene', // draft
+    title: 'Dark Counter',
+    sign: 'SHOP 7B',
+    scene: 'Game scene'
   },
   unit: {
     cr: 'cr.',
@@ -27,7 +30,6 @@ export const EN: Dict = {
     pair: '{a} {b}',
     glue: '{a}{b}',
   },
-  // draft: item names
   items: {
     comm: 'Communicator',
     battery: 'Power cell',
@@ -36,7 +38,7 @@ export const EN: Dict = {
     visor: 'AR visor',
     drone: 'Courier drone',
     chip: 'Neurochip',
-    arm: 'Cyber arm',
+    arm: 'Cyberarm',
   },
   hud: {
     credits: 'cr',
@@ -44,11 +46,11 @@ export const EN: Dict = {
     payment: 'payment',
     daysShort: 'd',
     parts: 'parts',
-    heat: 'wanted',
+    heat: 'heat',
     of: 'of',
     music: 'Music',
     sounds: 'Sounds',
-    lang: 'Language', // draft
+    lang: 'Language',
     on: 'on',
     off: 'off',
     menu: 'Menu',
@@ -57,15 +59,15 @@ export const EN: Dict = {
   },
   verdict: { unlikely: 'unlikely', maybe: 'maybe', likely: 'likely', deal: 'deal' },
   action: {
-    call: 'Call the next one',
+    call: 'Next customer',
     closeShop: 'Close the shop',
     offer: 'Make an offer',
     ask: 'Name a price',
-    noItem: 'Don\'t have it, goodbye',
+    noItem: 'Don\'t have one. Bye.',
     pay: 'Pay {amount} cr.',
-    defer: 'Ask for a delay',
-    collateral: 'Give money and goods',
-    evict: 'Nothing to pay with',
+    defer: 'Ask for more time',
+    collateral: 'Pay in cash and goods',
+    evict: 'Can\'t pay',
     sleep: 'Sleep',
     home: 'Go home',
     approaching: 'Coming to the counter…',
@@ -79,7 +81,6 @@ export const EN: Dict = {
     shiftOver: 'The shift is over — "Counter" tab',
     wait: 'Waiting…',
   },
-  // draft: tabs
   tabs: {
     counter: 'COUNTER',
     junk: 'JUNKYARD',
@@ -87,7 +88,6 @@ export const EN: Dict = {
     stock: 'STOCK · {n}',
     craft: 'CRAFT',
   },
-  // draft: the counter pane
   deal: {
     price: 'Price',
     hunch: 'Hunch',
@@ -97,58 +97,54 @@ export const EN: Dict = {
     buys: 'buying',
     cond: 'Cond.',
     condTitle: 'Scanner: condition',
-    serial: '№',
+    serial: 'S/N',
     serialTitle: 'Serial: stolen or clean',
     insides: 'Insides',
     insidesTitle: 'Diagnostics: defect, AI',
-    filed: 'filed off',
+    filed: 'filed', // short: "S/N filed off" did not fit the fact button on an iPhone SE (task 37)
     clean: 'clean',
     ai: 'AI',
     defect: 'defect',
     ok: 'ok',
-    asks: 'Asks {ask} cr. · worth {estimate}',
+    asks: 'Asks {ask} cr. · est. {estimate}',
     for: 'For {n}',
-    refuse: 'Let go',
+    refuse: 'Pass',
     needs: 'Wants: {item}',
     noStock: 'None in stock.',
     showItem: 'Put an item on the counter.',
     offers: 'Offers: {n} cr.',
     sealed: 'The shop is sealed.',
-    queueOver: 'No one left in the queue. Time to close.',
-    free: 'The counter is free. Call the next one when ready. Meanwhile, sort the stock.',
+    queueOver: 'Queue\'s empty. Time to close up.',
+    free: 'The counter is free. Call the next customer when ready. Meanwhile, sort the stock.',
   },
-  // draft: item tags
   tags: {
     condUnknown: 'cond. ?',
     stolen: 'stolen',
-    clean: 'clean №',
-    serialUnknown: '№ ?',
+    clean: 'clean S/N',
+    serialUnknown: 'S/N ?',
     defect: 'defect',
     ai: 'AI',
     insidesOk: 'insides ok',
     insidesUnknown: 'insides ?',
   },
-  // draft: the evening
   evening: {
-    closed: 'The shop is closed. Hours left: {hours}. The workbench and crafting are free.',
+    closed: 'The shop is closed. Hours left: {hours}. Workbench and crafting are free to use.',
     market: 'Flea market by the airlock',
-    marketAbout: '{hours} h. {parts} spare parts for {price} cr. Once an evening.',
-    sleepNote: '"Sleep" is the button below: ends the day. At night: the payment, raids, infection in the stock.',
+    marketAbout: '{hours} h. {parts} spare parts for {price} cr. Once per evening.',
+    sleepNote: '"Sleep" is the button below: ends the day. Night brings the payment, raids and AI infection in the stock.',
   },
-  // draft: Grobov's pane
   rent: {
     forPayment: 'for the payment',
     due: 'Due',
     fine: 'with a fine',
     pay: 'Pay',
-    noSecondDefer: 'Grobov will not give a second delay.',
+    noSecondDefer: 'Grobov won\'t give you more time again.',
     short: 'Not enough even with all the stock.',
     takes: 'Takes {cash} cr.{goods}. Stolen goods first (at 50%), the rest at 60%, no change.{heat}',
     andGoods: ' and {items}',
-    heatRelief: 'Wanted −{n}.',
+    heatRelief: 'Heat −{n}.',
     barNote: '"{action}" is the button below. {text}',
   },
-  // draft: the craft pane
   craft: {
     build: 'Build',
     note: 'A build gets a new serial: stolen parts come out clean. AI infection carries over.',
@@ -172,11 +168,11 @@ export const EN: Dict = {
     restart: 'Start over',
     locked: 'opens later',
     resetTitle: 'Start over?',
-    resetText: 'The current "{mode}" game will be lost, save the code.',
+    resetText: 'The current "{mode}" game will be lost. Save its code first.',
     resetYes: 'Start',
     resetNo: 'Cancel',
     close: 'Close',
-    startCalm: 'Day 1. Shop 7-B, lower tier. Father\'s debt to Grobov: {debt} cr. A payment every {period}.',
+    startCalm: 'Day 1. Shop 7-B, Lower Deck. Father\'s debt to Grobov: {debt} cr. A payment every {period}.',
     paidTitle: 'Debt paid',
     paidLine: 'Father\'s debt is paid off. Grobov will not come again.',
     paidContinue: 'Continue',
@@ -184,7 +180,7 @@ export const EN: Dict = {
     saveCode: 'Game code · {mode}, day {day}, {credits} cr.',
   },
   debt: {
-    start: 'Day 1. Shop 7-B, lower tier. Father\'s debt to Grobov: {debt} cr. A payment every {period}, the last shuttle on day {shuttle}.',
+    start: 'Day 1. Shop 7-B, Lower Deck. Father\'s debt to Grobov: {debt} cr. A payment every {period}, the last shuttle on day {shuttle}.',
     windowTitle: 'Debt to Grobov',
     debtLeft: 'Debt',
     nextPayment: 'Payment',
@@ -193,7 +189,7 @@ export const EN: Dict = {
     noPayments: 'no payments',
     youHave: 'You have',
     early: 'Pay early',
-    earlyHint: 'On top of the payment, any day. You see the rest at once.',
+    earlyHint: 'On top of the weekly payment, any day. The debt updates right away.',
     everything: 'All',
     paidEarly: 'Paid early {amount} cr. Debt: {debt} cr.',
     seatTitle: 'Shuttle seat',
@@ -213,50 +209,47 @@ export const EN: Dict = {
     deferOption: 'Comes back in {days}, payment +20%: {amount} cr. The fine goes onto the debt.',
     deferred: 'Deferred to day {day}. Payment {amount} cr., debt {debt} cr.',
     landlordToday: 'Grobov comes for the payment today: {amount} cr.',
-    noMoreDefer: ' No more delays.', // draft
+    noMoreDefer: ' No more grace periods.',
     shuttleSoon: 'The last shuttle leaves in {days}.',
     menuDebt: 'Debt: {debt} cr.',
     totals: 'Day {day} · {credits} cr. · debt {debt} cr.',
     newGame: 'New game',
   },
   ending: {
-    left: { title: 'Left', line: 'The last shuttle has gone, and you are on board.' },
-    stayed: { title: 'Stayed on the station', line: 'The last shuttle has gone without you.' },
-    evicted: { title: 'Evicted', line: 'Nothing to cover the payment with. Grobov sealed the shop.' },
-    betray: { title: 'Turned Grobov in', line: 'The patrol took Grobov away.' },
-    takeover: { title: 'Took his place', line: 'Now you collect the debts.' },
+    left: { title: 'Got Out', line: 'The last shuttle is leaving — and you\'re on it.' },
+    stayed: { title: 'Stayed Behind', line: 'The last shuttle left without you.' },
+    evicted: { title: 'Evicted', line: 'Nothing to pay with. Grobov sealed the shop.' },
+    betray: { title: 'Turned Grobov In', line: 'The patrol took Grobov away.' },
+    takeover: { title: 'Took His Place', line: 'Now you collect the debts.' },
   },
-  // draft: Grobov
   landlord: {
-    name: 'Grobov the lender',
-    deferred: 'The delay is over. {n} cr. from you, today.',
+    name: 'Grobov the Moneylender',
+    deferred: 'Grace period\'s over. {n} cr. Today.',
     due: 'Payment. {n} cr., as agreed.',
-    short: 'Payment, {n} cr. Short of it? I can wait a couple of days. With interest.',
+    short: 'Payment: {n} cr. Coming up short? I can wait a couple of days. With interest.',
     thanks: 'A pleasure doing business.',
   },
-  // draft: customers' lines
   lines: {
-    seller: ['Look, almost new. Almost.', 'Found it on the lower tier. Honestly found it.', 'Need credits fast, don\'t haggle long.', 'Selling because I\'m leaving the station.', 'Don\'t ask where from. Ask how much.'],
+    seller: ['Look, almost new. Almost.', 'Found it on the Lower Deck. Honest.', 'Need credits fast. Don\'t drag it out.', 'I\'m getting off this station. Everything must go.', 'Don\'t ask where it\'s from. Ask how much.'],
     sellerStolen: 'Quick. Credits first, questions later.',
-    sellerInsulted: ['That\'s an insult.', 'Are you kidding me?', 'For that money build it yourself.'],
-    sellerCounter: ['No. Let\'s say:', 'Won\'t do. My price:', 'Hmm… no. I can do'],
-    buyer: ['I need a {t|lower}. Today.', 'They say you get a {t|lower} sometimes. Show me?', 'Looking for a {t|lower}, no questions asked.', 'The boss wants a {t|lower}. Money\'s here.'],
-    buyerInsulted: ['For that money I\'ll buy a new one.', 'You\'re dreaming.'],
-    buyerCounter: ['Too much. I can do', 'Fine, I\'ll go up:', 'Last word —'],
+    sellerInsulted: ['That\'s an insult.', 'Are you kidding me?', 'For that, build it yourself.'],
+    sellerCounter: ['No. How about:', 'Not happening. My price:', 'Hmm… no. I can do'],
+    buyer: ['Need one: {t}. Today.', 'Word is you get these: {t}. Got one?', 'Looking for this: {t}. No questions asked.', 'Boss wants one: {t}. Money\'s here.'],
+    buyerInsulted: ['For that price I\'d buy a new one.', 'You\'re dreaming.'],
+    buyerCounter: ['Too much. I can do', 'Fine, I\'ll go to', 'Final offer:'],
     counter: '{line} {n} cr.',
-    noMoney: 'You don\'t have that much, don\'t make me laugh.',
+    noMoney: 'You don\'t have that kind of money. Don\'t make me laugh.',
     cond: 'Condition {n}%. {note}',
-    condLow: 'Well, it works.',
-    condGood: 'See, a good thing.',
-    serialStolen: '…A serial? Never was one. Fine, I\'ll go lower.',
+    condLow: 'Hey, it works.',
+    condGood: 'See? Good stuff.',
+    serialStolen: '…A serial? Never had one. Fine, I\'ll knock it down.',
     serialClean: 'The serial is clean, see for yourself.',
-    aiFound: 'What AI? I didn\'t know! Take it cheaper.',
-    defectFound: 'Yeah, a loose contact. I\'ll take it off the price.',
-    insidesOk: 'The insides are fine. Told you.',
-    worn: 'Worn out. ',
-    offer: '{worn}I\'ll give {n} cr.',
+    aiFound: 'What AI? I had no idea! Take it cheaper, then.',
+    defectFound: 'Yeah, the contact\'s loose. I\'ll knock some off.',
+    insidesOk: 'Insides are fine. Told you.',
+    worn: 'It\'s seen better days. ',
+    offer: '{worn}I\'ll give you {n} cr.',
   },
-  // draft: the log
   log: {
     title: 'Log',
     day: 'D{d}: ',
@@ -265,11 +258,11 @@ export const EN: Dict = {
     shopClosed: 'The shop is closed. The evening is free.',
     collateral: 'Grobov took {cash} cr. and goods: {items}.{over}{hot}',
     noChange: ' No change (overpaid ~{n} cr.).',
-    hotGone: ' The stolen goods ({n}) went through his channels, wanted −{relief}.',
+    hotGone: ' The stolen goods ({n}) moved through his people, heat −{relief}.',
     bought: 'Bought: {item} for {n} cr. from {name}.',
     sold: 'Sold: {item} for {n} cr. ({name}).{stolen}{ai}',
     soldStolen: ' The stolen goods moved on.',
-    soldAi: ' The item carried an AI, security got suspicious.',
+    soldAi: ' It was AI-infected — security is on alert.',
     dig: 'Junkyard: {m}',
     market: 'Flea market: {n} spare parts for {price} cr.',
     supplier: 'Ordered {n} spare parts from the supplier.',
@@ -283,24 +276,23 @@ export const EN: Dict = {
     craftedAi: ' Looks like the AI moved into the new build.',
     loaded: 'Save loaded: day {day}, {credits} cr.',
   },
-  // draft: the night
   night: {
-    infection: 'Something blinked in the stock at night. The {item} acts strange.',
+    infection: 'Something blinked in the stock at night. The {item} is acting strange.',
     raid: 'Morning patrol raid. Stolen goods seized: {n}. Fine {fine} cr.',
-    quiet: 'A quiet night on the lower tier.',
+    quiet: 'A quiet night on the Lower Deck.',
   },
   float: {
-    crafted: 'BUILT', // draft
+    crafted: 'BUILT',
   },
   save: {
-    about: 'Copy the code and keep it in your notes. On another device or another version of the game paste it into the load box.', // draft
-    copy: 'Copy', // draft
-    loadLabel: 'Load a save', // draft
-    loadPlaceholder: 'Paste the code', // draft
-    load: 'Load', // draft
-    copied: 'Copied.', // draft
-    selectManually: 'The code is selected, copy it manually.', // draft
-    badCode: 'Code not recognized. Check that the whole code was copied.', // draft
+    about: 'Copy the code and keep it in your notes. On another device or another version of the game paste it into the load box.',
+    copy: 'Copy',
+    loadLabel: 'Load a save',
+    loadPlaceholder: 'Paste the code',
+    load: 'Load',
+    copied: 'Copied.',
+    selectManually: 'The code is selected, copy it manually.',
+    badCode: 'Code not recognized. Check that the whole code was copied.',
     download: 'Download as file',
     upload: 'Load from file',
     fileUnread: 'Could not read the file. Choose a save file (.txt).',
@@ -315,7 +307,7 @@ export const EN: Dict = {
   },
   junk: {
     title: 'Ring B junkyard',
-    about: 'Road — {hours} h, a dig — {dig} h. Each dig gives up to three items and parts, deeper means rarer finds. The backpack holds {size}. After midnight the shop opens later tomorrow.', // draft
+    about: 'Road — {hours} h, a dig — {dig} h. Each dig gives up to three items and spare parts, deeper means rarer finds. The backpack holds {size}. After midnight the shop opens later tomorrow.', // draft
     arrive: 'Ring B junkyard. One big heap. No guards — dig.', // draft
     dig: 'Dig',
     depth: 'depth',
@@ -324,13 +316,13 @@ export const EN: Dict = {
     found: 'Dug up: {list}. Broken — for the workbench.', // draft
     rare: 'Rare find: {name}!',
     rareWith: '{r} Also: {list}.', // draft
-    andParts: '{m} Parts: +{n}.', // draft
+    andParts: '{m} Spare parts: +{n}.', // draft
     full: '{m} Backpack full: no room for {list}.', // draft
-    broken: 'Dug out: {name}, broken. Off to the workbench.',
-    droneTook: 'Guard drone! Had to run — the {name} stayed behind.',
-    droneHeat: 'Guard drone! Had to run, it got my face (wanted +{n}).',
-    noDigs: 'The heap is dug through. Time to go home.',
-    home: 'Junkyard: home. Finds this visit: {n}.',
+    broken: 'Dug up: {name}, broken. For the workbench.',
+    droneTook: 'Guard drone! Had to run — left the {name} behind.',
+    droneHeat: 'Guard drone! Got away, but it saw my face (heat +{n}).',
+    noDigs: 'Nothing left to dig. Time to head home.',
+    home: 'Junkyard: back home. Finds this trip: {n}.',
     backpack: 'Backpack',
     packFull: 'Backpack full', // draft
     waits: 'No room: {list}.', // draft
@@ -349,8 +341,8 @@ export const EN: Dict = {
     reasons: {
       quiet: 'Start of the week, the deck is quiet',
       payday: 'Payday on the deck',
-      saving: 'Everyone saves for their debts',
-      heat: 'Wanted level is high, honest buyers stay away',
+      saving: 'Everyone\'s saving up for debt payments',
+      heat: 'Heat is high — honest buyers stay away',
       late: 'You opened at {time} after the junkyard',
     },
     overslept: 'Overslept after the junkyard: the shop opened late, {n} customers fewer.',
@@ -367,8 +359,8 @@ export const EN: Dict = {
     shelves: 'Stock',
     terminal: 'Crafting',
     client: 'Haggle',
-    bell: 'Call the next one',
-    wanted: 'Wanted {n}/{max} — grows with stolen goods',
+    bell: 'Next customer',
+    wanted: 'Heat {n}/{max} — rises with stolen goods',
   },
   window: { close: 'Close window' },
   stock: {
@@ -378,15 +370,15 @@ export const EN: Dict = {
     emptyFilter: 'Nothing fits this filter.',
     legend: { rare: 'rare', unknown: 'not checked', ai: 'AI', stolen: 'stolen', fake: 'fake', broken: 'defect' }, // draft: ai, stolen, fake
     estimate: 'Estimate',
-    actions: { diag: 'Diagnostics', repair: 'Repair +25%', fix: 'Fix defect', purge: 'Purge AI', wipe: 'Re-stamp №', scrap: 'Scrap' }, // short: one line on an iPhone SE
-    wipeNote: 'A re-stamped serial: +1 to the wanted level.',
+    actions: { diag: 'Diagnostics', repair: 'Repair +25%', fix: 'Fix defect', purge: 'Purge AI', wipe: 'Re-stamp S/N', scrap: 'Scrap' }, // short: one line on an iPhone SE
+    wipeNote: 'A re-stamped serial: +1 heat.',
     offer: 'Offer to the customer',
     shown: 'On the counter',
     prev: 'Previous item',
     back: '‹ Stock',
     next: 'Next item',
     position: '{n} of {total}',
-    wants: 'Looking for: {item}',
+    wants: 'Wants: {item}',
     sells: 'Sells: {item}, asks {ask} cr.',
     collects: 'Came for the payment: {amount} cr.',
   },

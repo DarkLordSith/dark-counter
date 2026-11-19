@@ -19,6 +19,9 @@ import { mulberry32 } from '../../src/rng';
 import type { GameState, KeyValueStore } from '../../src/types';
 import { makeState } from './helpers';
 
+import { GLYPHS, signTextX } from '../../src/sign';
+import enSource from '../../src/lang/en.ts?raw';
+
 const SOURCES = import.meta.glob<string>('../../src/**/*.ts', { query: '?raw', import: 'default', eager: true });
 const CYRILLIC = /[А-Яа-яЁё]/;
 
@@ -121,7 +124,8 @@ function stringLiterals(source: string): { text: string; line: number }[] {
 const CYRILLIC_FILES = ['../../src/lang/ru.ts', '../../src/lang/names.ts'];
 /** Single literals that may: the shop sign drawn by the scene's own pixel font, the font sample of the mono face. */
 const CYRILLIC_LITERALS: Record<string, string[]> = {
-  '../../src/scene.ts': ['Л', 'А', 'В', 'К', 'Б', 'ЛАВКА 7Б'],
+  // the glyphs of the Russian sign (the sign text itself is in the dictionaries: app.sign)
+  '../../src/sign.ts': ['Л', 'А', 'В', 'К', 'Б'],
   '../../src/main.ts': ['Ёё Жж Яя'],
 };
 
@@ -211,7 +215,7 @@ describe('t() and stored messages', () => {
     expect(render(tx('expense.paid', { items: [tx('expense.energy', { n: 20 }), tx('expense.tier', { n: 50 })] })))
       .toBe('Расходы: энергия −20 кр., взнос ярусу −50 кр.');
     setLang('en');
-    expect(render(tx('lines.buyer.0', { t: tx('items.comm') }))).toBe('I need a communicator. Today.');
+    expect(render(tx('lines.buyer.0', { t: tx('items.comm') }))).toBe('Need one: Communicator. Today.'); // EN v1: no |lower (task 37)
     expect(itemName('chip')).toBe('Neurochip');
   });
 
@@ -271,7 +275,7 @@ describe('(г) the log shows old and new lines', () => {
   it('Grobov keeps his Russian name in the save (an older build shows it), the screen translates it', () => {
     expect(LANDLORD_NAME).toBe('Ростовщик Гробов');
     setLang('en');
-    expect(t('landlord.name')).toBe('Grobov the lender');
+    expect(t('landlord.name')).toBe('Grobov the Moneylender');
   });
 });
 
@@ -382,5 +386,43 @@ describe('a new game in English', () => {
     expect(russian).toEqual([]);
     expect(getLang()).toBe('en');
     expect(Object.keys(DICTS)).toEqual(['ru', 'en']);
+  });
+});
+
+/* ---------- EN v1 (task 37): the scriptwriter's read-through ---------- */
+
+describe('EN v1', () => {
+  const values = leaves(EN).flatMap(leaf => (typeof leaf.value === 'string' ? [leaf.value] : [...leaf.value]));
+
+  it('Н1: no {x|lower} in English (the names keep their capitals, no articles before them)', () => {
+    expect(values.filter(value => value.includes('|lower'))).toEqual([]);
+    expect(EN.lines.buyer).toHaveLength(RU.lines.buyer.length);
+    setLang('en');
+    expect(render(tx('lines.buyer.0', { t: tx('items.visor') }))).toBe('Need one: AR visor. Today.');
+  });
+
+  it('Н2/Н4/Н5: the glossary — deck, heat, S/N, moneylender; no tier / wanted / № / lender left', () => {
+    expect(values.filter(value => /\btier\b|wanted|№|\blender\b/i.test(value))).toEqual([]);
+    expect(EN.landlord.name).toBe('Grobov the Moneylender');
+    expect(EN.hud.heat).toBe('heat');
+    expect(EN.deal.serial).toBe('S/N');
+    expect(EN.night.quiet).toContain('Lower Deck');
+  });
+
+  it('only the lines newer than EN v1 wait for the read-through (junkyard v3 and the stock legend, task 35)', () => {
+    const NEWER = ['about', 'arrive', 'found', 'rareWith', 'andParts', 'full', 'packFull', 'waits', 'openPack', 'leave', 'throwAway', 'keep', 'slotEmpty', 'legend'];
+    const drafts = enSource.split('\n').filter(line => /\/\/ draft/.test(line) && !line.trim().startsWith('//'));
+    expect(drafts.map(line => line.trim().split(':')[0]).filter(key => !NEWER.includes(key))).toEqual([]);
+  });
+
+  it('the sign: "ЛАВКА 7Б" / "SHOP 7B", centred in the frame (RU stays at x 65), every letter has a glyph', () => {
+    expect(RU.app.sign).toBe('ЛАВКА 7Б');
+    expect(EN.app.sign).toBe('SHOP 7B');
+    expect(signTextX(RU.app.sign)).toBe(65);
+    expect(signTextX(EN.app.sign)).toBe(67);
+    for (const sign of [RU.app.sign, EN.app.sign]) {
+      expect([...sign].filter(char => !GLYPHS[char])).toEqual([]);
+    }
+    expect(GLYPHS.B).toEqual(GLYPHS['В']);
   });
 });
