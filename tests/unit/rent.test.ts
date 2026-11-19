@@ -4,8 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEBT, LANDLORD_SEED } from '../../src/data';
 import { callNextCustomer, closeShop, customerLeaves, isLandlordDue, payRent, sleepUntilMorning } from '../../src/economy';
 import { actorReset, newGame, state } from '../../src/state';
-import { daysRu, pluralRu } from '../../src/util';
-import { makeState } from './helpers';
+import { pluralRu } from '../../src/util';
+import { t } from '../../src/i18n';
+import { makeState, logLines } from './helpers';
+import { text } from '../../src/i18n';
 
 function seedRandom(seed: number): void {
   let value = seed;
@@ -15,7 +17,7 @@ function seedRandom(seed: number): void {
 /** Ends the current day without trading. */
 function skipDay(): string[] {
   closeShop(state);
-  return sleepUntilMorning(state, gameRng).events;
+  return sleepUntilMorning(state, gameRng).events.map(event => text(event));
 }
 
 /** Calls customers until the landlord stands at the counter. */
@@ -43,7 +45,7 @@ describe('payment schedule', () => {
     seedRandom(3);
     newGame();
     expect(state).toMatchObject({ day: 1, rent: 400, owed: 400, nextDue: 7, debt: 20000 });
-    expect(state.log.at(-1)).toContain('раз в 7 дней');
+    expect(logLines(state).at(-1)).toContain('раз в 7 дней');
     while (state.day < 7) {
       expect(isLandlordDue(state)).toBe(false);
       const events = skipDay();
@@ -59,13 +61,13 @@ describe('payment schedule', () => {
     state.cust = { kind: 'rent', name: 'Гробов', seed: LANDLORD_SEED, msg: '', pat: 0, max: 0, done: {} };
     payRent(state);
     expect(state).toMatchObject({ credits: 600, rent: 550, owed: 550, nextDue: 14, llDone: true });
-    expect(state.log[0]).toContain('550 кр. на день 14');
+    expect(logLines(state)[0]).toContain('550 кр. на день 14');
   });
 });
 
-describe('pluralRu / daysRu', () => {
+describe('pluralRu / plural.days', () => {
   it('picks the Russian plural form', () => {
-    expect([1, 2, 5, 7, 11, 12, 21, 22, 25, 101, 111].map(daysRu)).toEqual([
+    expect([1, 2, 5, 7, 11, 12, 21, 22, 25, 101, 111].map(n => t('plural.days', { n }))).toEqual([
       '1 день', '2 дня', '5 дней', '7 дней', '11 дней', '12 дней', '21 день', '22 дня', '25 дней', '101 день', '111 дней',
     ]);
     expect(pluralRu(0, 'a', 'b', 'c')).toBe('c');

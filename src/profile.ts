@@ -1,18 +1,20 @@
 // =====================================================================
 //  profile.ts — the player profile: endings seen (per mode), unlocked
-//  modes, the mode played last. Stored under PROFILE_KEY, apart from
+//  modes, the mode played last, the interface language. Stored under PROFILE_KEY, apart from
 //  every save: "Новая игра" and save codes never touch it.
 //  Pure functions over a KeyValueStore (localStorage in the game).
 // =====================================================================
-import { ENDING_TEXT, MODES, PLAYABLE_MODES, PROFILE_KEY } from './data';
+import { MODES, PLAYABLE_MODES, PROFILE_KEY } from './data';
+import { isLang } from './i18n';
+import { RU } from './lang/ru';
 import type { KeyValueStore, Mode, Profile, ProfileEnding } from './types';
 
 const isMode = (value: unknown): value is Mode => typeof value === 'string' && (MODES as readonly string[]).includes(value);
 const isProfileEnding = (value: unknown): value is ProfileEnding =>
-  value === 'paid' || (typeof value === 'string' && Object.hasOwn(ENDING_TEXT.ru, value));
+  value === 'paid' || (typeof value === 'string' && Object.hasOwn(RU.ending, value));
 
 export function defaultProfile(): Profile {
-  return { endings: {}, unlocked: [...PLAYABLE_MODES], last: 'story', tapped: false };
+  return { endings: {}, unlocked: [...PLAYABLE_MODES], last: 'story', tapped: false, lang: null };
 }
 
 /** The game's localStorage, or null where there is none (Vitest in node, blocked storage). */
@@ -52,6 +54,7 @@ export function loadProfile(store: KeyValueStore | null = browserStore()): Profi
     profile.last = raw.last;
   }
   profile.tapped = raw.tapped === true;
+  profile.lang = isLang(raw.lang) ? raw.lang : null;
   return profile;
 }
 

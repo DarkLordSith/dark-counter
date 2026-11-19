@@ -91,7 +91,7 @@ describe('one seed → one and the same day', () => {
   });
 
   it('the night: infection, the raid and the morning are the same', () => {
-    const night = (seed: number): { state: GameState; events: string[] } => {
+    const night = (seed: number): { state: GameState; events: unknown[] } => {
       const game = makeState({
         phase: 'evening', heat: 9, day: 4, nextDue: 7,
         // fixed uids: makeItem() numbers items from a shared counter

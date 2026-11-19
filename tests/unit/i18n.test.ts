@@ -1,0 +1,360 @@
+// Localization RU/EN (task 34): one dictionary per language, t() with typed keys,
+// the log and the bubble stored as keys and translated when shown.
+import { afterEach, describe, expect, it } from 'vitest';
+import { HUMAN_NAMES, ITEM_TYPES, LANDLORD_NAME, ROBOT_NAMES } from '../../src/data';
+import { mainAction, chipLines } from '../../src/actionbar';
+import {
+  askBuyer, buyFromSeller, callNextCustomer, closeShop, customerLeaves, deferRent, dig, evict, goHome, goToJunkyard, inspect, offerToSeller,
+  payRent, payWithCollateral,
+  presentItem, sellToBuyer, sleepUntilMorning,
+} from '../../src/economy';
+import { DICTS, decode, detectLang, getLang, itemName, render, say, setLang, t, text, tx } from '../../src/i18n';
+import { EN } from '../../src/lang/en';
+import { RU } from '../../src/lang/ru';
+import { loadProfile, saveProfile } from '../../src/profile';
+import { addLog, createGame } from '../../src/state';
+import { isRareLine } from '../../src/star';
+import { mulberry32 } from '../../src/rng';
+import type { GameState, KeyValueStore } from '../../src/types';
+import { makeState } from './helpers';
+
+const SOURCES = import.meta.glob<string>('../../src/**/*.ts', { query: '?raw', import: 'default', eager: true });
+const CYRILLIC = /[А-Яа-яЁё]/;
+
+afterEach(() => setLang('ru'));
+
+/* ---------- (а) no Cyrillic in string literals outside the Russian dictionary ---------- */
+
+/**
+ * String and template literals of a TypeScript source, comments skipped. TypeScript 7 has no JS API,
+ * so this is a small scanner: quotes, templates with ${…} (nested), comments and regex literals.
+ */
+function stringLiterals(source: string): { text: string; line: number }[] {
+  const found: { text: string; line: number }[] = [];
+  let i = 0;
+  const lineAt = (pos: number): number => source.slice(0, pos).split('\n').length;
+  const REGEX_BEFORE = '(,=:[!&|?{};+-*%<>~^';
+  let lastCode = '';
+  function readQuoted(quote: string): void {
+    const start = i;
+    i++;
+    let value = '';
+    while (i < source.length && source[i] !== quote) {
+      value += source[i] === '\\' ? source[i++] + source[i] : source[i];
+      i++;
+    }
+    i++;
+    found.push({ text: value, line: lineAt(start) });
+  }
+  function readTemplate(): void {
+    const start = i;
+    i++;
+    let value = '';
+    while (i < source.length && source[i] !== '`') {
+      if (source[i] === '\\') {
+        value += source[i] + source[i + 1];
+        i += 2;
+      } else if (source[i] === '$' && source[i + 1] === '{') {
+        i += 2;
+        readCode('}');
+        i++;
+        value += '${…}';
+      } else {
+        value += source[i++];
+      }
+    }
+    i++;
+    found.push({ text: value, line: lineAt(start) });
+  }
+  function readCode(until?: string): void {
+    let depth = 0;
+    while (i < source.length) {
+      const c = source[i];
+      if (until && c === until && depth === 0) {
+        return;
+      }
+      if (c === '/' && source[i + 1] === '/') {
+        i = source.indexOf('\n', i);
+        i = i < 0 ? source.length : i;
+      } else if (c === '/' && source[i + 1] === '*') {
+        i = source.indexOf('*/', i + 2) + 2;
+      } else if (c === '\'' || c === '"') {
+        readQuoted(c);
+        lastCode = 'x';
+      } else if (c === '`') {
+        readTemplate();
+        lastCode = 'x';
+      } else if (c === '/' && (lastCode === '' || REGEX_BEFORE.includes(lastCode))) {
+        i++;
+        let inClass = false;
+        while (i < source.length && (source[i] !== '/' || inClass)) {
+          if (source[i] === '\\') {
+            i++;
+          } else if (source[i] === '[') {
+            inClass = true;
+          } else if (source[i] === ']') {
+            inClass = false;
+          }
+          i++;
+        }
+        i++;
+        lastCode = 'x';
+      } else {
+        if (c === '{') {
+          depth++;
+        } else if (c === '}') {
+          depth--;
+        }
+        if (!/\s/.test(c)) {
+          lastCode = /[\w$)\]]/.test(c) ? 'x' : c;
+        }
+        i++;
+      }
+    }
+  }
+  readCode();
+  return found;
+}
+
+/** Files that may hold Cyrillic: the Russian dictionary and the proper names. */
+const CYRILLIC_FILES = ['../../src/lang/ru.ts', '../../src/lang/names.ts'];
+/** Single literals that may: the shop sign drawn by the scene's own pixel font, the font sample of the mono face. */
+const CYRILLIC_LITERALS: Record<string, string[]> = {
+  '../../src/scene.ts': ['Л', 'А', 'В', 'К', 'Б', 'ЛАВКА 7Б'],
+  '../../src/main.ts': ['Ёё Жж Яя'],
+};
+
+describe('(а) the texts live in the dictionaries', () => {
+  it('the scanner sees strings and templates, not comments', () => {
+    const literals = stringLiterals("// 'комментарий'\nconst a = 'да'; /* \"нет\" */ const b = `x ${'вложенное'} у`; const r = /'/g; const c = 'ok';");
+    expect(literals.map(literal => literal.text)).toEqual(['да', 'вложенное', 'x ${…} у', 'ok']);
+  });
+
+  it('no Cyrillic in string literals of src/ outside lang/ru.ts (and the listed exceptions)', () => {
+    const offenders: string[] = [];
+    for (const [path, source] of Object.entries(SOURCES)) {
+      if (CYRILLIC_FILES.includes(path)) {
+        continue;
+      }
+      const allowed = CYRILLIC_LITERALS[path] ?? [];
+      for (const literal of stringLiterals(source)) {
+        if (CYRILLIC.test(literal.text) && !allowed.includes(literal.text)) {
+          offenders.push(`${path.replace('../../', '')}:${literal.line} ${literal.text}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+/* ---------- (б, в) RU and EN have the same keys, params and list lengths ---------- */
+
+type Leaf = { path: string; value: string | readonly string[] };
+
+function leaves(node: unknown, path = ''): Leaf[] {
+  if (typeof node === 'string' || Array.isArray(node)) {
+    return [{ path, value: node as string | readonly string[] }];
+  }
+  return Object.entries(node as Record<string, unknown>).flatMap(([key, child]) => leaves(child, path ? `${path}.${key}` : key));
+}
+
+const params = (value: string): string[] => [...value.matchAll(/\{(\w+)(?:\|\w+)?\}/g)].map(match => match[1]).sort();
+
+describe('(б, в) the dictionaries match', () => {
+  const ru = leaves(RU);
+  const en = leaves(EN);
+
+  it('en has every key of ru and nothing else', () => {
+    expect(en.map(leaf => leaf.path)).toEqual(ru.map(leaf => leaf.path));
+  });
+
+  it('the {params} are the same in both languages, lists have the same length', () => {
+    const mismatches: string[] = [];
+    ru.forEach((leaf, index) => {
+      const other = en[index].value;
+      const mine = typeof leaf.value === 'string' ? [leaf.value] : leaf.value;
+      const theirs = typeof other === 'string' ? [other] : other;
+      if (mine.length !== theirs.length) {
+        mismatches.push(`${leaf.path}: ${mine.length} lines vs ${theirs.length}`);
+        return;
+      }
+      mine.forEach((line, i) => {
+        if (params(line).join() !== params(theirs[i]).join()) {
+          mismatches.push(`${leaf.path}[${i}]: {${params(line)}} vs {${params(theirs[i])}}`);
+        }
+      });
+    });
+    expect(mismatches).toEqual([]);
+  });
+
+  it('English has no Cyrillic; every item of the catalog has a name in both', () => {
+    expect(leaves(EN).filter(leaf => CYRILLIC.test(String(leaf.value))).map(leaf => leaf.path)).toEqual([]);
+    expect(Object.keys(RU.items)).toEqual(Object.keys(ITEM_TYPES));
+    expect(Object.keys(EN.items)).toEqual(Object.keys(ITEM_TYPES));
+  });
+
+  it('plural forms: three in both, picked by the language rule', () => {
+    expect(RU.plural.days).toHaveLength(3);
+    expect([1, 2, 5, 11, 21, 22].map(n => t('plural.days', { n }))).toEqual(['1 день', '2 дня', '5 дней', '11 дней', '21 день', '22 дня']);
+    setLang('en');
+    expect([1, 2, 21].map(n => t('plural.days', { n }))).toEqual(['1 day', '2 days', '21 days']);
+  });
+});
+
+/* ---------- t(), messages, the language ---------- */
+
+describe('t() and stored messages', () => {
+  it('fills params, nested messages, lists and {x|lower}', () => {
+    expect(t('debt.menuDebt', { debt: 900 })).toBe('Долг: 900 кр.');
+    expect(render(tx('lines.buyer.0', { t: tx('items.comm') }))).toBe('Мне нужен коммуникатор. Сегодня.');
+    expect(render(tx('expense.paid', { items: [tx('expense.energy', { n: 20 }), tx('expense.tier', { n: 50 })] })))
+      .toBe('Расходы: энергия −20 кр., взнос ярусу −50 кр.');
+    setLang('en');
+    expect(render(tx('lines.buyer.0', { t: tx('items.comm') }))).toBe('I need a communicator. Today.');
+    expect(itemName('chip')).toBe('Neurochip');
+  });
+
+  it('a key of a newer build shows the key, a missing param stays as {name}', () => {
+    expect(render({ k: 'future.key' } as never)).toBe('future.key');
+    expect(t('debt.menuDebt')).toBe('Долг: {debt} кр.');
+  });
+
+  it('the system language: ru-* is Russian, everything else English', () => {
+    expect(['ru', 'ru-RU', 'RU', 'en-US', 'de', undefined].map(detectLang)).toEqual(['ru', 'ru', 'ru', 'en', 'en', 'en']);
+  });
+
+  it('the language choice lives in the player profile, not in the save', () => {
+    const data = new Map<string, string>();
+    const store: KeyValueStore = { getItem: key => data.get(key) ?? null, setItem: (key, value) => void data.set(key, value) };
+    expect(loadProfile(store).lang).toBeNull();
+    const profile = loadProfile(store);
+    profile.lang = 'en';
+    saveProfile(profile, store);
+    expect(loadProfile(store).lang).toBe('en');
+    data.set('dark-counter-profile', JSON.stringify({ lang: 'de' }));
+    expect(loadProfile(store).lang).toBeNull();
+    expect(createGame('story', mulberry32(1))).not.toHaveProperty('lang');
+  });
+});
+
+/* ---------- (г) the log: old plain lines and new {k, p} entries ---------- */
+
+describe('(г) the log shows old and new lines', () => {
+  it('an old plain line stays as it was, in any language', () => {
+    const old = 'Д5: Продано: Нейрочип за 400 кр. (Пак).';
+    expect(text(old)).toBe(old);
+    setLang('en');
+    expect(text(old)).toBe(old);
+    expect(text('{not json')).toBe('{not json');
+  });
+
+  it('a new entry is a JSON string {d, k, p} and is translated when shown', () => {
+    const game = makeState({ day: 12 });
+    addLog(game, tx('log.sold', { item: tx('items.chip'), n: 400, name: 'Пак', stolen: tx('log.soldStolen'), ai: '' }));
+    expect(typeof game.log[0]).toBe('string');
+    expect(decode(game.log[0])).toEqual({ d: 12, k: 'log.sold', p: { item: { k: 'items.chip' }, n: 400, name: 'Пак', stolen: { k: 'log.soldStolen' }, ai: '' } });
+    expect(text(game.log[0])).toBe('Д12: Продано: Нейрочип за 400 кр. (Пак). Краденое ушло дальше.');
+    setLang('en');
+    expect(text(game.log[0])).toBe('D12: Sold: Neurochip for 400 cr. (Пак). The stolen goods moved on.');
+  });
+
+  it('the rare-find star works for new entries and old plain lines', () => {
+    const game = makeState();
+    addLog(game, tx('log.dig', { m: tx('junk.rare', { name: tx('items.arm') }) }));
+    expect(isRareLine(game.log[0])).toBe(true);
+    expect(isRareLine(say('junk.rare', { name: tx('items.arm') }))).toBe(true);
+    expect(isRareLine('Д3: Свалка: Редкая находка: Кибер-рука!')).toBe(true);
+    expect(isRareLine(say('junk.empty'))).toBe(false);
+  });
+
+  it('Grobov keeps his Russian name in the save (an older build shows it), the screen translates it', () => {
+    expect(LANDLORD_NAME).toBe('Ростовщик Гробов');
+    setLang('en');
+    expect(t('landlord.name')).toBe('Grobov the lender');
+  });
+});
+
+/* ---------- a day in English: no Russian on the screen except proper names ---------- */
+
+/** Everything a played state puts into words: the log, the bubble, the junkyard line, the bar, the chip. */
+function screenTexts(game: GameState): string[] {
+  const actor = { phase: game.cust ? 'idle' : 'empty', seed: 0, x: 0, scanStart: 0 } as never;
+  return [
+    ...game.log.map(line => text(line)),
+    game.cust ? text(game.cust.msg) : '',
+    text(game.jmsg),
+    game.over ? text(game.over) : '',
+    ...(['deal', 'inv', 'craft'] as const).map(tab => {
+      const main = mainAction(game, actor, tab);
+      return main.kind === 'button' ? main.label : main.kind === 'hint' ? main.text : '';
+    }),
+    ...chipLines(game),
+  ];
+}
+
+const NAMES = [...HUMAN_NAMES, ...ROBOT_NAMES].sort((a, b) => b.length - a.length);
+const withoutNames = (line: string): string => NAMES.reduce((rest, name) => rest.split(name).join(''), line);
+
+describe('a new game in English', () => {
+  it('plays days through (customers, inspection, haggling, Grobov, the junkyard, the night) without Russian words', () => {
+    setLang('en');
+    const rng = mulberry32(34);
+    const game = createGame('story', rng);
+    const seen: string[] = [];
+    for (let step = 0; step < 600 && !game.over; step++) {
+      if (game.phase === 'shop') {
+        if (!game.cust && !callNextCustomer(game, rng)) {
+          closeShop(game);
+        } else if (game.cust?.kind === 'sell') {
+          inspect(game, (['cond', 'serial', 'flaw'] as const)[step % 3]);
+          if (step % 4 === 0) {
+            offerToSeller(game, 10, rng); // an insult
+          } else if (step % 4 === 1) {
+            offerToSeller(game, Math.round(game.cust.ask * 0.8), rng);
+          } else {
+            buyFromSeller(game);
+          }
+        } else if (game.cust?.kind === 'buy') {
+          const match = game.inv.find(item => item.t === (game.cust as { want: string }).want);
+          if (!match) {
+            customerLeaves(game);
+          } else if (!game.cust.item) {
+            presentItem(game, match.uid);
+          } else if (step % 2) {
+            askBuyer(game, (game.cust.offer ?? 0) * 2, rng);
+          } else {
+            sellToBuyer(game);
+          }
+        } else if (game.cust?.kind === 'rent') {
+          seen.push(...screenTexts(game));
+          if (game.credits >= game.owed) {
+            payRent(game);
+          } else if (!game.deferred) {
+            deferRent(game);
+          } else {
+            payWithCollateral(game);
+            if (game.cust) {
+              evict(game);
+            }
+          }
+        }
+      } else if (game.where === 'home' && game.hours >= 2 && game.day % 2) {
+        goToJunkyard(game, rng);
+      } else if (game.where === 'junk') {
+        if (!dig(game, rng) || !game.junk?.d) {
+          seen.push(...screenTexts(game));
+          goHome(game);
+        }
+      } else {
+        const report = sleepUntilMorning(game, rng);
+        seen.push(...report.events.map(event => text(event)));
+      }
+      seen.push(...screenTexts(game));
+    }
+    expect(game.day).toBeGreaterThan(5);
+    const russian = [...new Set(seen.map(withoutNames).filter(line => CYRILLIC.test(line)))];
+    expect(russian).toEqual([]);
+    expect(getLang()).toBe('en');
+    expect(Object.keys(DICTS)).toEqual(['ru', 'en']);
+  });
+});

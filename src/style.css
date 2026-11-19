@@ -1545,6 +1545,27 @@ input:focus-visible {
   text-align: left;
 }
 
+/* Language in the ☰ menu (task 34): the label, then RU / EN; the chosen one is pressed. */
+.lang-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lang-row span {
+  flex: 1;
+}
+
+.lang-btn {
+  min-width: 56px;
+  min-height: 44px;
+}
+
+.lang-btn[aria-pressed="true"] {
+  border-color: var(--m-action);
+  color: var(--m-action);
+}
+
 /* Mode screen: cards in a column (mobile first), buttons 44 pt. */
 .modes {
   display: flex;

@@ -1,11 +1,12 @@
 // Font lab (debug sheet): defaults, allowed sizes, storage key, the copied result.
 import { describe, expect, it } from 'vitest';
 import { SAVE_KEY } from '../../src/data';
-import {
-  DEFAULT_SIZES, defaultSettings, DESKTOP_QUERY, FONTLAB_KEY, FONTLAB_KEYS, FONTLAB_TEXT, formatDpr, formatSettings, GROUPS,
-  isCrisp, isDefault, isPixelToken, PIXEL_SIZES, PROFILE_SIZES, PROFILES, sanitize, SIZE_TOKENS, stepSize,
-} from '../../src/fontlab';
+
+import { DEFAULT_SIZES, defaultSettings, DESKTOP_QUERY, FONTLAB_KEY, FONTLAB_KEYS, formatDpr, formatSettings, GROUPS, isCrisp, isDefault, isPixelToken, PIXEL_SIZES, PROFILE_SIZES, PROFILES, sanitize, SIZE_TOKENS, stepSize } from '../../src/fontlab';
+
 import styleCss from '../../src/style.css?raw';
+import { RU } from '../../src/lang/ru';
+import { EN } from '../../src/lang/en';
 
 const css = styleCss.replace(/\/\*[\s\S]*?\*\//g, '');
 const sizesIn = (body: string): Record<string, number> =>
@@ -132,9 +133,9 @@ describe('wiring', () => {
   });
 
   it('Russian and English texts have the same keys', () => {
-    expect(Object.keys(FONTLAB_TEXT.en).sort()).toEqual(Object.keys(FONTLAB_TEXT.ru).sort());
-    expect(Object.keys(FONTLAB_TEXT.en.groupNames).sort()).toEqual([...GROUPS].sort());
-    expect(Object.keys(FONTLAB_TEXT.en.sizeNames).sort()).toEqual([...SIZE_TOKENS].sort());
-    expect(Object.keys(FONTLAB_TEXT.en.profileNames).sort()).toEqual([...PROFILES].sort());
+    expect(Object.keys(EN.fontlab).sort()).toEqual(Object.keys(RU.fontlab).sort());
+    expect(Object.keys(EN.fontlab.groupNames).sort()).toEqual([...GROUPS].sort());
+    expect(Object.keys(EN.fontlab.sizeNames).sort()).toEqual([...SIZE_TOKENS].sort());
+    expect(Object.keys(EN.fontlab.profileNames).sort()).toEqual([...PROFILES].sort());
   });
 });

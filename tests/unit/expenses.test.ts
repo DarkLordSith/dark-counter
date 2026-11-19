@@ -5,7 +5,8 @@ import { EXPENSES } from '../../src/data';
 import { expenseLines, expensesToday, payExpenses, sleepUntilMorning } from '../../src/economy';
 import { mulberry32 } from '../../src/rng';
 import uiTs from '../../src/ui.ts?raw';
-import { makeState } from './helpers';
+import { makeState, logLines } from './helpers';
+import { text } from '../../src/i18n';
 
 /** Evening of `day`, Grobov's next visit on `nextDue`; no heat, so no raid. */
 const evening = (day: number, nextDue: number, credits: number) =>
@@ -18,7 +19,7 @@ describe('the morning bills', () => {
     expect(expenses).toEqual({ energy: EXPENSES.energyPerDay, tier: 0, paid: EXPENSES.energyPerDay, shortfall: 0, toDebt: 0 });
     expect(state.credits).toBe(500 - EXPENSES.energyPerDay);
     expect(state.debt).toBe(20000);
-    expect(state.log.some(line => line.endsWith('Расходы: энергия −20 кр.'))).toBe(true);
+    expect(logLines(state).some(line => line.endsWith('Расходы: энергия −20 кр.'))).toBe(true);
   });
 
   it('the deck fee comes on the first day of the station week (the morning after the payment day)', () => {
@@ -27,7 +28,7 @@ describe('the morning bills', () => {
     const { expenses } = sleepUntilMorning(state, mulberry32(1));
     expect(expenses?.tier).toBe(EXPENSES.tierFee);
     expect(state.credits).toBe(500 - EXPENSES.energyPerDay - EXPENSES.tierFee);
-    expect(state.log.some(line => line.endsWith('Расходы: энергия −20 кр., взнос ярусу −50 кр.'))).toBe(true);
+    expect(logLines(state).some(line => line.endsWith('Расходы: энергия −20 кр., взнос ярусу −50 кр.'))).toBe(true);
   });
 
   it('without enough credits the rest goes onto the debt, with a line of its own', () => {
@@ -36,7 +37,7 @@ describe('the morning bills', () => {
     expect(paid).toEqual({ energy: 20, tier: 50, paid: 30, shortfall: 40, toDebt: 40 });
     expect(state.credits).toBe(0);
     expect(state.debt).toBe(20040);
-    expect(expenseLines(paid, state.debt).shortfall).toBe('Не хватило 40 кр.: ушло в долг, долг 20040 кр.');
+    expect(text(expenseLines(paid, state.debt).shortfall!)).toBe('Не хватило 40 кр.: ушло в долг, долг 20040 кр.');
   });
 
   it('with no credits at all the whole bill is debt; nothing goes below zero', () => {
@@ -51,7 +52,7 @@ describe('the morning bills', () => {
     const paid = payExpenses(state)!;
     expect(paid).toEqual({ energy: 20, tier: 0, paid: 5, shortfall: 15, toDebt: 0 });
     expect(state).toMatchObject({ credits: 0, debt: 0, seat: true });
-    expect(expenseLines(paid, state.debt).shortfall).toBe('Не хватило 15 кр. В долг не пишут: место на шаттле оплачено.');
+    expect(text(expenseLines(paid, state.debt).shortfall!)).toBe('Не хватило 15 кр. В долг не пишут: место на шаттле оплачено.');
   });
 
   it('a whole night after the seat: the morning leaves the debt at zero', () => {
@@ -84,6 +85,6 @@ describe('the morning bills', () => {
   it('the morning window shows the bills, the shortfall in the risk colour', () => {
     const report = uiTs.match(/function showMorningReport[\s\S]*?\n}/)?.[0] ?? '';
     expect(report).toContain('expenseLines(report.expenses, state.debt)');
-    expect(report).toContain('<li class="m-risk">${bills.shortfall}</li>');
+    expect(report).toContain('<li class="m-risk">${textOf(bills.shortfall)}</li>');
   });
 });

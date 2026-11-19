@@ -1,7 +1,8 @@
 // The junkyard backpack (task 29): one row of slots per visit, the finds from the left, the drone's trace in place.
 import { describe, expect, it } from 'vitest';
 import { backpackFinds, backpackSlots, droneTrace } from '../../src/backpack';
-import { JUNK, JUNK_TEXT } from '../../src/data';
+import { JUNK } from '../../src/data';
+
 import { dig, digsPerVisit, goToJunkyard } from '../../src/economy';
 import { ICONS } from '../../src/icons';
 import { mulberry32 } from '../../src/rng';
@@ -9,6 +10,8 @@ import type { JunkVisit } from '../../src/types';
 import styleCss from '../../src/style.css?raw';
 import uiTs from '../../src/ui.ts?raw';
 import { makeItem, makeState } from './helpers';
+import { RU } from '../../src/lang/ru';
+import { EN } from '../../src/lang/en';
 
 const visitOf = (f: number[], dp: number, d: number): JunkVisit => ({ d, n: 0, dp, f, s: 77 });
 
@@ -72,8 +75,8 @@ describe('backpack on screen', () => {
     const pane = uiTs.match(/function junkyardPane[\s\S]*?\n}/)?.[0] ?? '';
     expect(pane.indexOf('noiseMeter(')).toBeLessThan(pane.indexOf('backpackRow('));
     expect(pane.indexOf('backpackRow(')).toBeLessThan(pane.indexOf('${homeHint}'));
-    expect(JUNK_TEXT.ru.backpack).toBe('Рюкзак');
-    expect(JUNK_TEXT.en.backpack).toBe('Backpack');
+    expect(RU.junk.backpack).toBe('Рюкзак');
+    expect(EN.junk.backpack).toBe('Backpack');
   });
 
   it('tiles 60×36, an empty slot is a line outline, ✕ is a 5×5 pixel icon', () => {

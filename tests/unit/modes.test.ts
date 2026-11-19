@@ -1,14 +1,18 @@
 // Game modes (story / calm / sandbox stub), one save slot per mode, the player profile.
 import { gameRng } from '../../src/rng';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEBT, LANDLORD_SEED, MODE_TEXT, MODES, PLAYABLE_MODES, PROFILE_KEY, SAVE_CODE_PREFIX, SAVE_KEY, SAVE_KEYS } from '../../src/data';
+import { DEBT, LANDLORD_SEED, MODES, PLAYABLE_MODES, PROFILE_KEY, SAVE_CODE_PREFIX, SAVE_KEY, SAVE_KEYS } from '../../src/data';
+import { text } from '../../src/i18n';
+
 import {
   canBuySeat, closeShop, isDebtClosed, isLandlordDue, payEarly, payRent, sleepUntilMorning,
 } from '../../src/economy';
 import { defaultProfile, isPlayable, loadProfile, recordEnding, saveProfile } from '../../src/profile';
 import { actorReset, exportSave, importSave, loadGame, migrate, newGame, persistence, readSlot, saveGame, setState, state } from '../../src/state';
 import type { KeyValueStore, SavedGame } from '../../src/types';
-import { makeState } from './helpers';
+import { makeState, logLines } from './helpers';
+import { RU } from '../../src/lang/ru';
+import { EN } from '../../src/lang/en';
 
 const FIXTURES = import.meta.glob<string>('../fixtures/*.txt', { query: '?raw', import: 'default', eager: true });
 
@@ -20,7 +24,7 @@ function memoryStore(): KeyValueStore & { data: Map<string, string> } {
 
 function sleep(): string[] {
   closeShop(state);
-  return sleepUntilMorning(state, gameRng).events;
+  return sleepUntilMorning(state, gameRng).events.map(event => text(event));
 }
 
 afterEach(() => {
@@ -33,9 +37,9 @@ describe('modes', () => {
   it('story, calm and the locked sandbox; names RU/EN', () => {
     expect(MODES).toEqual(['story', 'calm', 'sandbox']);
     expect(PLAYABLE_MODES).toEqual(['story', 'calm']);
-    expect(MODE_TEXT.ru.names).toEqual({ story: 'Начало конца', calm: 'Без таймера', sandbox: 'Своя лавка' });
-    expect(MODE_TEXT.en.names).toEqual({ story: 'Beginning of the End', calm: 'No Timer', sandbox: 'Your Own Shop' });
-    expect(Object.keys(MODE_TEXT.en)).toEqual(Object.keys(MODE_TEXT.ru));
+    expect(RU.mode.names).toEqual({ story: 'Начало конца', calm: 'Без таймера', sandbox: 'Своя лавка' });
+    expect(EN.mode.names).toEqual({ story: 'Beginning of the End', calm: 'No Timer', sandbox: 'Your Own Shop' });
+    expect(Object.keys(EN.mode)).toEqual(Object.keys(RU.mode));
   });
 
   it('a new game is story by default', () => {
@@ -43,7 +47,7 @@ describe('modes', () => {
     expect(state.mode).toBe('story');
     newGame('calm');
     expect(state).toMatchObject({ mode: 'calm', debt: DEBT.start });
-    expect(state.log[0]).not.toContain('шаттл');
+    expect(logLines(state)[0]).not.toContain('шаттл');
   });
 
   it('sandbox cannot be played yet, even if a profile or a code says so', () => {
@@ -153,7 +157,7 @@ describe('calm "Без таймера"', () => {
 
 describe('player profile', () => {
   it('defaults: no endings, story and calm open, last = story', () => {
-    expect(loadProfile(memoryStore())).toEqual({ endings: {}, unlocked: ['story', 'calm'], last: 'story', tapped: false });
+    expect(loadProfile(memoryStore())).toEqual({ endings: {}, unlocked: ['story', 'calm'], last: 'story', tapped: false, lang: null });
   });
 
   it('records endings per mode once and survives a reload', () => {
@@ -164,7 +168,7 @@ describe('player profile', () => {
     expect(recordEnding(profile, 'calm', 'paid')).toBe(true);
     profile.last = 'calm';
     saveProfile(profile, store);
-    expect(loadProfile(store)).toEqual({ endings: { story: ['left'], calm: ['paid'] }, unlocked: ['story', 'calm'], last: 'calm', tapped: false });
+    expect(loadProfile(store)).toEqual({ endings: { story: ['left'], calm: ['paid'] }, unlocked: ['story', 'calm'], last: 'calm', tapped: false, lang: null });
   });
 
   it('"Новая игра" does not touch it', () => {
@@ -187,7 +191,7 @@ describe('player profile', () => {
     }
     const store = memoryStore();
     store.setItem(PROFILE_KEY, JSON.stringify({ endings: { story: ['left', 'nope', 7], moon: ['left'] }, unlocked: 'all', last: 'sandbox' }));
-    expect(loadProfile(store)).toEqual({ endings: { story: ['left'] }, unlocked: ['story', 'calm'], last: 'story', tapped: false });
+    expect(loadProfile(store)).toEqual({ endings: { story: ['left'] }, unlocked: ['story', 'calm'], last: 'story', tapped: false, lang: null });
   });
 
   it('no storage at all: defaults, saving does not throw', () => {

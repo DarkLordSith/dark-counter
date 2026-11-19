@@ -1,4 +1,5 @@
 // Builders for test data. Defaults describe a plain mid-game state.
+import { text } from '../../src/i18n';
 import { setState } from '../../src/state';
 import type { GameState, Item, ItemType, PresentedBuyer, SellerCustomer } from '../../src/types';
 
@@ -69,3 +70,9 @@ export function makePresentedBuyer(overrides: Partial<PresentedBuyer> = {}): Pre
     ...overrides,
   };
 }
+
+/** The log as the player reads it (Russian): stored entries are keys since task 34. */
+export const logLines = (game: GameState): string[] => game.log.map(line => text(line));
+
+/** A stored string (cust.msg, jmsg, over) as shown in Russian. */
+export const shown = (stored: string | null | undefined): string => (stored ? text(stored) : '');

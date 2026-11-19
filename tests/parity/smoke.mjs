@@ -59,7 +59,8 @@ for (const file of fs.existsSync(fixturesDir) ? fs.readdirSync(fixturesDir).filt
   const result = await loadCodeThroughUi(page, code);
   // "ДЕНЬ" then the number: one line before V1.3 ("1 ·смена"), separate elements later, no phase word since V1.4,
   // the shuttle day in the label since the debt update ("ДЕНЬ/60" over the number)
-  const ok = !result.modalOpen && new RegExp(`день(/\\d+)?\\s*${day}(\\D|$)`, 'i').test(result.hud);
+  // task 34: the smoke browser is en-US, so the HUD may say "day"
+  const ok = !result.modalOpen && new RegExp(`(день|day)(/\\d+)?\\s*${day}(\\D|$)`, 'i').test(result.hud);
   fixturesOk &&= ok;
   console.log(`fixture ${file}: day ${day} → ${ok ? 'loaded' : 'FAILED'}`);
 }

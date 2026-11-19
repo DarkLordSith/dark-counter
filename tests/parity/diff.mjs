@@ -5,7 +5,7 @@
 // PARITY_IGNORE=<css selector> hides and skips intentionally new elements
 // in both versions (the version label .version is always skipped).
 import fs from 'node:fs';
-import { clickMenuItem, deterministicInit, hash as h, launch, MENU_ACTIONS, passModeScreen, preloadFonts, rng, savedCode, storySave, storyValues, waitInPage } from './common.mjs';
+import { clickMenuItem, deterministicInit, hash as h, launch, MENU_ACTIONS, passModeScreen, plainSave, plainValues, preloadFonts, rng, savedCode, storySave, waitInPage } from './common.mjs';
 
 const [, , URL_A, URL_B, RUNS = '12', STEPS = '250'] = process.argv;
 // The version label ("v0.7 · <commit>") differs between any two builds by
@@ -172,8 +172,8 @@ async function runOne(browser, label, url, seed, steps, shots, viewport) {
     await act(page, pick, r);
     await page.evaluate(() => __step(90));
     const s = await snapshot(page, i % 25 === 0 && !LOGIC_ONLY);
-    s.save = storySave(s.save);
-    s.values = storyValues(s.values);
+    s.save = storySave(await plainSave(page, s.save));
+    s.values = await plainValues(page, s.values);
     s.action = JSON.stringify(pick) + ' of ' + h(JSON.stringify(cs));
     if (shots) {
       const buf = Buffer.from(await page.screenshot());

@@ -2,7 +2,8 @@
 // the rare chance, noise raises the guard drone chance; "home" at any moment.
 import { gameRng } from '../../src/rng';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DIG_ODDS, HUD_TEXT, JUNK, JUNK_TEXT, MAX_HEAT, SAVE_KEY } from '../../src/data';
+import { DIG_ODDS, JUNK, MAX_HEAT, SAVE_KEY } from '../../src/data';
+
 import {
   canGoToJunkyard, dig, digBonus, digsPerVisit, droneChance, goHome, goToJunkyard, junkVisitHours, noiseLevel, rareChance,
 } from '../../src/economy';
@@ -11,6 +12,9 @@ import { migrate, state } from '../../src/state';
 import type { JunkPile, SavedGame } from '../../src/types';
 import uiTs from '../../src/ui.ts?raw';
 import { makeItem, makeState } from './helpers';
+import { RU } from '../../src/lang/ru';
+import { EN } from '../../src/lang/en';
+import { text } from '../../src/i18n';
 
 /** Math.random returns these values in turn (then 0.5). */
 function rolls(...values: number[]): void {
@@ -125,8 +129,8 @@ describe('depth and noise', () => {
     }
     expect(noise.every((value, i) => i === 0 || value > noise[i - 1])).toBe(true);
     expect([0, 25, 45, 70].map(noiseLevel)).toEqual([0, 1, 2, 3]);
-    expect(JUNK_TEXT.ru.levels).toEqual(['тихо', 'слышно', 'громко', 'дрон рядом']);
-    expect(JUNK_TEXT.en.levels).toHaveLength(4);
+    expect(RU.junk.levels).toEqual(['тихо', 'слышно', 'громко', 'дрон рядом']);
+    expect(EN.junk.levels).toHaveLength(4);
   });
 
   it('the drone chance is (noise / 100)², and zero on the first dig', () => {
@@ -151,7 +155,7 @@ describe('the guard drone', () => {
     rolls(0);
     const result = dig(state, gameRng);
     expect(result?.kind).toBe('drone');
-    expect(result?.message).toContain('Пришлось бежать');
+    expect(result ? text(result.message) : '').toContain('Пришлось бежать');
     expect(state.inv.some(item => item.uid === found)).toBe(false);
     expect(state.inv).toContain(old); // older stock is safe
     expect(state.junk).toMatchObject({ d: 0, run: true });
@@ -233,15 +237,15 @@ describe('junkyard sounds', () => {
   });
 
   it('have their own menu item with RU/EN words', () => {
-    expect(uiTs).toContain('data-a="sounds" aria-pressed="${audio.sfx}">${HUD.sounds}: ${audio.sfx ? HUD.on : HUD.off}');
-    expect(HUD_TEXT.ru.sounds + ': ' + HUD_TEXT.ru.on).toBe('Звуки: вкл');
-    expect(HUD_TEXT.en.sounds + ': ' + HUD_TEXT.en.off).toBe('Sounds: off');
+    expect(uiTs).toContain("data-a=\"sounds\" aria-pressed=\"${audio.sfx}\">${t('hud.sounds')}: ${audio.sfx ? t('hud.on') : t('hud.off')}");
+    expect(RU.hud.sounds + ': ' + RU.hud.on).toBe('Звуки: вкл');
+    expect(EN.hud.sounds + ': ' + EN.hud.off).toBe('Sounds: off');
   });
 });
 
 describe('strings', () => {
   it('RU and EN have the same junkyard keys', () => {
-    expect(Object.keys(JUNK_TEXT.en).sort()).toEqual(Object.keys(JUNK_TEXT.ru).sort());
+    expect(Object.keys(EN.junk).sort()).toEqual(Object.keys(RU.junk).sort());
   });
 
   it('the old piles are gone from the interface', () => {

@@ -7,14 +7,11 @@
 //  "where am I in the day" text drawn over the scene.
 //  The game state and the scene figure come as parameters (task 21).
 // =====================================================================
-import { ACTION_TEXT, DAY_TEXT, JUNK_TEXT } from './data';
+import { t } from './i18n';
 import { clockOf } from './day';
 import { isLandlordDue, isPresentedBuyer, planCollateral } from './economy';
 import type { Actor, GameState, Tab } from './types';
-import { fill } from './util';
 
-const TEXT = ACTION_TEXT.ru;
-const JUNK_WORDS = JUNK_TEXT.ru;
 
 export type MainAction =
   /** One button: data-a / data-v as in the pane; tone 'risk' only for eviction. */
@@ -39,16 +36,16 @@ export function canCallNext(state: GameState, actor: SceneFigure): boolean {
 /** Grobov at the counter: pay if the money is there, else defer, else goods, else eviction. */
 function landlordAction(state: GameState): MainAction {
   if (state.credits >= state.owed) {
-    return button('rentpay', fill(TEXT.pay, { amount: state.owed }));
+    return button('rentpay', t('action.pay', { amount: state.owed }));
   }
   if (!state.deferred) {
-    return button('rentdefer', TEXT.defer);
+    return button('rentdefer', t('action.defer'));
   }
   const plan = planCollateral(state);
   if (plan.ok && plan.items.length) {
-    return button('rentitems', TEXT.collateral);
+    return button('rentitems', t('action.collateral'));
   }
-  return button('evict', TEXT.evict, 'risk');
+  return button('evict', t('action.evict'), 'risk');
 }
 
 /** What the screen adds to the rules (not in the save): ui.ts passes it. */
@@ -70,48 +67,47 @@ export function mainAction(state: GameState, actor: SceneFigure, tab: Tab, conte
   }
   if (state.phase === 'evening') {
     if (tab !== 'deal') {
-      return hint(state.where === 'junk' ? TEXT.toJunkyard : TEXT.toEvening);
+      return hint(state.where === 'junk' ? t('action.toJunkyard') : t('action.toEvening'));
     }
     if (state.where === 'junk') {
       // "Копать" while digs are left; then (or after the drone) "Вернуться домой" takes the bar
-      return state.junk && state.junk.d > 0 ? button('dig', JUNK_WORDS.dig) : button('home', TEXT.home);
+      return state.junk && state.junk.d > 0 ? button('dig', t('junk.dig')) : button('home', t('action.home'));
     }
-    return button('sleep', TEXT.sleep);
+    return button('sleep', t('action.sleep'));
   }
   if (canCallNext(state, actor)) {
     // the morning: one button closes the window and calls the first customer
-    return context.morning ? button('openshop', TEXT.openShop) : button('call', TEXT.call);
+    return context.morning ? button('openshop', t('action.openShop')) : button('call', t('action.call'));
   }
   if (actor.phase === 'in') {
-    return hint(TEXT.approaching);
+    return hint(t('action.approaching'));
   }
   if (actor.phase === 'out') {
-    return hint(TEXT.leaving);
+    return hint(t('action.leaving'));
   }
   const customer = state.cust;
   if (!customer) {
     if (tab !== 'deal') {
-      return hint(TEXT.shiftOver);
+      return hint(t('action.shiftOver'));
     }
-    return state.slot >= state.cn && !isLandlordDue(state) ? button('closeshop', TEXT.closeShop) : hint(TEXT.wait);
+    return state.slot >= state.cn && !isLandlordDue(state) ? button('closeshop', t('action.closeShop')) : hint(t('action.wait'));
   }
   if (tab !== 'deal') {
     // Mac: the stock or the bench window is open over the scene, the customer is right there
-    return hint(context.desk ? TEXT.toCounterDesk : TEXT.toCounter);
+    return hint(context.desk ? t('action.toCounterDesk') : t('action.toCounter'));
   }
   if (customer.kind === 'rent') {
     return landlordAction(state);
   }
   if (customer.kind === 'sell') {
-    return button('offer', TEXT.offer);
+    return button('offer', t('action.offer'));
   }
   if (!state.inv.some(item => item.t === customer.want)) {
-    return button('refuse', TEXT.noItem);
+    return button('refuse', t('action.noItem'));
   }
-  return isPresentedBuyer(customer) ? button('ask', TEXT.ask) : hint(TEXT.showItem);
+  return isPresentedBuyer(customer) ? button('ask', t('action.ask')) : hint(t('action.showItem'));
 }
 
-const DAY_WORDS = DAY_TEXT.ru;
 
 /**
  * Chip in the scene corner: the game time first (task 16), then the queue. Short lines (V1.6),
@@ -121,17 +117,17 @@ const DAY_WORDS = DAY_TEXT.ru;
  */
 export function chipLines(state: GameState): string[] {
   if (state.over) {
-    return [DAY_WORDS.closed];
+    return [t('day.closed')];
   }
   const clock = clockOf(state);
   if (state.phase === 'evening') {
-    const place = clock.night ? DAY_WORDS.night : state.where === 'junk' ? DAY_WORDS.junk : DAY_WORDS.evening;
+    const place = clock.night ? t('day.night') : state.where === 'junk' ? t('day.junk') : t('day.evening');
     return [`${clock.text} · ${place}`];
   }
   const queue = state.cn - state.slot - (state.cust ? 1 : 0);
   const landlordDue = isLandlordDue(state);
-  const queueText = queue > 0 ? fill(DAY_WORDS.queue, { n: queue }) : landlordDue ? fill(DAY_WORDS.queue, { n: 0 }) : DAY_WORDS.shiftOver;
-  return landlordDue ? [clock.text, queueText, DAY_WORDS.payment] : [clock.text, queueText];
+  const queueText = queue > 0 ? t('day.queue', { n: queue }) : landlordDue ? t('day.queue', { n: 0 }) : t('day.shiftOver');
+  return landlordDue ? [clock.text, queueText, t('day.payment')] : [clock.text, queueText];
 }
 
 /** Past midnight: the chip's time is drawn in `wear` (time, as in the colour dictionary). */

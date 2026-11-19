@@ -12,11 +12,15 @@ import { startScene } from './scene';
 import { bindEvents, renderPane, renderSceneOverlay, startGame } from './ui';
 import { bindDiagnostics } from './diag';
 import { applyStoredFontLab } from './fontlab';
+import { plainSave } from './i18n';
 
 markIosPwa();
 applyStoredFontLab();
 bindEvents();
 bindDiagnostics();
+
+// tests/parity compares saves with the log as plain Russian text (task 34: the log is stored as keys)
+Object.assign(window, { __dcPlainSave: plainSave });
 
 // continues the last played mode; the very first launch opens the mode screen
 startGame();

@@ -3,15 +3,16 @@
 import { gameRng } from '../../src/rng';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chipIsNight, chipLines } from '../../src/actionbar';
-import {
-  CLOCK, CUSTOMER_FLOW, CUSTOMERS_BY_WEEKDAY, CUSTOMERS_PER_DAY, DAY_TEXT, DEBT, EVENING_HOURS, JUNK, WEEKDAY_REASONS,
-} from '../../src/data';
+import { CLOCK, CUSTOMER_FLOW, CUSTOMERS_BY_WEEKDAY, CUSTOMERS_PER_DAY, DEBT, EVENING_HOURS, JUNK, WEEKDAY_REASONS } from '../../src/data';
+
 import { clockOf, customersToday, formatHour, openingHour, weekdayOf } from '../../src/day';
 import { callNextCustomer, canGoToJunkyard, closeShop, customerLeaves, dig, digIsLate, goHome, goToJunkyard, sleepUntilMorning } from '../../src/economy';
 import { actor, actorReset, migrate, newGame, state } from '../../src/state';
 import type { GameState, SavedGame } from '../../src/types';
 import uiTs from '../../src/ui.ts?raw';
-import { makeState } from './helpers';
+import { makeState, logLines } from './helpers';
+import { RU } from '../../src/lang/ru';
+import { EN } from '../../src/lang/en';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -165,8 +166,8 @@ describe('digs past midnight', () => {
     expect(state.day).toBe(4);
     expect(state.cn).toBe(CUSTOMERS_PER_DAY - 1);
     // in the log (the ticker), not in the morning list: the window shows it as a reason
-    expect(state.log).toContain('Д4: Проспал после свалки: лавка открылась позже, клиентов на 1 меньше.');
-    expect(state.log).toContain('Д4: Лавка открылась в 10:00.');
+    expect(logLines(state)).toContain('Д4: Проспал после свалки: лавка открылась позже, клиентов на 1 меньше.');
+    expect(logLines(state)).toContain('Д4: Лавка открылась в 10:00.');
     expect(events.join(' ')).not.toContain('Проспал');
     expect(chipLines(state)).toEqual(['10:00', 'ОЧЕРЕДЬ: 5']);
     // the late opening lasts the day; closing the shop starts a new evening count
@@ -182,8 +183,8 @@ describe('digs past midnight', () => {
   });
 
   it('the panel warns before midnight and after it, in `wear`', () => {
-    expect(uiTs).toContain('JUNK_UI.pastMidnight');
-    expect(uiTs).toContain('JUNK_UI.lastFree');
+    expect(uiTs).toContain("t('junk.pastMidnight')");
+    expect(uiTs).toContain("t('junk.lastFree')");
     expect(uiTs).toContain('<div class="hint m-wear">');
   });
 });
@@ -257,14 +258,14 @@ describe('the evening of 19:00–24:00 (task 17)', () => {
 
 describe('strings', () => {
   it('RU and EN have the same day words and reasons', () => {
-    expect(Object.keys(DAY_TEXT.en).sort()).toEqual(Object.keys(DAY_TEXT.ru).sort());
-    expect(Object.keys(DAY_TEXT.en.reasons).sort()).toEqual(Object.keys(DAY_TEXT.ru.reasons).sort());
-    WEEKDAY_REASONS.filter(Boolean).forEach(key => expect(DAY_TEXT.ru.reasons).toHaveProperty(key));
+    expect(Object.keys(EN.day).sort()).toEqual(Object.keys(RU.day).sort());
+    expect(Object.keys(EN.day.reasons).sort()).toEqual(Object.keys(RU.day.reasons).sort());
+    WEEKDAY_REASONS.filter(Boolean).forEach(key => expect(RU.day.reasons).toHaveProperty(key));
   });
 
   it('the morning window says how many customers are expected and why', () => {
     expect(uiTs).toContain('${expectedCustomers()}<ul>');
-    expect(uiTs).toContain('<li class="m-wear">${fill(DAY_UI.reasons[reason.key], { time })} (${signed(reason.n)})</li>');
-    expect(DAY_TEXT.ru.expected).toBe('Ожидается клиентов: {n}');
+    expect(uiTs).toContain('<li class="m-wear">${t(`day.reasons.${reason.key}`, { time })} (${signed(reason.n)})</li>');
+    expect(RU.day.expected).toBe('Ожидается клиентов: {n}');
   });
 });

@@ -1,13 +1,16 @@
 // Stock and the workbench window (V2.3): filter chips, paging ‹ ›, the next item after one is gone,
 // "Предложить клиенту" only for a buyer who wants this item, the strings.
 import { describe, expect, it } from 'vitest';
-import { ITEM_TYPES, STOCK_TEXT } from '../../src/data';
+import { ITEM_TYPES } from '../../src/data';
+
 import { benchNav, benchOffer, benchOrder, filterStock, matchesFilter, STOCK_FILTERS, successor } from '../../src/stock';
 import { useWorkbench } from '../../src/economy';
 import { state, ui } from '../../src/state';
 import type { BuyerCustomer, Item } from '../../src/types';
 import uiTs from '../../src/ui.ts?raw';
 import { makeItem, makePresentedBuyer, makeSeller, makeState } from './helpers';
+import { RU } from '../../src/lang/ru';
+import { EN } from '../../src/lang/en';
 
 /** The stock after an item left it. */
 const without = (inv: Item[], gone: Item): Item[] => inv.filter(item => item !== gone);
@@ -141,6 +144,6 @@ describe('the bench window in ui.ts', () => {
   it('strings RU/EN have the same keys', () => {
     const keys = (value: object): string[] => Object.entries(value).flatMap(([key, inner]) =>
       typeof inner === 'object' ? keys(inner).map(sub => `${key}.${sub}`) : [key]);
-    expect(keys(STOCK_TEXT.en)).toEqual(keys(STOCK_TEXT.ru));
+    expect(keys(EN.stock)).toEqual(keys(RU.stock));
   });
 });
