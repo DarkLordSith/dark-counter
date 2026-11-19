@@ -5,7 +5,8 @@
 //  anchor point.
 // =====================================================================
 import { appearanceFor, seededRandom } from './appearance';
-import { BELL_AT, HOTSPOT_TEXT, HOTSPOTS, MAX_HEAT, SHOP_SIGN } from './data';
+import { BELL_AT, HOTSPOTS, MAX_HEAT, SHOP_SIGN } from './data';
+import { t } from './i18n';
 import { clockOf } from './day';
 import { noiseLevel } from './economy';
 import type { DigResult } from './economy';
@@ -16,7 +17,6 @@ import { CHARACTER, COLOR, GLOW, ITEM_COLORS, JUNKYARD, MEANING, SHADE, SHOP } f
 import { byId } from './dom';
 import { actor, COUNTER_X, DOOR_X, state } from './state';
 import type { Appearance, CustomerLook, Hotspot, HotspotId, ItemType, JunkVisit, LandlordLook } from './types';
-import { fill } from './util';
 
 /** A filled rectangle relative to a sprite's anchor: [x, y, width, height, color]. */
 type Rect = [number, number, number, number, string];
@@ -717,7 +717,7 @@ function updatePointerUi(): void {
   if (sceneCanvas.style.cursor !== cursor) {
     sceneCanvas.style.cursor = cursor;
   }
-  const text = spot && hover ? fill(HOTSPOT_TEXT.ru[spot.id], { n: state.heat, max: MAX_HEAT }) : '';
+  const text = spot && hover ? t(`hotspot.${spot.id}`, { n: state.heat, max: MAX_HEAT }) : '';
   hotTip.hidden = !text;
   if (!text || !hover) {
     return;

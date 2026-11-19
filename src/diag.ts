@@ -6,38 +6,8 @@
 // =====================================================================
 import { byId, IOS_PWA_CLASS, maybeById } from './dom';
 import { openFontLab } from './fontlab';
+import { t } from './i18n';
 import { VERSION_LABEL } from './version';
-
-/* =====================================================================
-   Texts (RU / EN). Kept in one object for the future i18n dictionary.
-   ===================================================================== */
-
-export type Lang = 'ru' | 'en';
-
-export const DIAG_TEXT = {
-  ru: {
-    title: 'Диагностика',
-    copy: 'Скопировать',
-    fonts: 'Шрифты',
-    close: 'Закрыть',
-    copied: 'Скопировано.',
-    selectManually: 'Текст выделен, скопируйте вручную.',
-    hint: 'Долгий тап по версии — открыть или закрыть.',
-  },
-  en: {
-    title: 'Diagnostics',
-    copy: 'Copy',
-    fonts: 'Fonts',
-    close: 'Close',
-    copied: 'Copied.',
-    selectManually: 'Text selected, copy it manually.',
-    hint: 'Long press the version to open or close.',
-  },
-} as const satisfies Record<Lang, Record<string, string>>;
-
-export function detectLang(language: string | undefined): Lang {
-  return language?.toLowerCase().startsWith('ru') ? 'ru' : 'en';
-}
 
 /* =====================================================================
    Measurements
@@ -172,7 +142,6 @@ const OVERLAY_ID = 'diag';
 /** The overlay may cover the label, so a long press on its title closes it too. */
 const TRIGGER_SELECTOR = '.version, .diag h2';
 
-const text = DIAG_TEXT[detectLang(typeof navigator === 'undefined' ? undefined : navigator.language)];
 
 function isOverlayOpen(): boolean {
   return maybeById(OVERLAY_ID) !== null;
@@ -189,14 +158,14 @@ function openOverlay(): void {
   const overlay = document.createElement('div');
   overlay.id = OVERLAY_ID;
   overlay.className = 'diag';
-  overlay.innerHTML = `<h2>${text.title}</h2>
+  overlay.innerHTML = `<h2>${t('diag.title')}</h2>
     <pre id="${OVERLAY_ID}-report"></pre>
     <div class="mbtns">
-      <button class="btn pri" data-diag="copy">${text.copy}</button>
-      <button class="btn" data-diag="fonts">${text.fonts}</button>
-      <button class="btn" data-diag="close">${text.close}</button>
+      <button class="btn pri" data-diag="copy">${t('diag.copy')}</button>
+      <button class="btn" data-diag="fonts">${t('diag.fonts')}</button>
+      <button class="btn" data-diag="close">${t('diag.close')}</button>
     </div>
-    <div class="hint" id="${OVERLAY_ID}-msg">${text.hint}</div>`;
+    <div class="hint" id="${OVERLAY_ID}-msg">${t('diag.hint')}</div>`;
   document.body.appendChild(overlay);
   refreshReport();
 }
@@ -222,11 +191,11 @@ function copyReport(): void {
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
-    message.textContent = text.selectManually;
+    message.textContent = t('diag.selectManually');
   };
   try {
     navigator.clipboard.writeText(report.textContent ?? '').then(() => {
-      message.textContent = text.copied;
+      message.textContent = t('diag.copied');
     }, selectForManualCopy);
   } catch (err) {
     selectForManualCopy();

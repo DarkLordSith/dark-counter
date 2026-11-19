@@ -12,7 +12,8 @@
 //  The content is HTML with data-a buttons: ui.ts handles their clicks
 //  like everywhere else (its ACTIONS table).
 // =====================================================================
-import { CUSTOMER_ZONE, WINDOW_TEXT } from './data';
+import { CUSTOMER_ZONE } from './data';
+import { t } from './i18n';
 import { byId } from './dom';
 import { iconSvg } from './icons';
 import { deskWindowPlacement } from './layout';
@@ -168,7 +169,6 @@ export function floatPlacement(stage: Box, viewport: { width: number; height: nu
 
 /* ---------- the DOM ---------- */
 
-const TEXT = WINDOW_TEXT.ru;
 let manager: WindowManager | null = null;
 let returnFocus: HTMLElement | null = null;
 /** The spec on screen: place() reads its `cover`. */
@@ -324,13 +324,18 @@ function trapTab(event: KeyboardEvent): void {
   }
 }
 
+/** The frame's words in the current language (the ✕ label); again after a language switch. */
+export function labelWindowFrame(): void {
+  byId('winx').setAttribute('aria-label', t('window.close'));
+}
+
 /** Builds the frame (title, ✕) and binds Esc, a tap past the window and the view change. Called once at startup. */
 export function initWindows(): void {
   const coarse = window.matchMedia(COARSE_QUERY);
   manager = new WindowManager(domSurface, viewFor(coarse.matches));
   const close = byId<HTMLButtonElement>('winx');
   close.innerHTML = iconSvg('close');
-  close.setAttribute('aria-label', TEXT.close);
+  labelWindowFrame();
   close.addEventListener('click', () => manager?.close('close'));
   byId('winback').addEventListener('click', event => {
     const through = manager?.current?.liveBar ? barButtonAt(event.clientX, event.clientY) : null;

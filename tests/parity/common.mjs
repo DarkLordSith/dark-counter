@@ -2,6 +2,7 @@
 import puppeteer from 'puppeteer-core';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import zlib from 'node:zlib';
 
 const CHROME_CANDIDATES = [
   process.env.CHROME,
@@ -40,6 +41,8 @@ export function rng(seed) {
 export const deterministicInit = (seed, presetSave = null) => `(() => {
   ${rng.toString()}
   Math.random = rng(${seed});
+  // task 34: the game follows the system language; both builds play in Russian (headless Chrome is en-US)
+  Object.defineProperty(navigator, 'language', { get: () => 'ru-RU' });
   let now = 1000;
   const queue = [];
   performance.now = () => now;
@@ -53,7 +56,7 @@ export const deterministicInit = (seed, presetSave = null) => `(() => {
   // with a lit tile, since V2.3 the window. In it the moves are the bench actions, the
   // neighbour item (sel) and "__closebench" (the lit tile toggled off / the window's ✕).
   // UI_ONLY moves have no twin in older builds and change no game state: never pressed.
-  const UI_ONLY = new Set(['filter', 'offerbench', 'benchnav', 'benchback']);
+  const UI_ONLY = new Set(['filter', 'offerbench', 'benchnav', 'benchback', 'lang']);
   window.__benchView = () => {
     const win = document.getElementById('win');
     if (win && !win.hidden && win.querySelector('[data-a="bench"]')) {
@@ -240,13 +243,26 @@ export function preloadFonts(page) {
   ]).then(() => document.fonts.ready).catch(() => {}), sample);
 }
 
-/** The same for save codes among input values: the "Сохранение" window (savecode) and a pasted code (loadcode). */
-export function storyValues(values) {
-  return values.replace(/DC1:([A-Za-z0-9+/=]+)/g, (whole, b64) => {
+
+/**
+ * Task 34: the candidate keeps the log, the bubble and the ending as keys ({k, p} JSON strings).
+ * Its window.__dcPlainSave renders them back as Russian text; a build without the hook (the
+ * reference before task 34) already has plain text. Saves are compared through it.
+ */
+export const plainSave = (page, raw) => page.evaluate(r => (window.__dcPlainSave ? window.__dcPlainSave(r) : r), raw);
+
+/** The save codes among input values, decoded (DC1 base64 / DC2 deflate-raw) and compared as plain saves. */
+export async function plainValues(page, values) {
+  const codes = [...values.matchAll(/DC([12]):([A-Za-z0-9+/=]+)/g)];
+  let out = values;
+  for (const [whole, version, b64] of codes) {
     try {
-      return 'DC1:' + Buffer.from(storySave(Buffer.from(b64, 'base64').toString('utf8')), 'utf8').toString('base64');
+      const bytes = Buffer.from(b64, 'base64');
+      const json = version === '2' ? zlib.inflateRawSync(bytes).toString('utf8') : bytes.toString('utf8');
+      out = out.replace(whole, 'SAVE:' + storySave(await plainSave(page, json)));
     } catch {
-      return whole;
+      // not a whole code (a pasted fragment): compared as it is
     }
-  });
+  }
+  return out;
 }

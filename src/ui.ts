@@ -7,14 +7,17 @@ import type { BarContext } from './actionbar';
 import { customersToday, formatHour, openingHour } from './day';
 import { audio, playSfx, setJunkAmbience, startSoundOnGesture, toggleMusic, toggleSfx } from './audio';
 import {
-  ACTION_TEXT, BENCH_COST, DAY_TEXT, DEBT, JUNK, DEBT_TEXT, ENDING_TEXT, HAGGLE, HUD_TEXT, HUNCH_VERDICT_TEXT, ITEM_TYPES, JUNK_TEXT, MARKET, MAX_HEAT, MODES, MODE_TEXT,
-  PLAYABLE_MODES, RECIPES, RENT, SAVE_TEXT, STOCK_TEXT, SUPPLIER,
+  BENCH_COST, DEBT, JUNK, HAGGLE, ITEM_TYPES, MARKET, MAX_HEAT, MODES,
+  PLAYABLE_MODES, RECIPES, RENT, SUPPLIER,
 } from './data';
+import { detectLang, getLang, isLang, itemName, LANGS, list, setLang, t, text as textOf, tx } from './i18n';
+import type { Lang, Tx } from './i18n';
+import type { RU } from './lang/ru';
 import { byId, maybeById } from './dom';
 import { iconSvg } from './icons';
 import { isRareItem, isRareLine, starSvg } from './star';
 import type { StarKind } from './star';
-import { closeWindow, initWindows, isWindowOpen, openWindow, relayoutWindow, updateWindow } from './window';
+import { closeWindow, initWindows, isWindowOpen, labelWindowFrame, openWindow, relayoutWindow, updateWindow } from './window';
 import { DESK_QUERY, stageFit } from './layout';
 import { benchNav, benchOffer, benchOrder, filterStock, STOCK_FILTERS, successor } from './stock';
 import { backpackFinds, backpackSlots, droneTrace } from './backpack';
@@ -23,7 +26,7 @@ import type { WindowSpec } from './window';
 import {
   askBuyer, availableOfType, buyFromSeller, buySeat, callNextCustomer, canBuySeat, canCraft, hasShuttle, isDebtClosed, canVisitMarket, closeShop,
   collateralHeatRelief, craft, customerLeaves, deferredDebt, deferRent, dig, digsPerVisit, estimatedValue, evict, feedback,
-  canGoToJunkyard, digIsLate, goHome, goToJunkyard, hunchVerdict, junkVisitHours, noiseLevel, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer, itemName,
+  canGoToJunkyard, digIsLate, goHome, goToJunkyard, hunchVerdict, junkVisitHours, noiseLevel, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer,
   nextRent, offerToSeller, orderParts, payEarly, payRent, payWithCollateral, perceivedChance, planCollateral, presentItem,
   expenseLines, recipeNeeds, scrapValue, seatPrice, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
 } from './economy';
@@ -35,7 +38,7 @@ import {
   actor, actorAtCounter, actorEnter, actorReset, addLog, exportSaveCode, findItem, importSaveCode, newGame, persistence, readSlot, saveGame, setState, state, ui,
 } from './state';
 import type { BuyerCustomer, Customer, GameState, InspectCheck, Item, ItemType, JunkVisit, Mode, Profile, Recipe, RentCustomer, SellerCustomer, StockFilter, Tab } from './types';
-import { daysRu, fill, roundTo10 } from './util';
+import { roundTo10 } from './util';
 import { VERSION_LABEL } from './version';
 import { gameRng } from './rng';
 
@@ -45,7 +48,7 @@ import { gameRng } from './rng';
 
 // Colors carry meaning only through the m-* classes (style.css → --m-* → MEANING in palette.ts).
 const UNKNOWN = '<span class="m-unknown">?</span>';
-const CLOSE_BUTTON = '<button class="btn pri" data-a="close">Закрыть</button>';
+const closeButton = (): string => `<button class="btn pri" data-a="close">${t('hud.close')}</button>`;
 const FLOATING_TEXT_LIFETIME_MS = 1300;
 /** Viewport shrink that means an on-screen keyboard, not a browser bar. */
 const KEYBOARD_MIN_PX = 150;
@@ -56,6 +59,10 @@ const disabledIf = (condition: unknown): string => condition ? 'disabled' : '';
  * and its "≈" is unreadable, so the sign is set in mono (.approx) and the number keeps its font.
  */
 const approx = (value: string | number): string => `<span class="approx">~</span>${value}`;
+/** "120 кр." / "120 cr." */
+const money = (n: number): string => t('unit.money', { n });
+/** The visitor's name: Grobov's is translated (the save keeps the Russian one), customers' names stay as they are. */
+const customerName = (customer: Customer): string => customer.kind === 'rent' ? t('landlord.name') : customer.name;
 const conditionText = (item: Item): string => item.k.cond ? item.cond + '%' : '?%';
 
 function iconCanvas(type: ItemType, cssClass = '', infected = false): string {
@@ -65,26 +72,26 @@ function iconCanvas(type: ItemType, cssClass = '', infected = false): string {
 function itemTags(item: Item): string {
   const tags: string[] = [];
   if (isRareItem(item)) {
-    tags.push(`<span class="tag m-rare">${starSvg('rare')} ${STOCK_TEXT.ru.legend.rare}</span>`);
+    tags.push(`<span class="tag m-rare">${starSvg('rare')} ${t('stock.legend.rare')}</span>`);
   }
-  tags.push(item.k.cond ? `<span class="tag ${item.cond < 40 ? 'm-wear' : ''}">${item.cond}%</span>` : '<span class="tag m-unknown">сост. ?</span>');
+  tags.push(item.k.cond ? `<span class="tag ${item.cond < 40 ? 'm-wear' : ''}">${item.cond}%</span>` : `<span class="tag m-unknown">${t('tags.condUnknown')}</span>`);
   if (item.k.serial) {
-    tags.push(item.stolen ? '<span class="tag m-risk">краденое</span>' : '<span class="tag m-action">чистый №</span>');
+    tags.push(item.stolen ? `<span class="tag m-risk">${t('tags.stolen')}</span>` : `<span class="tag m-action">${t('tags.clean')}</span>`);
   } else {
-    tags.push('<span class="tag m-unknown">№ ?</span>');
+    tags.push(`<span class="tag m-unknown">${t('tags.serialUnknown')}</span>`);
   }
   if (item.k.flaw) {
     if (item.defect) {
-      tags.push('<span class="tag m-wear">дефект</span>');
+      tags.push(`<span class="tag m-wear">${t('tags.defect')}</span>`);
     }
     if (item.infected) {
-      tags.push('<span class="tag m-risk">ИИ</span>');
+      tags.push(`<span class="tag m-risk">${t('tags.ai')}</span>`);
     }
     if (!item.defect && !item.infected) {
-      tags.push('<span class="tag m-action">начинка ок</span>');
+      tags.push(`<span class="tag m-action">${t('tags.insidesOk')}</span>`);
     }
   } else {
-    tags.push('<span class="tag m-unknown">начинка ?</span>');
+    tags.push(`<span class="tag m-unknown">${t('tags.insidesUnknown')}</span>`);
   }
   return `<div class="tags">${tags.join('')}</div>`;
 }
@@ -128,15 +135,9 @@ function meterCells(total: number, filled: number): string {
    HUD, scene overlay, tabs
    ===================================================================== */
 
-/** Interface language; the game is Russian for now, the strings are ready for RU/EN. */
-const HUD = HUD_TEXT.ru;
-
 /** One HUD stat: a small mono label above a pixel-font number (V1.4: one row on a 375 pt screen). */
 const hudStat = (label: string, valueHtml: string, cssClass = ''): string =>
   `<span class="st ${cssClass}"><small>${label}</small>${valueHtml}</span>`;
-
-/** Debt strings in the interface language. */
-const DEBT_UI = DEBT_TEXT.ru;
 
 /**
  * Weekly payment: days left go into the label ("платёж·3д"), so the number column stays narrow.
@@ -147,28 +148,28 @@ function paymentStat(): string {
   const paying = state.debt > 0 && !state.over;
   const urgent = paying && (state.credits < state.owed && daysLeft <= 1 || state.deferred);
   // due today = "0д": same width as "6д" (the scene chip says "+ПЛАТЁЖ" on that day)
-  const when = paying ? `·${Math.max(0, daysLeft)}${HUD.daysShort}` : '';
+  const when = paying ? `·${Math.max(0, daysLeft)}${t('hud.daysShort')}` : '';
   const value = paying ? state.owed : '—';
-  return `<button class="st st-btn ${urgent ? 'm-risk' : ''}" data-a="debt" aria-haspopup="dialog"><small>${HUD.payment}${when}</small><b>${value}</b></button>`;
+  return `<button class="st st-btn ${urgent ? 'm-risk' : ''}" data-a="debt" aria-haspopup="dialog"><small>${t('hud.payment')}${when}</small><b>${value}</b></button>`;
 }
 
 /** Bottom bar: кр · день/60 · платёж · зап, then ☰. The wanted level is on the scene wall, music in the menu. */
 function renderHud(): void {
-  const menu = `<button class="ib" data-a="menu" aria-haspopup="dialog" aria-label="${HUD.menu}">${iconSvg('menu')}</button>`;
+  const menu = `<button class="ib" data-a="menu" aria-haspopup="dialog" aria-label="${t('hud.menu')}">${iconSvg('menu')}</button>`;
   byId('hud').innerHTML = `<div class="stats">${[
-    hudStat(HUD.credits, `<b>${state.credits}</b>`),
+    hudStat(t('hud.credits'), `<b>${state.credits}</b>`),
     // the shuttle day goes into the label ("день/60"): the number column keeps two digits
-    hudStat(hasShuttle(state) ? `${HUD.day}/${state.shuttleDay}` : HUD.day, `<b>${state.day}</b>`),
+    hudStat(hasShuttle(state) ? `${t('hud.day')}/${state.shuttleDay}` : t('hud.day'), `<b>${state.day}</b>`),
     paymentStat(),
-    hudStat(HUD.parts, `<b>${state.parts}</b>`),
+    hudStat(t('hud.parts'), `<b>${state.parts}</b>`),
   ].join('')}</div>${menu}`;
 }
 
 /** Screen-reader text of the wanted-level meter drawn on the scene ("розыск 3 из 10"). */
-const heatText = (): string => `${HUD.heat} ${state.heat} ${HUD.of} ${MAX_HEAT}`;
+const heatText = (): string => `${t('hud.heat')} ${state.heat} ${t('hud.of')} ${MAX_HEAT}`;
 
-/** A log line as shown: a rare find gets the star (the saved log stays plain text). */
-const logLine = (line: string): string => isRareLine(line) ? `${starSvg('rare')} ${line}` : line;
+/** A log line as shown, in the current language: a rare find gets the star (it is not stored). */
+const logLine = (line: string): string => isRareLine(line) ? `${starSvg('rare')} ${textOf(line)}` : textOf(line);
 
 /** The log the ticker showed last: a different array means a new line (see renderSceneOverlay). */
 let shownLog: string[] | null = null;
@@ -180,7 +181,7 @@ export function renderSceneOverlay(): void {
   const bubble = byId('bubble');
   if (state.where === 'junk' && state.jmsg) {
     bubble.hidden = false;
-    bubble.textContent = state.jmsg;
+    bubble.textContent = textOf(state.jmsg);
     bubble.classList.add('free');
     // a rare find: the star and a lamp frame instead of the turquoise one (V2.6)
     const rare = isRareLine(state.jmsg);
@@ -192,7 +193,7 @@ export function renderSceneOverlay(): void {
     bubble.classList.remove('free', 'rare');
     bubble.hidden = !atCounter;
     if (atCounter) {
-      bubble.textContent = customer.msg;
+      bubble.textContent = textOf(customer.msg);
     }
   }
   // the time comes first; past midnight it reads as `wear` (time)
@@ -218,8 +219,8 @@ export function renderSceneOverlay(): void {
 
 /** Tab names; on a Mac (V2.4) they are also the titles of the windows that replaced the pane. */
 function tabLabels(): [Tab, string][] {
-  const firstTab = state.phase === 'shop' ? 'ПРИЛАВОК' : state.where === 'junk' ? 'СВАЛКА' : 'ВЕЧЕР';
-  return [['deal', firstTab], ['inv', `СКЛАД · ${state.inv.length}`], ['craft', 'СБОРКА']];
+  const firstTab = t(state.phase === 'shop' ? 'tabs.counter' : state.where === 'junk' ? 'tabs.junk' : 'tabs.evening');
+  return [['deal', firstTab], ['inv', t('tabs.stock', { n: state.inv.length })], ['craft', t('tabs.craft')]];
 }
 
 function renderTabs(): void {
@@ -234,9 +235,9 @@ function renderTabs(): void {
 
 function priceRow(defaultPrice: number): string {
   return `<div class="pr"><button class="btn" data-a="adj" data-v="-50">−50</button><button class="btn" data-a="adj" data-v="-10">−10</button>
-  <input id="offer" type="number" inputmode="numeric" min="0" step="10" value="${defaultPrice}" aria-label="Цена">
+  <input id="offer" type="number" inputmode="numeric" min="0" step="10" value="${defaultPrice}" aria-label="${t('deal.price')}">
   <button class="btn" data-a="adj" data-v="10">+10</button><button class="btn" data-a="adj" data-v="50">+50</button></div>
-  <div class="chance"><span>Чуйка</span><div class="cbar"><i id="cbar"></i></div><b id="cverdict" class="verdict">—</b><small id="cval">—</small></div>`;
+  <div class="chance"><span>${t('deal.hunch')}</span><div class="cbar"><i id="cbar"></i></div><b id="cverdict" class="verdict">—</b><small id="cval">—</small></div>`;
 }
 
 const readOffer = (input: HTMLInputElement): number => Math.max(0, parseInt(input.value) || 0);
@@ -252,8 +253,8 @@ function updateChanceMeter(): void {
     return;
   }
   const chance = perceivedChance(customer, readOffer(input));
-  byId('cverdict').textContent = HUNCH_VERDICT_TEXT.ru[hunchVerdict(chance)];
-  byId('cval').innerHTML = chance >= 1 ? 'согласится' : chance <= 0 ? 'обидится' : approx(`${Math.round(chance * 100)}%`);
+  byId('cverdict').textContent = t(`verdict.${hunchVerdict(chance)}`);
+  byId('cval').innerHTML = chance >= 1 ? t('deal.agrees') : chance <= 0 ? t('deal.offended') : approx(`${Math.round(chance * 100)}%`);
   byId('cbar').style.width = (chance * 100) + '%';
 }
 
@@ -265,31 +266,27 @@ function option(action: string, disabled: boolean, title: string, description: s
   return `<button class="opt" data-a="${action}" ${disabledIf(disabled)}><div><b>${title}</b><br><span>${description}</span></div><span${sideClass}>${side}</span></button>`;
 }
 
-/** Junkyard words (v2): the noise scale, the panel, the messages. */
-const JUNK_UI = JUNK_TEXT.ru;
-const DAY_UI = DAY_TEXT.ru;
-const ACTION_UI = ACTION_TEXT.ru;
 /** Cells of the noise scale: 10 cells for 0…100. */
 const NOISE_CELLS = 10;
 
 /** Noise as a scale plus a word, like the hunch verdict: тихо / слышно / громко / дрон рядом. From "громко" on it reads as risk. */
 function noiseMeter(noise: number): string {
   const level = noiseLevel(noise);
-  const word = JUNK_UI.levels[level];
+  const word = list('junk.levels')[level];
   const filled = Math.round(noise / 100 * NOISE_CELLS);
-  return `<div class="noise${level >= 2 ? ' loud' : ''}"><span>${JUNK_UI.noise}</span><div class="nbar">${meterCells(NOISE_CELLS, filled)}</div><b class="nword${level >= 2 ? ' m-risk' : ''}">${word}</b></div>`;
+  return `<div class="noise${level >= 2 ? ' loud' : ''}"><span>${t('junk.noise')}</span><div class="nbar">${meterCells(NOISE_CELLS, filled)}</div><b class="nword${level >= 2 ? ' m-risk' : ''}">${word}</b></div>`;
 }
 
 /** Time before "Копать" (task 16): the last dig before midnight, then each dig costs a customer tomorrow. Time reads as `wear`. */
 function junkTimeNote(digsLeft: number): string {
   const lines: string[] = [];
   if (digsLeft > 0 && digIsLate(state)) {
-    lines.push(JUNK_UI.pastMidnight);
+    lines.push(t('junk.pastMidnight'));
   } else if (digsLeft > 0 && state.hours === JUNK.digHours) {
-    lines.push(JUNK_UI.lastFree);
+    lines.push(t('junk.lastFree'));
   }
   if (state.late > 0) {
-    lines.push(fill(JUNK_UI.lateSoFar, { n: state.late * JUNK.lateCustomerLoss }));
+    lines.push(t('junk.lateSoFar', { n: state.late * JUNK.lateCustomerLoss }));
   }
   return lines.map(line => `<div class="hint m-wear">${line}</div>`).join('');
 }
@@ -321,7 +318,7 @@ function backpackRow(visit: JunkVisit): string {
   // the animations play once, on the render right after the dig
   backpack.fresh = null;
   backpack.flying = false;
-  return `<div class="bp"><div class="bp-head"><small>${JUNK_UI.backpack}</small><b class="rn">· ${count}</b></div><div class="bp-row">${cells}</div></div>`;
+  return `<div class="bp"><div class="bp-head"><small>${t('junk.backpack')}</small><b class="rn">· ${count}</b></div><div class="bp-row">${cells}</div></div>`;
 }
 
 function junkyardPane(): string {
@@ -331,9 +328,9 @@ function junkyardPane(): string {
   }
   const total = visit.dp + visit.d;
   // "Копать" is the main action (the action bar), "Вернуться домой" is here until the digs run out — then it goes to the bar
-  const homeButton = visit.d > 0 ? `<button class="btn" data-a="home">${ACTION_UI.home}</button>` : '';
-  const homeHint = visit.d > 0 ? `<div class="hint">${JUNK_UI.homeHint}</div>` : '';
-  return `${junkTimeNote(visit.d)}<div class="junk-stats"><span>${JUNK_UI.digsLeft}: <b class="rn">${visit.d}</b> ${HUD.of} ${total}</span><span>${JUNK_UI.depth} <b class="rn">${visit.dp}</b></span></div>
+  const homeButton = visit.d > 0 ? `<button class="btn" data-a="home">${t('action.home')}</button>` : '';
+  const homeHint = visit.d > 0 ? `<div class="hint">${t('junk.homeHint')}</div>` : '';
+  return `${junkTimeNote(visit.d)}<div class="junk-stats"><span>${t('junk.digsLeft')}: <b class="rn">${visit.d}</b> ${t('hud.of')} ${total}</span><span>${t('junk.depth')} <b class="rn">${visit.dp}</b></span></div>
       ${noiseMeter(visit.n)}
       ${backpackRow(visit)}
       ${homeHint}
@@ -341,59 +338,59 @@ function junkyardPane(): string {
 }
 
 function eveningPane(): string {
-  return `<div class="hint" style="margin-bottom:8px">Лавка закрыта. Осталось часов: <b>${state.hours}</b>. Верстак и сборка работают бесплатно.</div>
+  return `<div class="hint" style="margin-bottom:8px">${t('evening.closed', { hours: `<b>${state.hours}</b>` })}</div>
     <div class="opts">
-      ${option('junk', !canGoToJunkyard(state), JUNK_UI.title, fill(JUNK_UI.about, { hours: junkVisitHours(), dig: JUNK.digHours, digs: digsPerVisit(state) }), '→')}
-      ${option('market', !canVisitMarket(state), 'Барахолка у шлюза', `${MARKET.hours} ч. ${MARKET.parts} запчастей за ${MARKET.price} кр. Раз за вечер.`, MARKET.price)}
+      ${option('junk', !canGoToJunkyard(state), t('junk.title'), t('junk.about', { hours: junkVisitHours(), dig: JUNK.digHours, digs: digsPerVisit(state) }), '→')}
+      ${option('market', !canVisitMarket(state), t('evening.market'), t('evening.marketAbout', { hours: MARKET.hours, parts: MARKET.parts, price: MARKET.price }), MARKET.price)}
     </div>
-    <div class="hint note">«Спать» — кнопка внизу: закончить день. Ночью: платёж, рейды, заражение склада.</div>`;
+    <div class="hint note">${t('evening.sleepNote')}</div>`;
 }
 
 function emptyCounterPane(): string {
   if (actor.phase === 'in') {
-    return '<div class="hint">Подходит к прилавку…</div>';
+    return `<div class="hint">${t('action.approaching')}</div>`;
   }
   if (actor.phase === 'out') {
-    return '<div class="hint">Уходит…</div>';
+    return `<div class="hint">${t('action.leaving')}</div>`;
   }
   if (state.over) {
-    return '<div class="hint">Лавка опечатана.</div>';
+    return `<div class="hint">${t('deal.sealed')}</div>`;
   }
   if (state.slot >= state.cn && !isLandlordDue(state)) {
-    return '<div class="hint">Очередь кончилась. Пора закрываться.</div>';
+    return `<div class="hint">${t('deal.queueOver')}</div>`;
   }
-  return '<div class="hint">Прилавок свободен. Зовите следующего, когда будете готовы. Пока можно разобрать склад.</div>';
+  return `<div class="hint">${t('deal.free')}</div>`;
 }
 
 function collateralDescription(plan: CollateralPlan): string {
   if (!plan.ok) {
-    return 'Даже со всем складом не хватает.';
+    return t('rent.short');
   }
-  const goods = plan.items.length ? ' и ' + plan.items.map(item => itemName(item.t)).join(', ') : '';
-  const heatNote = plan.hot ? ` <span class="m-action">Розыск −${collateralHeatRelief(state, plan)}.</span>` : '';
-  return `Заберёт ${plan.cash} кр.${goods}. Сначала берёт краденое (за 50%), остальное за 60%, сдачи не даёт.${heatNote}`;
+  const goods = plan.items.length ? t('rent.andGoods', { items: plan.items.map(item => itemName(item.t)).join(', ') }) : '';
+  const heat = plan.hot ? ` <span class="m-action">${t('rent.heatRelief', { n: collateralHeatRelief(state, plan) })}</span>` : '';
+  return t('rent.takes', { cash: plan.cash, goods, heat });
 }
 
 function rentPane(customer: RentCustomer): string {
   const plan = planCollateral(state);
   const canPay = state.credits >= state.owed;
   const deferText = state.deferred
-    ? 'Вторую отсрочку Гробов не даст.'
-    : fill(DEBT_UI.deferOption, { days: daysRu(RENT.deferDays), amount: deferredDebt(state) });
-  const payText = fill(DEBT_UI.paymentOption, {
+    ? t('rent.noSecondDefer')
+    : t('debt.deferOption', { days: tx('plural.days', { n: RENT.deferDays }), amount: deferredDebt(state) });
+  const payText = t('debt.paymentOption', {
     debt: state.debt - state.owed,
     next: Math.min(nextRent(state), Math.max(0, state.debt - state.owed)),
-    period: daysRu(DEBT.periodDays),
+    period: tx('plural.days', { n: DEBT.periodDays }),
   });
-  let html = `<div class="thead"><div><span class="cname">${customer.name}</span><span class="kind m-risk">за платежом</span></div></div>
+  let html = `<div class="thead"><div><span class="cname">${customerName(customer)}</span><span class="kind m-risk">${t('rent.forPayment')}</span></div></div>
     <div class="card" style="flex-direction:column;gap:2px"><div class="rows">
-      <span>К оплате</span><span class="price"><b>${state.owed} кр.</b>${state.deferred ? ' <span class="m-risk">с пеней</span>' : ''}</span>
-      <span>${DEBT_UI.debtLeft}</span><span class="price">${state.debt} кр.</span>
-      <span>У вас</span><span class="price ${canPay ? 'm-action' : 'm-risk'}">${state.credits} кр.</span></div></div>
+      <span>${t('rent.due')}</span><span class="price"><b>${money(state.owed)}</b>${state.deferred ? ` <span class="m-risk">${t('rent.fine')}</span>` : ''}</span>
+      <span>${t('debt.debtLeft')}</span><span class="price">${money(state.debt)}</span>
+      <span>${t('debt.youHave')}</span><span class="price ${canPay ? 'm-action' : 'm-risk'}">${money(state.credits)}</span></div></div>
     <div class="opts" style="margin-top:8px">${rentOptions([
-      ['rentpay', 'Заплатить', option('rentpay', !canPay, 'Заплатить', payText, state.owed, ' class="price"'), payText],
-      ['rentdefer', 'Попросить отсрочку', option('rentdefer', state.deferred, 'Попросить отсрочку', deferText, '⧗'), deferText],
-      ['rentitems', 'Отдать деньги и товар', option('rentitems', !(plan.ok && plan.items.length), 'Отдать деньги и товар', collateralDescription(plan), '⚖'), collateralDescription(plan)],
+      ['rentpay', t('rent.pay'), option('rentpay', !canPay, t('rent.pay'), payText, state.owed, ' class="price"'), payText],
+      ['rentdefer', t('action.defer'), option('rentdefer', state.deferred, t('action.defer'), deferText, '⧗'), deferText],
+      ['rentitems', t('action.collateral'), option('rentitems', !(plan.ok && plan.items.length), t('action.collateral'), collateralDescription(plan), '⚖'), collateralDescription(plan)],
     ])}</div>`;
   return html;
 }
@@ -405,13 +402,13 @@ function rentPane(customer: RentCustomer): string {
 function rentOptions(options: [action: string, title: string, html: string, description: string][]): string {
   const main = barAction(state, actor, 'deal', barContext());
   const chosen = options.find(([action]) => action === main);
-  const note = chosen ? `<div class="hint note">«${chosen[1]}» — кнопка внизу. ${chosen[3]}</div>` : '';
+  const note = chosen ? `<div class="hint note">${t('rent.barNote', { action: chosen[1], text: chosen[3] })}</div>` : '';
   return note + options.filter(([action]) => action !== main).map(([, , html]) => html).join('');
 }
 
 function customerHeader(customer: SellerCustomer | BuyerCustomer): string {
   // V2.5: patience lives over the customer's head on the scene, not here
-  return `<div class="thead"><div><span class="cname">${customer.name}</span><span class="kind ${customer.kind}">${customer.kind === 'sell' ? 'продаёт' : 'покупает'}</span></div></div>`;
+  return `<div class="thead"><div><span class="cname">${customer.name}</span><span class="kind ${customer.kind}">${t(customer.kind === 'sell' ? 'deal.sells' : 'deal.buys')}</span></div></div>`;
 }
 
 /**
@@ -428,22 +425,22 @@ function fact(customer: SellerCustomer, check: InspectCheck, label: string, titl
 function sellerPane(customer: SellerCustomer): string {
   const item = customer.item;
   const condition = `<span class="${item.cond < 40 ? 'm-wear' : ''}">${item.cond}%</span>`;
-  const serial = item.stolen ? '<span class="m-risk">спилен</span>' : '<span class="m-action">чистый</span>';
-  const insides = item.infected ? '<span class="m-risk">ИИ</span>' : item.defect ? '<span class="m-wear">дефект</span>' : '<span class="m-action">ок</span>';
+  const serial = item.stolen ? `<span class="m-risk">${t('deal.filed')}</span>` : `<span class="m-action">${t('deal.clean')}</span>`;
+  const insides = item.infected ? `<span class="m-risk">${t('deal.ai')}</span>` : item.defect ? `<span class="m-wear">${t('deal.defect')}</span>` : `<span class="m-action">${t('deal.ok')}</span>`;
   const defaultOffer = Math.min(state.credits, roundTo10(customer.ask * HAGGLE.sellerDefaultOfferShare));
   return `<div class="card deal-item">${iconCanvas(item.t, 'midico', showsInfection(item))}<div class="di-body"><div class="rn">${itemName(item.t)}</div>
-      <div class="facts">${fact(customer, 'cond', 'Сост.', 'Сканер: состояние', condition)}${fact(customer, 'serial', '№', 'Серийник: краденое или чистое', serial)}${fact(customer, 'flaw', 'Начинка', 'Диагностика: дефект, ИИ', insides)}</div></div></div>
-    <div class="deal"><div class="ask">Просит <b class="price">${customer.ask}</b> кр. · оценка ${approx(estimatedValue(item))}</div>
+      <div class="facts">${fact(customer, 'cond', t('deal.cond'), t('deal.condTitle'), condition)}${fact(customer, 'serial', t('deal.serial'), t('deal.serialTitle'), serial)}${fact(customer, 'flaw', t('deal.insides'), t('deal.insidesTitle'), insides)}</div></div></div>
+    <div class="deal"><div class="ask">${t('deal.asks', { ask: `<b class="price">${customer.ask}</b>`, estimate: approx(estimatedValue(item)) })}</div>
       ${priceRow(defaultOffer)}
-      <div class="acts"><button class="btn alt" data-a="accept" ${disabledIf(customer.ask > state.credits)}>За ${customer.ask}</button>
-      <button class="btn" data-a="refuse">Отпустить</button></div></div>`;
+      <div class="acts"><button class="btn alt" data-a="accept" ${disabledIf(customer.ask > state.credits)}>${t('deal.for', { n: customer.ask })}</button>
+      <button class="btn" data-a="refuse">${t('deal.refuse')}</button></div></div>`;
 }
 
 function buyerPane(customer: BuyerCustomer): string {
   const matching = state.inv.filter(item => item.t === customer.want);
-  let html = `<div class="ask want">Нужно: <b>${itemName(customer.want)}</b></div>`;
+  let html = `<div class="ask want">${t('deal.needs', { item: `<b>${itemName(customer.want)}</b>` })}</div>`;
   if (!matching.length) {
-    return html + '<div class="hint">На складе такого нет.</div>';
+    return html + `<div class="hint">${t('deal.noStock')}</div>`;
   }
   const tiles = matching.map(item => {
     const shown = customer.item && customer.item.uid === item.uid;
@@ -452,11 +449,11 @@ function buyerPane(customer: BuyerCustomer): string {
   // compact row tiles (V1.6): the price and the gut feeling fit an iPhone SE without scrolling
   html += `<div class="shelf pick">${tiles}</div>`;
   if (!isPresentedBuyer(customer)) {
-    return html + '<div class="hint" style="margin:8px 0">Выложите товар на прилавок.</div><button class="btn" data-a="refuse" style="width:100%">Отпустить</button>';
+    return html + `<div class="hint" style="margin:8px 0">${t('deal.showItem')}</div><button class="btn" data-a="refuse" style="width:100%">${t('deal.refuse')}</button>`;
   }
-  return html + `<div class="deal"><div class="ask">Предлагает: <b class="price">${customer.offer}</b> кр.</div>${priceRow(roundTo10(customer.offer * HAGGLE.buyerDefaultAskShare))}
-        <div class="acts"><button class="btn alt" data-a="take">За ${customer.offer}</button>
-        <button class="btn" data-a="refuse">Отпустить</button></div></div>`;
+  return html + `<div class="deal"><div class="ask">${t('deal.offers', { n: `<b class="price">${customer.offer}</b>` })}</div>${priceRow(roundTo10(customer.offer * HAGGLE.buyerDefaultAskShare))}
+        <div class="acts"><button class="btn alt" data-a="take">${t('deal.for', { n: customer.offer })}</button>
+        <button class="btn" data-a="refuse">${t('deal.refuse')}</button></div></div>`;
 }
 
 function dealPane(): string {
@@ -478,7 +475,6 @@ function dealPane(): string {
    Stock (pane) and the workbench window (V2.3)
    ===================================================================== */
 
-const STOCK_UI = STOCK_TEXT.ru;
 const isStockFilter = (value: string | undefined): value is StockFilter => (STOCK_FILTERS as readonly (string | undefined)[]).includes(value);
 
 /** Filter chips: one tap, the chosen one lit; an empty category is dim but stays where it is. */
@@ -487,31 +483,30 @@ function filterChips(): string {
     const count = filterStock(state.inv, filter).length;
     const on = ui.filter === filter;
     const tone = filter === 'stolen' ? 'm-risk' : '';
-    return `<button class="fchip ${on ? 'on' : ''} ${count ? tone : 'm-inactive'}" data-a="filter" data-v="${filter}" aria-pressed="${on}" ${disabledIf(!count && !on)}>${STOCK_UI.filters[filter]} <span class="cnt hint">${count}</span></button>`;
+    return `<button class="fchip ${on ? 'on' : ''} ${count ? tone : 'm-inactive'}" data-a="filter" data-v="${filter}" aria-pressed="${on}" ${disabledIf(!count && !on)}>${t(`stock.filters.${filter}`)} <span class="cnt hint">${count}</span></button>`;
   }).join('');
-  return `<div class="chips" role="group" aria-label="${STOCK_UI.filtersLabel}">${chips}</div>`;
+  return `<div class="chips" role="group" aria-label="${t('stock.filtersLabel')}">${chips}</div>`;
 }
 
 /** A compact shelf tile: icon and price, the marks in the corner; the name is for screen readers. */
 function stockTile(item: Item): string {
-  const label = `${itemName(item.t)}, ${conditionText(item)}, ${estimatedValue(item)} кр.`;
+  const label = `${itemName(item.t)}, ${conditionText(item)}, ${money(estimatedValue(item))}`;
   return `<button class="tile stile ${ui.sel === item.uid ? 'on' : ''}" data-a="sel" data-v="${item.uid}" aria-label="${label}">${itemDots(item)}${iconCanvas(item.t, '', showsInfection(item))}<span class="tv">${approx(estimatedValue(item))}</span></button>`;
 }
 
 function inventoryPane(): string {
   if (!state.inv.length) {
-    return `<div class="hint">${STOCK_UI.empty}</div>`;
+    return `<div class="hint">${t('stock.empty')}</div>`;
   }
   const items = filterStock(state.inv, ui.filter);
-  const shelf = items.length ? `<div class="shelf stock">${items.map(stockTile).join('')}</div>` : `<div class="hint">${STOCK_UI.emptyFilter}</div>`;
-  const legend = STOCK_UI.legend;
+  const shelf = items.length ? `<div class="shelf stock">${items.map(stockTile).join('')}</div>` : `<div class="hint">${t('stock.emptyFilter')}</div>`;
   return `${filterChips()}${shelf}
-  <div class="legend">${state.inv.some(isRareItem) ? `<span>${DOT.rare}${legend.rare}</span>` : ''}<span>${DOT.unknown}${legend.unknown}</span><span>${DOT.risk}${legend.risk}</span><span>${DOT.wear}${legend.wear}</span></div>`;
+  <div class="legend">${state.inv.some(isRareItem) ? `<span>${DOT.rare}${t('stock.legend.rare')}</span>` : ''}<span>${DOT.unknown}${t('stock.legend.unknown')}</span><span>${DOT.risk}${t('stock.legend.risk')}</span><span>${DOT.wear}${t('stock.legend.wear')}</span></div>`;
 }
 
-function benchButton(action: keyof typeof BENCH_COST & keyof typeof STOCK_UI.actions, enabled: boolean): string {
+function benchButton(action: keyof typeof RU.stock.actions, enabled: boolean): string {
   const cost = BENCH_COST[action];
-  return `<button class="btn" data-a="bench" data-v="${action}" ${enabled && state.parts >= cost ? '' : 'disabled'}><span>${STOCK_UI.actions[action]}</span><span class="price">${cost}⚙</span></button>`;
+  return `<button class="btn" data-a="bench" data-v="${action}" ${enabled && state.parts >= cost ? '' : 'disabled'}><span>${t(`stock.actions.${action}`)}</span><span class="price">${cost}⚙</span></button>`;
 }
 
 /** The customer at the counter, on top of the bench: mini portrait and the request in one line. */
@@ -522,13 +517,13 @@ function benchCustomer(): string {
   }
   let line: string;
   if (customer.kind === 'buy') {
-    line = fill(STOCK_UI.wants, { item: `<b>${itemName(customer.want)}</b>` });
+    line = t('stock.wants', { item: `<b>${itemName(customer.want)}</b>` });
   } else if (customer.kind === 'sell') {
-    line = fill(STOCK_UI.sells, { item: itemName(customer.item.t), ask: customer.ask });
+    line = t('stock.sells', { item: itemName(customer.item.t), ask: customer.ask });
   } else {
-    line = fill(STOCK_UI.collects, { amount: state.owed });
+    line = t('stock.collects', { amount: state.owed });
   }
-  return `<div class="bench-cust"><canvas class="face" width="24" height="24" data-face="${customer.seed}" aria-hidden="true"></canvas><div class="bc-text"><span class="cname">${customer.name}</span><span class="bc-line">${line}</span></div></div>`;
+  return `<div class="bench-cust"><canvas class="face" width="24" height="24" data-face="${customer.seed}" aria-hidden="true"></canvas><div class="bc-text"><span class="cname">${customerName(customer)}</span><span class="bc-line">${line}</span></div></div>`;
 }
 
 function benchOfferButton(item: Item): string {
@@ -537,19 +532,19 @@ function benchOfferButton(item: Item): string {
     return '';
   }
   return offer === 'ready'
-    ? `<button class="btn pri bench-offer" data-a="offerbench" data-v="${item.uid}">${STOCK_UI.offer}</button>`
-    : `<button class="btn bench-offer" disabled>${STOCK_UI.shown}</button>`;
+    ? `<button class="btn pri bench-offer" data-a="offerbench" data-v="${item.uid}">${t('stock.offer')}</button>`
+    : `<button class="btn bench-offer" disabled>${t('stock.shown')}</button>`;
 }
 
 function benchBody(item: Item): string {
   return `${benchCustomer()}
-    <div class="card bench-card">${iconCanvas(item.t, 'bigico', showsInfection(item))}<div class="bench-info"><div class="hint">${STOCK_UI.estimate} ${approx(estimatedValue(item))} кр.</div>${itemTags(item)}</div></div>
+    <div class="card bench-card">${iconCanvas(item.t, 'bigico', showsInfection(item))}<div class="bench-info"><div class="hint">${t('stock.estimate')} ${approx(estimatedValue(item))} ${t('unit.cr')}</div>${itemTags(item)}</div></div>
     ${benchOfferButton(item)}
     <div class="bgrid">${benchButton('diag', !isFullyKnown(item))}${benchButton('repair', item.cond < 100)}
     ${benchButton('fix', item.k.flaw && item.defect)}${benchButton('purge', item.k.flaw && item.infected)}
     ${benchButton('wipe', item.k.serial && item.stolen)}
-    <button class="btn" data-a="bench" data-v="scrap" ${disabledIf(isOnCounter(state, item))}><span>${STOCK_UI.actions.scrap}</span><span class="price">+${scrapValue(item)}⚙</span></button></div>
-    <div class="hint note">${STOCK_UI.wipeNote}</div>`;
+    <button class="btn" data-a="bench" data-v="scrap" ${disabledIf(isOnCounter(state, item))}><span>${t('stock.actions.scrap')}</span><span class="price">+${scrapValue(item)}⚙</span></button></div>
+    <div class="hint note">${t('stock.wipeNote')}</div>`;
 }
 
 /** ‹ n of total ›: pages through the filtered stock without closing the window. */
@@ -557,7 +552,7 @@ function benchArrows(order: number[], uid: number): string {
   const nav = benchNav(order, uid);
   const arrow = (target: number | null, glyph: string, label: string): string =>
     `<button class="btn bench-arrow" data-a="benchnav" data-v="${target ?? ''}" aria-label="${label}" ${disabledIf(target === null)}>${glyph}</button>`;
-  return `${arrow(nav.prev, '‹', STOCK_UI.prev)}<span class="bench-pos hint">${fill(STOCK_UI.position, { n: nav.n, total: nav.total })}</span>${arrow(nav.next, '›', STOCK_UI.next)}`;
+  return `${arrow(nav.prev, '‹', t('stock.prev'))}<span class="bench-pos hint">${t('stock.position', { n: nav.n, total: nav.total })}</span>${arrow(nav.next, '›', t('stock.next'))}`;
 }
 
 /** What the open bench shows: the item and the order it pages through (to find the next one when the item is gone). */
@@ -574,7 +569,7 @@ function benchSpec(item: Item): WindowSpec {
     // Mac: the bench took the stock's place in the window, the game goes on under it
     modal: !isDesk(),
     body: benchBody(item),
-    buttons: (isDesk() ? `<button class="btn bench-back" data-a="benchback">${STOCK_UI.back}</button>` : '') + benchArrows(bench.order, item.uid),
+    buttons: (isDesk() ? `<button class="btn bench-back" data-a="benchback">${t('stock.back')}</button>` : '') + benchArrows(bench.order, item.uid),
     onClose: reason => {
       ui.sel = null;
       bench.uid = null;
@@ -626,14 +621,14 @@ function recipeRow(recipe: Recipe, index: number): string {
     .map(([type, count]) => `<span class="${availableOfType(state, type).length >= count ? 'm-ok' : 'm-inactive'}">${itemName(type)} ×${count}</span>`)
     .join(' + ');
   const partsClass = state.parts >= recipe.parts ? 'm-ok' : 'm-inactive';
-  return `<div class="recipe">${iconCanvas(recipe.out)}<div class="rb"><div class="rn">${itemName(recipe.out)}</div><div class="need">${parts} + <span class="${partsClass}">${recipe.parts}⚙</span> · ${approx(ITEM_TYPES[recipe.out].basePrice)} кр.</div></div>
-    <button class="btn" data-a="craft" data-v="${index}" ${canCraft(state, recipe) ? '' : 'disabled'}>Собрать</button></div>`;
+  return `<div class="recipe">${iconCanvas(recipe.out)}<div class="rb"><div class="rn">${itemName(recipe.out)}</div><div class="need">${parts} + <span class="${partsClass}">${recipe.parts}⚙</span> · ${approx(ITEM_TYPES[recipe.out].basePrice)} ${t('unit.cr')}</div></div>
+    <button class="btn" data-a="craft" data-v="${index}" ${canCraft(state, recipe) ? '' : 'disabled'}>${t('craft.build')}</button></div>`;
 }
 
 function craftPane(): string {
   return `<div class="recipes">${RECIPES.map(recipeRow).join('')}</div>
-    <div class="hint note" style="margin:8px 0">Сборка даёт новый серийник: краденые детали становятся чистыми. ИИ-заражение переносится.</div>
-    <button class="btn" data-a="parts" ${state.credits >= SUPPLIER.price ? '' : 'disabled'} style="width:100%">Заказать ${SUPPLIER.parts} запчастей · ${SUPPLIER.price} кр.</button>`;
+    <div class="hint note" style="margin:8px 0">${t('craft.note')}</div>
+    <button class="btn" data-a="parts" ${state.credits >= SUPPLIER.price ? '' : 'disabled'} style="width:100%">${t('craft.order', { n: SUPPLIER.parts, price: SUPPLIER.price })}</button>`;
 }
 
 /* =====================================================================
@@ -740,10 +735,10 @@ export function render(): void {
    ===================================================================== */
 
 /** Floating "+120" style number over the scene. */
-function showFloatingText(text: string, color: string, star?: StarKind): void {
+function showFloatingText(text: string | Tx, color: string, star?: StarKind): void {
   const element = document.createElement('div');
   element.className = 'fx';
-  element.textContent = text;
+  element.textContent = textOf(text);
   if (star) {
     element.insertAdjacentHTML('afterbegin', starSvg(star, 4)); // 20×20 px, the size of the 16 px numbers
   }
@@ -771,15 +766,22 @@ function openModal(title: string, body: string, buttons: string, footer = ''): v
   byId('modal').hidden = false;
 }
 
-/** ☰ menu: a sheet over the HUD with the current mode on top, the debt, modes (a new game starts there), music, sounds and save (later: RU/EN). */
+/** RU / EN in the ☰ menu (task 34): two buttons, the current one pressed. */
+function langRow(): string {
+  const buttons = LANGS.map(lang => `<button class="btn lang-btn" data-a="lang" data-v="${lang}" aria-pressed="${getLang() === lang}">${lang.toUpperCase()}</button>`).join('');
+  return `<div class="menu-item lang-row" role="group" aria-label="${t('hud.lang')}"><span>${t('hud.lang')}</span>${buttons}</div>`;
+}
+
+/** ☰ menu: a sheet over the HUD with the current mode on top, the debt, modes (a new game starts there), music, sounds, the language and save. */
 function openMenu(): void {
-  byId('mbox').innerHTML = `<h2>${MODE_UI.names[state.mode]}</h2>
-    <button class="btn menu-item" data-a="debt">${fill(DEBT_UI.menuDebt, { debt: state.debt })}</button>
-    <button class="btn menu-item" data-a="modes">${MODE_UI.menuModes}</button>
-    <button class="btn menu-item" data-a="music" aria-pressed="${audio.on}">${HUD.music}: ${audio.on ? HUD.on : HUD.off}</button>
-    <button class="btn menu-item" data-a="sounds" aria-pressed="${audio.sfx}">${HUD.sounds}: ${audio.sfx ? HUD.on : HUD.off}</button>
-    <button class="btn menu-item" data-a="savemenu">${HUD.save}</button>
-    <div class="mbtns"><button class="btn" data-a="close">${HUD.close}</button></div>`;
+  byId('mbox').innerHTML = `<h2>${t(`mode.names.${state.mode}`)}</h2>
+    <button class="btn menu-item" data-a="debt">${t('debt.menuDebt', { debt: state.debt })}</button>
+    <button class="btn menu-item" data-a="modes">${t('mode.menuModes')}</button>
+    <button class="btn menu-item" data-a="music" aria-pressed="${audio.on}">${t('hud.music')}: ${audio.on ? t('hud.on') : t('hud.off')}</button>
+    <button class="btn menu-item" data-a="sounds" aria-pressed="${audio.sfx}">${t('hud.sounds')}: ${audio.sfx ? t('hud.on') : t('hud.off')}</button>
+    ${langRow()}
+    <button class="btn menu-item" data-a="savemenu">${t('hud.save')}</button>
+    <div class="mbtns"><button class="btn" data-a="close">${t('hud.close')}</button></div>`;
   closeWindowForModal();
   byId('modal').classList.add('sheet');
   byId('modal').hidden = false;
@@ -804,10 +806,10 @@ export function showEnding(): void {
   if (!state.over) {
     return;
   }
-  const ending = ENDING_TEXT.ru[state.ending ?? 'evicted'];
-  const totals = fill(DEBT_UI.totals, { day: state.day, credits: state.credits, debt: state.debt });
-  openModal(ending.title, `<p>${ending.line}</p><p class="hint">${totals}</p>`,
-    `<button class="btn pri" data-a="newgame-yes">${DEBT_UI.newGame}</button>`);
+  const ending = state.ending ?? 'evicted';
+  const totals = t('debt.totals', { day: state.day, credits: state.credits, debt: state.debt });
+  openModal(t(`ending.${ending}.title`), `<p>${t(`ending.${ending}.line`)}</p><p class="hint">${totals}</p>`,
+    `<button class="btn pri" data-a="newgame-yes">${t('debt.newGame')}</button>`);
 }
 
 /** "+4" / "−2" with a real minus sign. */
@@ -818,9 +820,9 @@ function expectedCustomers(): string {
   const today = customersToday(state);
   const time = formatHour(openingHour(state));
   const reasons = today.reasons
-    .map(reason => `<li class="m-wear">${fill(DAY_UI.reasons[reason.key], { time })} (${signed(reason.n)})</li>`)
+    .map(reason => `<li class="m-wear">${t(`day.reasons.${reason.key}`, { time })} (${signed(reason.n)})</li>`)
     .join('');
-  return `<p class="expect">${fill(DAY_UI.expected, { n: `<b class="rn">${today.count}</b>` })}</p>${reasons ? `<ul class="reasons">${reasons}</ul>` : ''}`;
+  return `<p class="expect">${t('day.expected', { n: `<b class="rn">${today.count}</b>` })}</p>${reasons ? `<ul class="reasons">${reasons}</ul>` : ''}`;
 }
 
 function showMorningReport(report: MorningReport): void {
@@ -828,14 +830,14 @@ function showMorningReport(report: MorningReport): void {
     showEnding();
     return;
   }
-  const lines = report.events.map(event => `<li>${event}</li>`);
+  const lines = report.events.map(event => `<li>${textOf(event)}</li>`);
   if (report.expenses) {
     const bills = expenseLines(report.expenses, state.debt);
-    lines.push(`<li>${bills.paid}</li>`);
+    lines.push(`<li>${textOf(bills.paid)}</li>`);
     if (bills.shortfall && report.expenses.toDebt) {
-      lines.push(`<li class="m-risk">${bills.shortfall}</li>`); // short of money: onto the debt
+      lines.push(`<li class="m-risk">${textOf(bills.shortfall)}</li>`); // short of money: onto the debt
     } else if (bills.shortfall) {
-      lines.push(`<li>${bills.shortfall}</li>`); // the seat is bought: nothing onto the debt
+      lines.push(`<li>${textOf(bills.shortfall)}</li>`); // the seat is bought: nothing onto the debt
     }
   }
   const body = `${expectedCustomers()}<ul>${lines.join('')}</ul>`;
@@ -845,7 +847,7 @@ function showMorningReport(report: MorningReport): void {
   // V2.2: the first window on the window component (a sheet on a phone, a mini window on a Mac)
   showWindow({
     id: 'morning',
-    title: fill(DAY_UI.morningTitle, { day: state.day }),
+    title: t('day.morningTitle', { day: state.day }),
     body,
     liveBar: true,
   });
@@ -857,48 +859,48 @@ function earlyButtons(): string {
   const steps = DEBT.earlySteps
     .map(step => `<button class="btn" data-a="early" data-v="${step}" ${disabledIf(state.over || state.debt === 0 || state.credits < Math.min(step, state.debt))}>+${step}</button>`)
     .join('');
-  return `${steps}<button class="btn" data-a="early" data-v="all" ${disabledIf(state.over || all <= 0)}>${DEBT_UI.everything} · ${all}</button>`;
+  return `${steps}<button class="btn" data-a="early" data-v="all" ${disabledIf(state.over || all <= 0)}>${t('debt.everything')} · ${all}</button>`;
 }
 
 function seatBlock(): string {
   if (state.seat) {
-    return `<p class="m-ok">${fill(DEBT_UI.seatOwned, { shuttle: state.shuttleDay })}</p>`;
+    return `<p class="m-ok">${t('debt.seatOwned', { shuttle: state.shuttleDay })}</p>`;
   }
   const price = seatPrice(state.day);
-  const note = state.debt > 0 ? `<p class="hint m-inactive">${DEBT_UI.seatNeedsZero}</p>` : '';
-  return `<p class="hint">${fill(DEBT_UI.seatPrice, { price, perDay: DEBT.seatPerDay, shuttle: state.shuttleDay })}</p>${note}
-    <button class="btn pri" data-a="seat" style="width:100%" ${disabledIf(!canBuySeat(state))}>${DEBT_UI.seatBuy} · ${price} кр.</button>`;
+  const note = state.debt > 0 ? `<p class="hint m-inactive">${t('debt.seatNeedsZero')}</p>` : '';
+  return `<p class="hint">${t('debt.seatPrice', { price, perDay: DEBT.seatPerDay, shuttle: state.shuttleDay })}</p>${note}
+    <button class="btn pri" data-a="seat" style="width:100%" ${disabledIf(!canBuySeat(state))}>${t('debt.seatBuy')} · ${money(price)}</button>`;
 }
 
 /** Debt window (HUD payment stat or ☰): the debt left, the next payment, early payments, the shuttle seat. */
 function openDebt(): void {
   const payment = state.debt > 0
-    ? `<span>${DEBT_UI.nextPayment}</span><span class="price">${state.owed} кр.</span>
-      <span>${DEBT_UI.when}</span><span>${fill(DEBT_UI.paymentDay, { day: state.nextDue, days: daysRu(Math.max(0, state.nextDue - state.day)) })}</span>`
-    : `<span>${DEBT_UI.nextPayment}</span><span>${DEBT_UI.noPayments}</span>`;
-  openModal(DEBT_UI.windowTitle, `<div class="debt"><div class="rows">
-      <span>${DEBT_UI.debtLeft}</span><span class="price"><b>${state.debt} кр.</b></span>
+    ? `<span>${t('debt.nextPayment')}</span><span class="price">${money(state.owed)}</span>
+      <span>${t('debt.when')}</span><span>${t('debt.paymentDay', { day: state.nextDue, days: tx('plural.days', { n: Math.max(0, state.nextDue - state.day) }) })}</span>`
+    : `<span>${t('debt.nextPayment')}</span><span>${t('debt.noPayments')}</span>`;
+  openModal(t('debt.windowTitle'), `<div class="debt"><div class="rows">
+      <span>${t('debt.debtLeft')}</span><span class="price"><b>${money(state.debt)}</b></span>
       ${payment}
-      <span>${DEBT_UI.youHave}</span><span class="price">${state.credits} кр.</span></div>
-    ${state.debt > 0 ? `<h3>${DEBT_UI.early}</h3><p class="hint">${DEBT_UI.earlyHint}</p><div class="early">${earlyButtons()}</div>` : ''}
-    ${hasShuttle(state) ? `<h3>${DEBT_UI.seatTitle}</h3>${seatBlock()}` : ''}</div>`, CLOSE_BUTTON);
+      <span>${t('debt.youHave')}</span><span class="price">${money(state.credits)}</span></div>
+    ${state.debt > 0 ? `<h3>${t('debt.early')}</h3><p class="hint">${t('debt.earlyHint')}</p><div class="early">${earlyButtons()}</div>` : ''}
+    ${hasShuttle(state) ? `<h3>${t('debt.seatTitle')}</h3>${seatBlock()}` : ''}</div>`, closeButton());
 }
 
 /** Buying the seat cannot be undone: ask first. */
 function confirmSeat(): void {
-  openModal(DEBT_UI.seatConfirmTitle, `<p>${fill(DEBT_UI.seatConfirmText, { price: seatPrice(state.day) })}</p>`,
-    `<button class="btn pri" data-a="seat-yes">${DEBT_UI.seatConfirmYes}</button><button class="btn" data-a="debt">${DEBT_UI.seatConfirmNo}</button>`);
+  openModal(t('debt.seatConfirmTitle'), `<p>${t('debt.seatConfirmText', { price: seatPrice(state.day) })}</p>`,
+    `<button class="btn pri" data-a="seat-yes">${t('debt.seatConfirmYes')}</button><button class="btn" data-a="debt">${t('debt.seatConfirmNo')}</button>`);
 }
 
 function openSaveMenu(): void {
-  openModal('Сохранение', `<p class="hint" style="margin:0">Скопируйте код и сохраните в заметки. На другом устройстве или в другой версии игры вставьте его в поле загрузки.</p>
-      <label for="savecode">${fill(MODE_UI.saveCode, { mode: MODE_UI.names[state.mode], day: state.day, credits: state.credits })}</label><textarea id="savecode" readonly placeholder="${SAVE_UI.preparing}"></textarea>
-      <div class="mbtns"><button class="btn pri" data-a="copysave">Скопировать</button><button class="btn" data-a="savefile">${SAVE_UI.download}</button></div>
-      <label for="loadcode">Загрузить сейв</label><textarea id="loadcode" placeholder="Вставьте код"></textarea>
-      <div class="mbtns"><button class="btn" data-a="loadfile">${SAVE_UI.upload}</button></div>
+  openModal(t('hud.save'), `<p class="hint" style="margin:0">${t('save.about')}</p>
+      <label for="savecode">${t('mode.saveCode', { mode: t(`mode.names.${state.mode}`), day: state.day, credits: state.credits })}</label><textarea id="savecode" readonly placeholder="${t('save.preparing')}"></textarea>
+      <div class="mbtns"><button class="btn pri" data-a="copysave">${t('save.copy')}</button><button class="btn" data-a="savefile">${t('save.download')}</button></div>
+      <label for="loadcode">${t('save.loadLabel')}</label><textarea id="loadcode" placeholder="${t('save.loadPlaceholder')}"></textarea>
+      <div class="mbtns"><button class="btn" data-a="loadfile">${t('save.upload')}</button></div>
       <input type="file" id="loadfilepick" accept=".txt,text/plain" hidden>
       <div id="savemsg" class="hint"></div>`,
-    '<button class="btn alt" data-a="loadsave">Загрузить</button><button class="btn" data-a="close">Закрыть</button>',
+    `<button class="btn alt" data-a="loadsave">${t('save.load')}</button><button class="btn" data-a="close">${t('hud.close')}</button>`,
     `<div class="version">${VERSION_LABEL}</div>`,
   );
   // DC2 is compressed asynchronously: the code arrives a moment after the window
@@ -926,7 +928,7 @@ async function loadSaveFile(file: File | undefined): Promise<void> {
   try {
     byId<HTMLTextAreaElement>('loadcode').value = file ? (await file.text()).trim() : '';
   } catch {
-    showSaveError(SAVE_UI.fileUnread);
+    showSaveError(t('save.fileUnread'));
     return;
   }
   await loadSaveCode();
@@ -942,11 +944,11 @@ function copySaveCode(): void {
   const selectForManualCopy = () => {
     textarea.focus();
     textarea.select();
-    byId('savemsg').textContent = 'Код выделен, скопируйте вручную.';
+    byId('savemsg').textContent = t('save.selectManually');
   };
   try {
     navigator.clipboard.writeText(textarea.value).then(() => {
-      byId('savemsg').textContent = 'Скопировано.';
+      byId('savemsg').textContent = t('save.copied');
     }, selectForManualCopy);
   } catch (err) {
     selectForManualCopy();
@@ -957,29 +959,24 @@ function copySaveCode(): void {
 async function loadSaveCode(): Promise<void> {
   const loaded = await importSaveCode(byId<HTMLTextAreaElement>('loadcode').value);
   if (!loaded) {
-    showSaveError('Код не распознан. Проверьте, что скопирован весь код целиком.');
+    showSaveError(t('save.badCode'));
     return;
   }
   // the current game is already in its slot (render saves after every action);
   // the code goes into the slot of its own mode, and the game switches to that mode
   enterGame(loaded);
-  addLog(state, `Сейв загружен: день ${state.day}, ${state.credits} кр.`);
+  addLog(state, tx('log.loaded', { day: state.day, credits: state.credits }));
   closeModal();
   render();
 }
 
 function openLog(): void {
-  openModal('Лента', `<ul>${state.log.map(line => `<li>${logLine(line)}</li>`).join('')}</ul>`, CLOSE_BUTTON);
+  openModal(t('log.title'), `<ul>${state.log.map(line => `<li>${logLine(line)}</li>`).join('')}</ul>`, closeButton());
 }
 
 /* =====================================================================
    Game modes: the mode screen, slots, the player profile
    ===================================================================== */
-
-/** Mode strings in the interface language. */
-const MODE_UI = MODE_TEXT.ru;
-/** Save window strings (the file buttons). */
-const SAVE_UI = SAVE_TEXT.ru;
 
 /** Player profile; loaded by startGame(). */
 let profile: Profile = loadProfile(null);
@@ -1035,30 +1032,30 @@ function modeStatus(game: GameState | null): string {
     return '';
   }
   if (game.over) {
-    return fill(MODE_UI.finished, { ending: ENDING_TEXT.ru[game.ending ?? 'evicted'].title, day: game.day });
+    return t('mode.finished', { ending: t(`ending.${game.ending ?? 'evicted'}.title`), day: game.day });
   }
   if (game.mode === 'calm' && game.debt === 0) {
-    return fill(MODE_UI.paidOff, { day: game.day });
+    return t('mode.paidOff', { day: game.day });
   }
-  return fill(MODE_UI.progress, { day: game.day, debt: game.debt });
+  return t('mode.progress', { day: game.day, debt: game.debt });
 }
 
 function modeCard(mode: Mode): string {
-  const name = `<span class="mode-name">${MODE_UI.names[mode]}</span>`;
-  const about = `<p class="hint">${MODE_UI.about[mode]}</p>`;
+  const name = `<span class="mode-name">${t(`mode.names.${mode}`)}</span>`;
+  const about = `<p class="hint">${t(`mode.about.${mode}`)}</p>`;
   if (!isPlayable(profile, mode)) {
-    return `<div class="mode-card m-inactive">${name}${about}<p class="mode-lock">${iconSvg('lock')}${MODE_UI.locked}</p></div>`;
+    return `<div class="mode-card m-inactive">${name}${about}<p class="mode-lock">${iconSvg('lock')}${t('mode.locked')}</p></div>`;
   }
   const game = gameIn(mode);
-  const current = mode === state.mode && persistence.enabled ? ` <span class="tag">${MODE_UI.current}</span>` : '';
+  const current = mode === state.mode && persistence.enabled ? ` <span class="tag">${t('mode.current')}</span>` : '';
   let buttons: string;
   if (!game) {
-    buttons = `<button class="btn pri" data-a="mode-go" data-v="${mode}">${MODE_UI.start}</button>`;
+    buttons = `<button class="btn pri" data-a="mode-go" data-v="${mode}">${t('mode.start')}</button>`;
   } else if (game.over) {
-    buttons = `<button class="btn pri" data-a="mode-reset" data-v="${mode}">${MODE_UI.restart}</button>`;
+    buttons = `<button class="btn pri" data-a="mode-reset" data-v="${mode}">${t('mode.restart')}</button>`;
   } else {
-    buttons = `<button class="btn pri" data-a="mode-go" data-v="${mode}">${MODE_UI.continue}</button>`
-      + `<button class="btn" data-a="mode-reset" data-v="${mode}">${MODE_UI.restart}</button>`;
+    buttons = `<button class="btn pri" data-a="mode-go" data-v="${mode}">${t('mode.continue')}</button>`
+      + `<button class="btn" data-a="mode-reset" data-v="${mode}">${t('mode.restart')}</button>`;
   }
   const status = game ? `<p class="mode-status">${modeStatus(game)}</p>` : '';
   return `<div class="mode-card"><div>${name}${current}</div>${about}${status}<div class="mode-btns">${buttons}</div></div>`;
@@ -1066,8 +1063,8 @@ function modeCard(mode: Mode): string {
 
 /** Mode screen: on the first launch (no close button) and from ☰ "Режимы" (a new game starts there). */
 function openModes(): void {
-  const close = persistence.enabled ? `<button class="btn" data-a="close">${MODE_UI.close}</button>` : '';
-  openModal(MODE_UI.screenTitle, `<div class="modes">${MODES.map(modeCard).join('')}</div>`, close);
+  const close = persistence.enabled ? `<button class="btn" data-a="close">${t('mode.close')}</button>` : '';
+  openModal(t('mode.screenTitle'), `<div class="modes">${MODES.map(modeCard).join('')}</div>`, close);
 }
 
 const isMode = (value: string | undefined): value is Mode => (MODES as readonly (string | undefined)[]).includes(value);
@@ -1105,9 +1102,9 @@ function askResetMode(mode: Mode): void {
     resetMode(mode);
     return;
   }
-  openModal(MODE_UI.resetTitle, `<p>${fill(MODE_UI.resetText, { mode: MODE_UI.names[mode] })}</p>`,
-    `<button class="btn pri" data-a="mode-reset-yes" data-v="${mode}">${MODE_UI.resetYes}</button>`
-    + `<button class="btn" data-a="modes">${MODE_UI.resetNo}</button>`);
+  openModal(t('mode.resetTitle'), `<p>${t('mode.resetText', { mode: t(`mode.names.${mode}`) })}</p>`,
+    `<button class="btn pri" data-a="mode-reset-yes" data-v="${mode}">${t('mode.resetYes')}</button>`
+    + `<button class="btn" data-a="modes">${t('mode.resetNo')}</button>`);
 }
 
 function resetMode(mode: Mode): void {
@@ -1126,9 +1123,21 @@ function resetMode(mode: Mode): void {
 
 /** calm: the debt has just been closed. "Продолжить" keeps the shop going without payments. */
 function showDebtClosed(): void {
-  const totals = fill(DEBT_UI.totals, { day: state.day, credits: state.credits, debt: state.debt });
-  openModal(MODE_UI.paidTitle, `<p>${MODE_UI.paidLine}</p><p class="hint">${totals}</p>`,
-    `<button class="btn pri" data-a="close">${MODE_UI.paidContinue}</button><button class="btn" data-a="newgame-yes">${MODE_UI.paidNewGame}</button>`);
+  const totals = t('debt.totals', { day: state.day, credits: state.credits, debt: state.debt });
+  openModal(t('mode.paidTitle'), `<p>${t('mode.paidLine')}</p><p class="hint">${totals}</p>`,
+    `<button class="btn pri" data-a="close">${t('mode.paidContinue')}</button><button class="btn" data-a="newgame-yes">${t('mode.paidNewGame')}</button>`);
+}
+
+/** The interface language: the profile's choice, else the system language. */
+const wantedLang = (): Lang => profile.lang ?? detectLang(typeof navigator === 'undefined' ? undefined : navigator.language);
+
+/** Switches the screen's language: the texts outside the render (page title, scene label, window frame); render() does the rest. */
+function applyLang(lang: Lang): void {
+  setLang(lang);
+  document.documentElement.lang = lang;
+  document.title = t('app.title');
+  byId('scn').setAttribute('aria-label', t('app.scene'));
+  labelWindowFrame();
 }
 
 /**
@@ -1137,6 +1146,7 @@ function showDebtClosed(): void {
  */
 export function startGame(): void {
   profile = loadProfile();
+  applyLang(wantedLang());
   setHotspotHints(!profile.tapped);
   const order: Mode[] = [profile.last, ...PLAYABLE_MODES.filter(mode => mode !== profile.last)];
   for (const mode of order) {
@@ -1287,6 +1297,15 @@ const ACTIONS: Record<string, ActionHandler> = {
   },
   sounds: () => {
     toggleSfx();
+    openMenu();
+  },
+  // RU / EN (task 34): the choice goes into the profile, the screen is drawn again in the new language
+  lang: value => {
+    if (isLang(value)) {
+      profile.lang = value;
+      saveProfile(profile);
+      applyLang(value);
+    }
     openMenu();
   },
   menu: () => {

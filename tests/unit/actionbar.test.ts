@@ -1,13 +1,16 @@
 // V1.5 "Каркас": the action bar above the HUD — one main button per screen, always in the same place.
 import { afterEach, describe, expect, it } from 'vitest';
 import { barAction, canCallNext, mainAction, type MainAction } from '../../src/actionbar';
-import { ACTION_TEXT, CUSTOMERS_PER_DAY, JUNK_TEXT, LANDLORD_SEED } from '../../src/data';
+import { CUSTOMERS_PER_DAY, LANDLORD_SEED } from '../../src/data';
+
 import { actor, actorAtCounter, actorReset, state } from '../../src/state';
 import type { Tab } from '../../src/types';
 import styleCss from '../../src/style.css?raw';
 import uiTs from '../../src/ui.ts?raw';
 import indexHtml from '../../index.html?raw';
 import { makeItem, makePresentedBuyer, makeSeller, makeState } from './helpers';
+import { RU } from '../../src/lang/ru';
+import { EN } from '../../src/lang/en';
 
 const css = styleCss.replace(/\/\*[\s\S]*?\*\//g, '');
 const RULES: [string, string][] = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(m => [m[1].trim().replace(/\s+/g, ' '), m[2]]);
@@ -37,7 +40,7 @@ describe('main action table', () => {
   it('the morning (task 29): the same call reads "Открыть лавку" on any tab', () => {
     makeState({ slot: 0 });
     for (const tab of ['deal', 'inv', 'craft'] as const) {
-      expect(mainAction(state, actor, tab, { morning: true })).toEqual({ kind: 'button', action: 'openshop', label: ACTION_TEXT.ru.openShop, tone: 'action' });
+      expect(mainAction(state, actor, tab, { morning: true })).toEqual({ kind: 'button', action: 'openshop', label: RU.action.openShop, tone: 'action' });
     }
     // nobody to call (the counter is busy): no morning button
     state.cust = makeSeller();
@@ -49,25 +52,25 @@ describe('main action table', () => {
     makeState();
     state.cust = makeSeller();
     actorAtCounter(1);
-    expect(mainAction(state, actor, 'inv', { desk: true })).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.toCounterDesk });
-    expect(mainAction(state, actor, 'craft', { desk: true })).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.toCounterDesk });
-    expect(mainAction(state, actor, 'inv')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.toCounter });
+    expect(mainAction(state, actor, 'inv', { desk: true })).toEqual({ kind: 'hint', text: RU.action.toCounterDesk });
+    expect(mainAction(state, actor, 'craft', { desk: true })).toEqual({ kind: 'hint', text: RU.action.toCounterDesk });
+    expect(mainAction(state, actor, 'inv')).toEqual({ kind: 'hint', text: RU.action.toCounter });
   });
 
   it('the queue is over → "Закрыть лавку"', () => {
     makeState({ slot: CUSTOMERS_PER_DAY, day: 3, nextDue: 7 });
     expect(action()).toBe('closeshop');
-    expect(mainAction(state, actor, 'inv')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.shiftOver });
+    expect(mainAction(state, actor, 'inv')).toEqual({ kind: 'hint', text: RU.action.shiftOver });
   });
 
   it('a customer walking in or out → a dim hint, not an empty bar', () => {
     makeState();
     state.cust = makeSeller();
     actor.phase = 'in';
-    expect(mainAction(state, actor, 'deal')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.approaching });
+    expect(mainAction(state, actor, 'deal')).toEqual({ kind: 'hint', text: RU.action.approaching });
     state.cust = null;
     actor.phase = 'out';
-    expect(mainAction(state, actor, 'deal')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.leaving });
+    expect(mainAction(state, actor, 'deal')).toEqual({ kind: 'hint', text: RU.action.leaving });
   });
 
   it('seller → "Предложить"; buyer → "Назвать цену" once an item is shown', () => {
@@ -78,7 +81,7 @@ describe('main action table', () => {
     expect(mainAction(state, actor, 'inv').kind).toBe('hint');
     state.inv = [makeItem('battery')];
     state.cust = { ...makePresentedBuyer(), item: null };
-    expect(mainAction(state, actor, 'deal')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.showItem });
+    expect(mainAction(state, actor, 'deal')).toEqual({ kind: 'hint', text: RU.action.showItem });
     state.cust = makePresentedBuyer({ item: state.inv[0] });
     expect(action()).toBe('ask');
   });
@@ -108,16 +111,16 @@ describe('main action table', () => {
   it('evening → "Спать"; junkyard → "Копать", then "Вернуться домой"; on other tabs a hint', () => {
     makeState({ phase: 'evening', where: 'home', hours: 4 });
     expect(action()).toBe('sleep');
-    expect(mainAction(state, actor, 'inv')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.toEvening });
+    expect(mainAction(state, actor, 'inv')).toEqual({ kind: 'hint', text: RU.action.toEvening });
     state.where = 'junk';
     state.junk = { d: 2, n: 30, dp: 3, f: [], s: 1 };
     expect(action()).toBe('dig');
-    expect(mainAction(state, actor, 'deal')).toMatchObject({ label: JUNK_TEXT.ru.dig });
+    expect(mainAction(state, actor, 'deal')).toMatchObject({ label: RU.junk.dig });
     state.junk.d = 0;
     expect(action()).toBe('home');
     state.junk = { d: 0, n: 50, dp: 4, f: [], s: 1, run: true }; // after the drone
     expect(action()).toBe('home');
-    expect(mainAction(state, actor, 'inv')).toEqual({ kind: 'hint', text: ACTION_TEXT.ru.toJunkyard });
+    expect(mainAction(state, actor, 'inv')).toEqual({ kind: 'hint', text: RU.action.toJunkyard });
   });
 
   it('after the end the bar is hidden (the final window has its buttons)', () => {
@@ -135,7 +138,7 @@ describe('main action table', () => {
   });
 
   it('RU and EN have the same strings', () => {
-    expect(Object.keys(ACTION_TEXT.en)).toEqual(Object.keys(ACTION_TEXT.ru));
+    expect(Object.keys(EN.action)).toEqual(Object.keys(RU.action));
   });
 });
 

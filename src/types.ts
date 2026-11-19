@@ -5,7 +5,9 @@
 //  DC1: codes). Short field names are kept on purpose: renaming them
 //  would break old saves. When a field changes, upgrade it in migrate().
 // =====================================================================
-import type { ENDING_TEXT, ITEM_TYPES, MODES } from './data';
+import type { ITEM_TYPES, MODES } from './data';
+import type { Lang } from './i18n';
+import type { RU } from './lang/ru';
 
 /* ---------- goods ---------- */
 
@@ -13,7 +15,6 @@ import type { ENDING_TEXT, ITEM_TYPES, MODES } from './data';
 export type ItemType = keyof typeof ITEM_TYPES;
 
 export interface ItemTypeInfo {
-  name: string;
   /** Price at 100% condition. */
   basePrice: number;
   /** Relative chance to appear. */
@@ -64,7 +65,7 @@ interface CustomerBase {
   name: string;
   /** Appearance seed (see appearanceFor). */
   seed: number;
-  /** Speech bubble text. */
+  /** Speech bubble: a stored message (i18n say(): a JSON {k, p}) or, in old saves, a plain text. */
   msg: string;
   /** Patience left. */
   pat: number;
@@ -156,18 +157,18 @@ export interface GameState {
   uid: number;
   /** Inventory. */
   inv: Item[];
-  /** Event log, newest first. */
+  /** Event log, newest first: log entries as JSON {d, k, p} (i18n, task 34); old saves keep plain texts "Д5: …". */
   log: string[];
   /** Customer at the counter. */
   cust: Customer | null;
-  /** Game-over text (the ending's line), null while playing. */
+  /** Game-over text (the ending's line as a stored message; plain text in old saves), null while playing. */
   over: string | null;
   phase: 'shop' | 'evening';
   /** Evening hours left. */
   hours: number;
   where: 'home' | 'junk';
   junk: JunkVisit | null;
-  /** Junkyard message in the speech bubble. */
+  /** Junkyard message in the speech bubble (a stored message, like cust.msg). */
   jmsg: string;
   /** Flea market visited this evening. */
   market: boolean;
@@ -209,10 +210,12 @@ export interface Profile {
   last: Mode;
   /** A scene hotspot was tapped once (V2.1): the first-day hints never pulse again. */
   tapped: boolean;
+  /** Interface language chosen in ☰ (task 34); null — the system language. */
+  lang: Lang | null;
 }
 
 /** Endings: left, stayed, evicted; betray and takeover are stubs for Patch C. */
-export type Ending = keyof typeof ENDING_TEXT.ru;
+export type Ending = keyof typeof RU.ending;
 
 /** Fields added by the landlord update; saves made before it lack them. */
 type RentFields = 'nextDue' | 'owed' | 'deferred' | 'llAt' | 'llDone';

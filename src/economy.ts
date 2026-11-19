@@ -8,12 +8,14 @@
 //  business: it reads the result. Floating numbers are queued in `feedback`.
 // =====================================================================
 import {
-  ACCEPT, HUNCH_VERDICT, HUNCH_VERDICT_TEXT, BENCH_COST, BUYER_COUNTER_LINES, BUYER_INSULTED_LINES, BUYER_LINES, COLLATERAL,
-  buyerShare, CRAFT_CONDITION_BONUS, CUSTOMER, DAY_TEXT, DEBT, DEBT_TEXT, ENDING_TEXT, EXPENSE_TEXT, EXPENSES, DIG_LOOT, DIG_ODDS, EVENING_HOURS, JUNK_TEXT, HAGGLE, HUMAN_NAMES,
+  ACCEPT, HUNCH_VERDICT, BENCH_COST, COLLATERAL,
+  buyerShare, CRAFT_CONDITION_BONUS, CUSTOMER, DEBT, EXPENSES, DIG_LOOT, DIG_ODDS, EVENING_HOURS, HAGGLE, HUMAN_NAMES,
   INSPECT, ITEM_TYPES, JUNK, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
-  RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SELLER_COUNTER_LINES, SELLER_INSULTED_LINES, SELLER_LINES,
-  SELLER_STOLEN_LINE, SUPPLIER, VALUE,
+  RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SUPPLIER, VALUE,
 } from './data';
+import { itemRef, listLength, say, tx } from './i18n';
+import type { ListKey, TextKey, Tx } from './i18n';
+import type { RU } from './lang/ru';
 import { COLOR, MEANING } from './palette';
 import { appearanceFor } from './appearance';
 import { customersToday, formatHour, openingHour, weekdayOf } from './day';
@@ -24,18 +26,23 @@ import type { StarKind } from './star';
 import type {
   BuyerCustomer, Ending, GameState, InspectCheck, Item, ItemType, JunkVisit, PresentedBuyer, Recipe, SellerCustomer,
 } from './types';
-import { clamp, daysRu, fill, roundTo10 } from './util';
+import { clamp, roundTo10 } from './util';
 
-const TEXT = DEBT_TEXT.ru;
-const JUNK_WORDS = JUNK_TEXT.ru;
-const DAY_WORDS = DAY_TEXT.ru;
+/**
+ * Texts (task 34): the rules never translate. They keep messages — tx(key, params) for the log,
+ * say(…) for the string fields of the save (cust.msg, jmsg, over) — and the screen translates them.
+ */
+
+/** A random line of a dictionary list, as its key ('lines.seller.2'): one rng() call, like pickRandom. */
+const lineKey = (rng: Rng, key: ListKey): TextKey => `${key}.${Math.floor(rng() * listLength(key))}` as TextKey;
 
 /* =====================================================================
    Feedback for the UI: floating numbers to show after the action.
    ===================================================================== */
 
 export interface FloatingText {
-  text: string;
+  /** A number ("+120") or a word to translate. */
+  text: string | Tx;
   color: string;
   /** A pixel star drawn before the text (a rare find). */
   star?: StarKind;
@@ -43,15 +50,13 @@ export interface FloatingText {
 
 export const feedback: { floats: FloatingText[] } = { floats: [] };
 
-function floatText(text: string, color: string, star?: StarKind): void {
+function floatText(text: string | Tx, color: string, star?: StarKind): void {
   feedback.floats.push(star ? { text, color, star } : { text, color });
 }
 
 /* =====================================================================
    Item value
    ===================================================================== */
-
-export const itemName = (type: ItemType): string => ITEM_TYPES[type].name;
 
 function conditionValue(type: ItemType, condition: number): number {
   return ITEM_TYPES[type].basePrice * (VALUE.conditionFloor + VALUE.conditionSpan * condition / 100);
@@ -131,13 +136,13 @@ function createCustomer(state: GameState, forceSeller: boolean, rng: Rng): void 
   if (isBuyer) {
     const want = rng() < CUSTOMER.buyerWantsStockedChance ? pickRandom(rng, state.inv).t : pickRandomItemType(rng);
     const mult = randomBetween(rng, CUSTOMER.buyerMarkupMin, CUSTOMER.buyerMarkupMax);
-    const msg = pickRandom(rng, BUYER_LINES).replace('{t}', itemName(want).toLowerCase());
+    const msg = say(lineKey(rng, 'lines.buyer'), { t: itemRef(want) });
     state.cust = { ...base, kind: 'buy', want, mult, item: null, msg };
   } else {
     const item = createItem(state, pickRandomItemType(rng), {}, rng);
     const ask = Math.round(cleanValue(item) * randomBetween(rng, CUSTOMER.sellerAskMin, CUSTOMER.sellerAskMax));
     const min = Math.round(trueValue(item) * (item.stolen ? CUSTOMER.sellerMinStolen : CUSTOMER.sellerMinClean));
-    const msg = item.stolen && rng() < CUSTOMER.stolenRushLineChance ? SELLER_STOLEN_LINE : pickRandom(rng, SELLER_LINES);
+    const msg = item.stolen && rng() < CUSTOMER.stolenRushLineChance ? say('lines.sellerStolen') : say(lineKey(rng, 'lines.seller'));
     state.cust = { ...base, kind: 'sell', item, ask, min, msg };
   }
 }
@@ -168,13 +173,8 @@ export function callNextCustomer(state: GameState, rng: Rng): boolean {
 }
 
 function landlordGreeting(state: GameState): string {
-  if (state.deferred) {
-    return `Отсрочка кончилась. С тебя ${state.owed} кр., сегодня.`;
-  }
-  if (state.credits >= state.owed) {
-    return `Платёж. ${state.owed} кр., как договаривались.`;
-  }
-  return `Платёж, ${state.owed} кр. Не хватает? Могу подождать пару дней. Под процент.`;
+  const key = state.deferred ? 'landlord.deferred' : state.credits >= state.owed ? 'landlord.due' : 'landlord.short';
+  return say(key, { n: state.owed });
 }
 
 function spawnLandlord(state: GameState): void {
@@ -182,11 +182,12 @@ function spawnLandlord(state: GameState): void {
   state.cust = { kind: 'rent', name: LANDLORD_NAME, seed: LANDLORD_SEED, msg, pat: 0, max: 0, done: {} };
 }
 
-export function customerLeaves(state: GameState, reason?: string): void {
+export function customerLeaves(state: GameState, reason?: Tx): void {
   if (!state.cust) {
     return;
   }
-  addLog(state, `${state.cust.name} ушёл(ла). ${reason || ''}`);
+  const name = state.cust.kind === 'rent' ? tx('landlord.name') : state.cust.name;
+  addLog(state, tx('log.left', { name, reason: reason ?? '' }));
   finishCustomer(state);
 }
 
@@ -215,7 +216,7 @@ export function closeShop(state: GameState): void {
   state.late = 0; // today's late opening is over; tonight counts its own digs past midnight
   state.where = 'home';
   state.market = false;
-  addLog(state, 'Лавка закрыта. Вечер свободен.');
+  addLog(state, tx('log.shopClosed'));
 }
 
 /* =====================================================================
@@ -242,7 +243,7 @@ function reduceDebt(state: GameState, amount: number): void {
 /** Last line of a payment: the debt is gone. */
 function logIfDebtPaid(state: GameState): void {
   if (state.debt === 0) {
-    addLog(state, TEXT.debtPaid);
+    addLog(state, tx('debt.debtPaid'));
   }
 }
 
@@ -316,9 +317,10 @@ export function payRent(state: GameState): void {
   const amount = state.owed;
   state.credits -= amount;
   floatText(`−${amount}`, MEANING.risk); // payment to the landlord
-  state.cust.msg = 'Приятно иметь дело.';
+  state.cust.msg = say('landlord.thanks');
   settleRent(state);
-  addLog(state, fill(TEXT.paymentPaid, { amount, debt: state.debt }) + (state.debt > 0 ? ' ' + fill(TEXT.paymentNext, { amount: state.owed, day: state.nextDue }) : ''));
+  const paid = tx('debt.paymentPaid', { amount, debt: state.debt });
+  addLog(state, state.debt > 0 ? tx('join.pair', { a: paid, b: tx('debt.paymentNext', { amount: state.owed, day: state.nextDue }) }) : paid);
   logIfDebtPaid(state);
   finishCustomer(state);
 }
@@ -334,7 +336,7 @@ export function deferRent(state: GameState): void {
   state.nextDue = state.day + RENT.deferDays;
   state.deferred = true;
   state.llDone = true;
-  addLog(state, fill(TEXT.deferred, { day: state.nextDue, amount: state.owed, debt: state.debt }));
+  addLog(state, tx('debt.deferred', { day: state.nextDue, amount: state.owed, debt: state.debt }));
   finishCustomer(state);
 }
 
@@ -350,10 +352,12 @@ export function payWithCollateral(state: GameState): void {
   }
   const relief = collateralHeatRelief(state, plan);
   state.heat -= relief;
-  const taken = plan.items.map(item => itemName(item.t)).join(', ');
-  const overNote = plan.over ? ` Сдачи не будет (переплата ~${plan.over} кр.).` : '';
-  const hotNote = plan.hot ? ` Краденое (${plan.hot}) ушло по его каналам, розыск −${relief}.` : '';
-  addLog(state, `Гробов забрал ${plan.cash} кр. и товар: ${taken}.${overNote}${hotNote}`);
+  addLog(state, tx('log.collateral', {
+    cash: plan.cash,
+    items: plan.items.map(item => itemRef(item.t)),
+    over: plan.over ? tx('log.noChange', { n: plan.over }) : '',
+    hot: plan.hot ? tx('log.hotGone', { n: plan.hot, relief }) : '',
+  }));
   settleRent(state);
   logIfDebtPaid(state);
   finishCustomer(state);
@@ -372,7 +376,7 @@ export function payEarly(state: GameState, amount: number): number {
   }
   state.credits -= paid;
   floatText(`−${paid}`, MEANING.risk);
-  addLog(state, fill(TEXT.paidEarly, { amount: paid, debt: state.debt - paid }));
+  addLog(state, tx('debt.paidEarly', { amount: paid, debt: state.debt - paid }));
   reduceDebt(state, paid);
   capPaymentByDebt(state);
   logIfDebtPaid(state);
@@ -397,15 +401,15 @@ export function buySeat(state: GameState): boolean {
   state.credits -= price;
   state.seat = true;
   floatText(`−${price}`, MEANING.risk);
-  addLog(state, fill(TEXT.seatBought, { price }));
+  addLog(state, tx('debt.seatBought', { price }));
   return true;
 }
 
 /** Ends the game: the ending's line becomes the game-over text. */
 export function endGame(state: GameState, ending: Ending): void {
   state.ending = ending;
-  state.over = ENDING_TEXT.ru[ending].line;
-  addLog(state, state.over);
+  state.over = say(`ending.${ending}.line`);
+  addLog(state, tx(`ending.${ending}.line`));
 }
 
 /* =====================================================================
@@ -414,7 +418,7 @@ export function endGame(state: GameState, ending: Ending): void {
 
 function revealCondition(customer: SellerCustomer, item: Item): void {
   item.k.cond = true;
-  customer.msg = `Состояние ${item.cond}%. ${item.cond < INSPECT.lowCondition ? 'Ну, работает же.' : 'Видишь, хорошая вещь.'}`;
+  customer.msg = say('lines.cond', { n: item.cond, note: tx(item.cond < INSPECT.lowCondition ? 'lines.condLow' : 'lines.condGood') });
 }
 
 function revealSerial(customer: SellerCustomer, item: Item): void {
@@ -422,9 +426,9 @@ function revealSerial(customer: SellerCustomer, item: Item): void {
   if (item.stolen) {
     customer.ask = Math.max(customer.min, Math.round(customer.ask * INSPECT.stolenAskMult));
     customer.min = Math.round(customer.min * INSPECT.stolenMinMult);
-    customer.msg = '…Серийник? Его и не было. Ладно, скину цену.';
+    customer.msg = say('lines.serialStolen');
   } else {
-    customer.msg = 'Серийник чистый, сам видишь.';
+    customer.msg = say('lines.serialClean');
   }
 }
 
@@ -433,12 +437,12 @@ function revealFlaw(customer: SellerCustomer, item: Item): void {
   if (item.infected) {
     customer.ask = Math.max(customer.min, Math.round(customer.ask * INSPECT.infectedAskMult));
     customer.min = Math.round(customer.min * INSPECT.infectedMinMult);
-    customer.msg = 'Какой ещё ИИ? Я не знал! Забирай дешевле.';
+    customer.msg = say('lines.aiFound');
   } else if (item.defect) {
     customer.ask = Math.max(customer.min, Math.round(customer.ask * INSPECT.defectAskMult));
-    customer.msg = 'Ну да, контакт отходит. Учту в цене.';
+    customer.msg = say('lines.defectFound');
   } else {
-    customer.msg = 'Начинка в порядке. Говорил же.';
+    customer.msg = say('lines.insidesOk');
   }
 }
 
@@ -509,7 +513,7 @@ export function perceivedChance(customer: SellerCustomer | PresentedBuyer, price
   return clamp(Math.round((chance + customer.noise) * ACCEPT.feelStep) / ACCEPT.feelStep, ACCEPT.feelMin, ACCEPT.feelMax);
 }
 
-export type HunchVerdict = keyof typeof HUNCH_VERDICT_TEXT.ru;
+export type HunchVerdict = keyof typeof RU.verdict;
 
 /** One word for the gut feeling: "unlikely" < 25% ≤ "maybe" < 55% ≤ "likely" < 85% ≤ "deal". */
 export function hunchVerdict(chance: number): HunchVerdict {
@@ -529,7 +533,7 @@ export function offerToSeller(state: GameState, price: number, rng: Rng): Item |
     return null;
   }
   if (price > state.credits) {
-    customer.msg = 'У тебя столько нет, не смеши.';
+    customer.msg = say('lines.noMoney');
     return null;
   }
   if (price >= customer.ask) {
@@ -540,14 +544,14 @@ export function offerToSeller(state: GameState, price: number, rng: Rng): Item |
   }
   if (price < customer.min * HAGGLE.sellerInsultShare) {
     losePatience(state, HAGGLE.insultPatienceLoss);
-    customer.msg = pickRandom(rng, SELLER_INSULTED_LINES);
+    customer.msg = say(lineKey(rng, 'lines.sellerInsulted'));
   } else {
     losePatience(state, HAGGLE.counterPatienceLoss);
     customer.ask = Math.round(Math.max(customer.min, customer.ask - (customer.ask - price) * HAGGLE.sellerConcession));
-    customer.msg = pickRandom(rng, SELLER_COUNTER_LINES) + ` ${customer.ask} кр.`;
+    customer.msg = say('lines.counter', { line: tx(lineKey(rng, 'lines.sellerCounter')), n: customer.ask });
   }
   if (customer.pat <= 0) {
-    customerLeaves(state, 'Не сторговались.');
+    customerLeaves(state, tx('log.noDeal'));
   }
   return null;
 }
@@ -565,7 +569,7 @@ export function buyFromSeller(state: GameState, price?: number): Item | null {
   if (item.stolen) {
     raiseHeat(state, 1);
   }
-  addLog(state, `Куплено: ${itemName(item.t)} за ${paid} кр. у ${customer.name}.`);
+  addLog(state, tx('log.bought', { item: itemRef(item.t), n: paid, name: customer.name }));
   floatText(`−${paid}`, COLOR.fg); // a purchase: plain spending, no meaning color
   finishCustomer(state);
   return item;
@@ -581,7 +585,7 @@ export function presentItem(state: GameState, uid: number): void {
   customer.item = item;
   customer.max2 = Math.round(buyerBaseValue(item) * customer.mult);
   customer.offer = Math.round(customer.max2 * CUSTOMER.buyerOpeningShare);
-  customer.msg = `${item.cond < CUSTOMER.worndownCondition ? 'Потрёпан. ' : ''}Дам ${customer.offer} кр.`;
+  customer.msg = say('lines.offer', { worn: item.cond < CUSTOMER.worndownCondition ? tx('lines.worn') : '', n: customer.offer });
 }
 
 export function askBuyer(state: GameState, price: number, rng: Rng): void {
@@ -599,14 +603,14 @@ export function askBuyer(state: GameState, price: number, rng: Rng): void {
   }
   if (price > customer.max2 * HAGGLE.buyerInsultShare) {
     losePatience(state, HAGGLE.insultPatienceLoss);
-    customer.msg = pickRandom(rng, BUYER_INSULTED_LINES);
+    customer.msg = say(lineKey(rng, 'lines.buyerInsulted'));
   } else {
     losePatience(state, HAGGLE.counterPatienceLoss);
     customer.offer = Math.round(customer.offer + (customer.max2 - customer.offer) * HAGGLE.buyerConcession);
-    customer.msg = pickRandom(rng, BUYER_COUNTER_LINES) + ` ${customer.offer} кр.`;
+    customer.msg = say('lines.counter', { line: tx(lineKey(rng, 'lines.buyerCounter')), n: customer.offer });
   }
   if (customer.pat <= 0) {
-    customerLeaves(state, 'Не сторговались.');
+    customerLeaves(state, tx('log.noDeal'));
   }
 }
 
@@ -620,16 +624,17 @@ export function sellToBuyer(state: GameState, price?: number): void {
   const item = customer.item;
   state.credits += paid;
   state.inv = state.inv.filter(i => i.uid !== item.uid);
-  let note = '';
   if (item.stolen) {
     raiseHeat(state, 1);
-    note = ' Краденое ушло дальше.';
   }
   if (item.infected) {
     raiseHeat(state, 2);
-    note += ' Вещь была заражена ИИ, служба безопасности насторожилась.';
   }
-  addLog(state, `Продано: ${itemName(item.t)} за ${paid} кр. (${customer.name}).${note}`);
+  addLog(state, tx('log.sold', {
+    item: itemRef(item.t), n: paid, name: customer.name,
+    stolen: item.stolen ? tx('log.soldStolen') : '',
+    ai: item.infected ? tx('log.soldAi') : '',
+  }));
   floatText(`+${paid}`, MEANING.action);
   finishCustomer(state);
 }
@@ -690,12 +695,12 @@ export function goToJunkyard(state: GameState, rng: Rng): void {
   state.hours -= junkVisitHours();
   state.where = 'junk';
   state.junk = { d: digsPerVisit(state), n: 0, dp: 0, f: [], s: randomSeed(rng) };
-  state.jmsg = JUNK_WORDS.arrive;
+  state.jmsg = say('junk.arrive');
 }
 
 export function goHome(state: GameState): void {
   if (state.where === 'junk' && state.junk) {
-    addLog(state, fill(JUNK_WORDS.home, { n: state.junk.f.length }));
+    addLog(state, tx('junk.home', { n: state.junk.f.length }));
   }
   state.where = 'home';
   state.junk = null;
@@ -705,7 +710,7 @@ export function goHome(state: GameState): void {
 /** What one dig gave; ui.ts picks the sound and the animation by `kind`. */
 export interface DigResult {
   kind: 'empty' | 'parts' | 'broken' | 'rare' | 'drone';
-  message: string;
+  message: Tx;
 }
 
 /** Rolls the heap's loot at this depth; applies it and returns the result. */
@@ -716,7 +721,7 @@ function rollLoot(state: GameState, visit: JunkVisit, rng: Rng): DigResult {
     const found = randomInt(rng, DIG_LOOT.partsMin, DIG_LOOT.partsMax);
     state.parts += found;
     floatText(`+${found} ⚙`, MEANING.action);
-    return { kind: 'parts', message: fill(JUNK_WORDS.parts, { n: found }) };
+    return { kind: 'parts', message: tx('junk.parts', { n: found }) };
   }
   roll -= DIG_ODDS.broken;
   if (roll < 0) {
@@ -729,7 +734,7 @@ function rollLoot(state: GameState, visit: JunkVisit, rng: Rng): DigResult {
     state.inv.push(item);
     visit.f.push(item.uid);
     floatText('+1', MEANING.wear); // a broken find
-    return { kind: 'broken', message: fill(JUNK_WORDS.broken, { name: itemName(type) }) };
+    return { kind: 'broken', message: tx('junk.broken', { name: itemRef(type) }) };
   }
   roll -= rareChance(visit.dp - 1);
   if (roll < 0) {
@@ -738,9 +743,9 @@ function rollLoot(state: GameState, visit: JunkVisit, rng: Rng): DigResult {
     state.inv.push(item);
     visit.f.push(item.uid);
     floatText('', MEANING.rare, 'rare'); // a rare find: the pixel ★, not a font glyph
-    return { kind: 'rare', message: fill(JUNK_WORDS.rare, { name: itemName(type) }) };
+    return { kind: 'rare', message: tx('junk.rare', { name: itemRef(type) }) };
   }
-  return { kind: 'empty', message: JUNK_WORDS.empty };
+  return { kind: 'empty', message: tx('junk.empty') };
 }
 
 /** The guard drone: takes one find of this visit (if any is still here) or raises the wanted level; the visit ends. */
@@ -753,11 +758,11 @@ function droneCatches(state: GameState, visit: JunkVisit, rng: Rng): DigResult {
     state.inv = state.inv.filter(item => item.uid !== taken.uid);
     visit.f = visit.f.filter(uid => uid !== taken.uid);
     floatText('−1', MEANING.risk);
-    return { kind: 'drone', message: fill(JUNK_WORDS.droneTook, { name: itemName(taken.t) }) };
+    return { kind: 'drone', message: tx('junk.droneTook', { name: itemRef(taken.t) }) };
   }
   state.heat = Math.min(MAX_HEAT, state.heat + JUNK.droneHeat);
   floatText(`+${JUNK.droneHeat}`, MEANING.risk);
-  return { kind: 'drone', message: fill(JUNK_WORDS.droneHeat, { n: JUNK.droneHeat }) };
+  return { kind: 'drone', message: tx('junk.droneHeat', { n: JUNK.droneHeat }) };
 }
 
 /**
@@ -775,10 +780,10 @@ export function dig(state: GameState, rng: Rng): DigResult | null {
   visit.dp++;
   spendDigTime(state);
   const result = caught ? droneCatches(state, visit, rng) : rollLoot(state, visit, rng);
-  state.jmsg = result.message;
-  addLog(state, 'Свалка: ' + result.message);
+  state.jmsg = JSON.stringify(result.message);
+  addLog(state, tx('log.dig', { m: result.message }));
   if (!caught && visit.d === 0) {
-    addLog(state, JUNK_WORDS.noDigs);
+    addLog(state, tx('junk.noDigs'));
   }
   return result;
 }
@@ -793,7 +798,7 @@ export function visitMarket(state: GameState): void {
   state.market = true;
   state.credits -= MARKET.price;
   state.parts += MARKET.parts;
-  addLog(state, 'Барахолка: 5 запчастей за 50 кр.');
+  addLog(state, tx('log.market', { n: MARKET.parts, price: MARKET.price }));
 }
 
 export function orderParts(state: GameState): void {
@@ -802,7 +807,7 @@ export function orderParts(state: GameState): void {
   }
   state.credits -= SUPPLIER.price;
   state.parts += SUPPLIER.parts;
-  addLog(state, 'Заказано 5 запчастей у снабженца.');
+  addLog(state, tx('log.supplier', { n: SUPPLIER.parts }));
 }
 
 /* =====================================================================
@@ -810,7 +815,7 @@ export function orderParts(state: GameState): void {
    ===================================================================== */
 
 /** Each infected item may infect one more electronic item on the shelf. */
-function spreadInfection(state: GameState, events: string[], rng: Rng): void {
+function spreadInfection(state: GameState, events: Tx[], rng: Rng): void {
   const infectedCount = state.inv.filter(item => item.infected).length;
   for (let i = 0; i < infectedCount; i++) {
     if (rng() >= NIGHT.infectionSpreadChance) {
@@ -823,7 +828,7 @@ function spreadInfection(state: GameState, events: string[], rng: Rng): void {
     const victim = pickRandom(rng, targets);
     victim.infected = true;
     victim.k.flaw = false;
-    events.push(`Ночью на складе что-то мигало. ${itemName(victim.t)} ведёт себя странно.`);
+    events.push(tx('night.infection', { item: itemRef(victim.t) }));
   }
 }
 
@@ -839,7 +844,7 @@ function startNewDay(state: GameState, rng: Rng): void {
 }
 
 /** Heat cools by 1 overnight, but yesterday's heat decides the raid chance. */
-function coolDownAndMaybeRaid(state: GameState, events: string[], rng: Rng): void {
+function coolDownAndMaybeRaid(state: GameState, events: Tx[], rng: Rng): void {
   const heatBefore = state.heat;
   state.heat = Math.max(0, state.heat - 1);
   if (state.over || rng() >= heatBefore * NIGHT.raidChancePerHeat) {
@@ -850,7 +855,7 @@ function coolDownAndMaybeRaid(state: GameState, events: string[], rng: Rng): voi
   state.inv = state.inv.filter(item => !item.stolen);
   state.credits = Math.max(0, state.credits - fine);
   state.heat = 0;
-  events.push(`Утренний рейд патруля. Изъято краденого: ${stolen.length}. Штраф ${fine} кр.`);
+  events.push(tx('night.raid', { n: stolen.length, fine }));
 }
 
 /** What the morning took (or nothing: the game ended, or a closed calm debt pays no bills). */
@@ -892,43 +897,45 @@ export function payExpenses(state: GameState): ExpensesPaid | null {
 }
 
 /** Lines of the morning bills for the log and the morning window; `debt` is the debt after them. */
-export function expenseLines(expenses: ExpensesPaid, debt: number): { paid: string; shortfall: string | null } {
-  const words = EXPENSE_TEXT.ru;
-  const items = [fill(words.energy, { n: expenses.energy })];
+export function expenseLines(expenses: ExpensesPaid, debt: number): { paid: Tx; shortfall: Tx | null } {
+  const items = [tx('expense.energy', { n: expenses.energy })];
   if (expenses.tier) {
-    items.push(fill(words.tier, { n: expenses.tier }));
+    items.push(tx('expense.tier', { n: expenses.tier }));
   }
-  const shortfall = expenses.toDebt ? fill(words.shortfall, { n: expenses.shortfall, debt }) : fill(words.unpaid, { n: expenses.shortfall });
+  const shortfall = expenses.toDebt ? tx('expense.shortfall', { n: expenses.shortfall, debt }) : tx('expense.unpaid', { n: expenses.shortfall });
   return {
-    paid: fill(words.paid, { items: items.join(', ') }),
+    paid: tx('expense.paid', { items }),
     shortfall: expenses.shortfall ? shortfall : null,
   };
 }
 
 /** The night is over: its events for the morning window, and the morning bills. */
 export interface MorningReport {
-  events: string[];
+  /** Night events as messages (the screen translates them). */
+  events: Tx[];
   expenses: ExpensesPaid | null;
 }
 
 /** Ends the day; returns the night events and the morning bills for the morning report. */
 export function sleepUntilMorning(state: GameState, rng: Rng): MorningReport {
   state.where = 'home';
-  const events: string[] = [];
+  const events: Tx[] = [];
   spreadInfection(state, events, rng);
   startNewDay(state, rng);
   if (hasShuttle(state) && state.day >= state.shuttleDay) {
     // the last shuttle leaves this morning: the game ends, no raid and no landlord
-    endGame(state, state.seat ? 'left' : 'stayed');
-    events.push(state.over ?? '');
+    const ending = state.seat ? 'left' : 'stayed';
+    endGame(state, ending);
+    events.push(tx(`ending.${ending}.line`));
     return { events, expenses: null };
   }
   const daysToShuttle = state.shuttleDay - state.day;
   if (hasShuttle(state) && (DEBT.shuttleReminders as readonly number[]).includes(daysToShuttle)) {
-    events.push(fill(TEXT.shuttleSoon, { days: daysRu(daysToShuttle) }));
+    events.push(tx('debt.shuttleSoon', { days: tx('plural.days', { n: daysToShuttle }) }));
   }
   if (state.debt > 0 && state.day >= state.nextDue) {
-    events.push(fill(TEXT.landlordToday, { amount: state.owed }) + (state.deferred ? ' Отсрочки больше не будет.' : ''));
+    const today = tx('debt.landlordToday', { amount: state.owed });
+    events.push(state.deferred ? tx('join.glue', { a: today, b: tx('debt.noMoreDefer') }) : today);
   }
   coolDownAndMaybeRaid(state, events, rng);
   // the bills come after the raid's fine: what is left pays them
@@ -937,11 +944,11 @@ export function sleepUntilMorning(state: GameState, rng: Rng): MorningReport {
   state.cn = customersToday(state).count;
   // the late opening goes to the log only: the morning window already lists it as a reason
   if (state.late > 0) {
-    addLog(state, fill(DAY_WORDS.overslept, { n: state.late * JUNK.lateCustomerLoss }));
-    addLog(state, fill(DAY_WORDS.opened, { time: formatHour(openingHour(state)) }));
+    addLog(state, tx('day.overslept', { n: state.late * JUNK.lateCustomerLoss }));
+    addLog(state, tx('day.opened', { time: formatHour(openingHour(state)) }));
   }
   if (!events.length) {
-    events.push('Тихая ночь на нижнем ярусе.');
+    events.push(tx('night.quiet'));
   }
   events.forEach(event => addLog(state, event));
   if (expenses) {
@@ -964,25 +971,25 @@ export const isOnCounter = (state: GameState, item: Item): boolean => !!state.cu
 const BENCH_ACTIONS: Record<string, (state: GameState, item: Item) => void> = {
   diag(state, item) {
     item.k = fullKnowledge();
-    addLog(state, `Диагностика: ${itemName(item.t)}.`);
+    addLog(state, tx('log.diag', { item: itemRef(item.t) }));
   },
   repair(state, item) {
     item.cond = Math.min(100, item.cond + REPAIR_AMOUNT);
     item.k.cond = true;
-    addLog(state, `Ремонт: ${itemName(item.t)} → ${item.cond}%.`);
+    addLog(state, tx('log.repair', { item: itemRef(item.t), n: item.cond }));
   },
   fix(state, item) {
     item.defect = false;
-    addLog(state, `Дефект устранён: ${itemName(item.t)}.`);
+    addLog(state, tx('log.fix', { item: itemRef(item.t) }));
   },
   purge(state, item) {
     item.infected = false;
-    addLog(state, `ИИ вычищен из: ${itemName(item.t)}.`);
+    addLog(state, tx('log.purge', { item: itemRef(item.t) }));
   },
   wipe(state, item) {
     item.stolen = false;
     raiseHeat(state, 1);
-    addLog(state, `Серийник перебит: ${itemName(item.t)}.`);
+    addLog(state, tx('log.wipe', { item: itemRef(item.t) }));
   },
   scrap(state, item) {
     if (isOnCounter(state, item)) {
@@ -991,7 +998,7 @@ const BENCH_ACTIONS: Record<string, (state: GameState, item: Item) => void> = {
     const gained = scrapValue(item);
     state.parts += gained;
     state.inv = state.inv.filter(i => i !== item);
-    addLog(state, `Разобрано: ${itemName(item.t)}, +${gained} запч.`);
+    addLog(state, tx('log.scrap', { item: itemRef(item.t), n: gained }));
   },
 };
 
@@ -1038,7 +1045,7 @@ export function craft(state: GameState, index: number, rng: Rng): Item | null {
   // a new build gets a fresh serial number, but the AI virus survives
   const item = createItem(state, recipe.out, { cond, stolen: false, defect: false, infected: used.some(part => part.infected), known: true }, rng);
   state.inv.push(item);
-  floatText('СОБРАНО', MEANING.action);
-  addLog(state, `Собрано: ${itemName(recipe.out)} (${cond}%).${item.infected ? ' Похоже, ИИ перебрался в новую сборку.' : ''}`);
+  floatText(tx('float.crafted'), MEANING.action);
+  addLog(state, tx('log.crafted', { item: itemRef(recipe.out), n: cond, ai: item.infected ? tx('log.craftedAi') : '' }));
   return item;
 }

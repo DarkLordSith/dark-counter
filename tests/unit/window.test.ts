@@ -143,7 +143,7 @@ describe('the morning window is on the component', () => {
     expect(report).toContain('showWindow({');
     expect(uiTs).toMatch(/function showWindow[\s\S]*?openWindow\(spec\)/);
     expect(report).toContain("id: 'morning'");
-    expect(report).toContain('DAY_UI.morningTitle');
+    expect(report).toContain("t('day.morningTitle'");
     // task 29: no button inside, "Открыть лавку" is the action bar's; a tap on the bar goes through
     expect(report).not.toContain('buttons:');
     expect(report).toContain('liveBar: true');

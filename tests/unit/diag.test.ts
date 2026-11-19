@@ -1,7 +1,11 @@
 // Diagnostics overlay: language pick and the copied report text.
 import { describe, expect, it } from 'vitest';
-import { DIAG_TEXT, detectLang, formatReport } from '../../src/diag';
+import { formatReport } from '../../src/diag';
+
 import type { ViewportMetrics } from '../../src/diag';
+import { RU } from '../../src/lang/ru';
+import { EN } from '../../src/lang/en';
+import { detectLang } from '../../src/i18n';
 
 const METRICS: ViewportMetrics = {
   version: 'v0.7 · abc1234',
@@ -36,7 +40,7 @@ describe('detectLang', () => {
   });
 
   it('has the same keys in both languages', () => {
-    expect(Object.keys(DIAG_TEXT.en).sort()).toEqual(Object.keys(DIAG_TEXT.ru).sort());
+    expect(Object.keys(EN.diag).sort()).toEqual(Object.keys(RU.diag).sort());
   });
 });
 

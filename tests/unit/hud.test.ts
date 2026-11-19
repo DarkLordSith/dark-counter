@@ -2,7 +2,8 @@
 // music in the menu (on by default), new game only through the menu.
 import { describe, expect, it } from 'vitest';
 import { MUSIC_KEY, musicWanted, rememberMusic, type PrefStorage } from '../../src/audio';
-import { DEBT, HUD_TEXT, MAX_HEAT, SAVE_KEY } from '../../src/data';
+import { DEBT, MAX_HEAT, SAVE_KEY } from '../../src/data';
+
 import { blinkLit, HEAT_METER, heatMeterCells, heatMeterHeight, heatMeterRects, sirenLit } from '../../src/heatmeter';
 import { ICONS, iconSvg, ICON_SCALE } from '../../src/icons';
 import { COLOR, MEANING, SHOP } from '../../src/palette';
@@ -10,6 +11,8 @@ import styleCss from '../../src/style.css?raw';
 import uiTs from '../../src/ui.ts?raw';
 import sceneTs from '../../src/scene.ts?raw';
 import indexHtml from '../../index.html?raw';
+import { RU } from '../../src/lang/ru';
+import { EN } from '../../src/lang/en';
 
 const css = styleCss.replace(/\/\*[\s\S]*?\*\//g, '');
 const RULES: [string, string][] = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(m => [m[1].trim().replace(/\s+/g, ' '), m[2]]);
@@ -75,10 +78,10 @@ describe('bottom bar', () => {
     const label = (text: string): number => text.length * rootPx('--fs-xs') * 0.6; // IBM Plex Mono: 0.6em
     const gap = 16;
     const stats = [
-      Math.max(label(HUD_TEXT.ru.credits), 5 * digit), // 99999 кр
-      Math.max(label(`${HUD_TEXT.ru.day}/${DEBT.shuttleDay}`), 2 * digit), // day 59 of 60
-      Math.max(label(`${HUD_TEXT.ru.payment}·0${HUD_TEXT.ru.daysShort}`), 4 * digit), // payment 2400, due today
-      Math.max(label(HUD_TEXT.ru.parts), 2 * digit), // 99 parts
+      Math.max(label(RU.hud.credits), 5 * digit), // 99999 кр
+      Math.max(label(`${RU.hud.day}/${DEBT.shuttleDay}`), 2 * digit), // day 59 of 60
+      Math.max(label(`${RU.hud.payment}·0${RU.hud.daysShort}`), 4 * digit), // payment 2400, due today
+      Math.max(label(RU.hud.parts), 2 * digit), // 99 parts
     ];
     const width = stats.reduce((sum, w) => sum + w, 0) + gap * (stats.length - 1) + 8 + 44;
     const bodyPadding = 2 * 12;
@@ -157,7 +160,7 @@ describe('the wanted level is on the scene, not in the HUD', () => {
 
   it('screen readers hear it as text', () => {
     expect(indexHtml).toMatch(/<span class="sr-only" id="heatText" aria-live="polite"><\/span>/);
-    expect(uiTs).toContain('`${HUD.heat} ${state.heat} ${HUD.of} ${MAX_HEAT}`');
+    expect(uiTs).toContain("`${t('hud.heat')} ${state.heat} ${t('hud.of')} ${MAX_HEAT}`");
   });
 });
 
@@ -189,15 +192,15 @@ describe('music', () => {
   it('starts on the first touch and is a text item of the menu', () => {
     expect(uiTs).toMatch(/function startSoundOnFirstTouch\(\)[\s\S]*?'pointerdown', 'touchend'/);
     expect(openMenu).toContain('data-a="music"');
-    expect(openMenu).toContain('${HUD.music}: ${audio.on ? HUD.on : HUD.off}');
-    expect(HUD_TEXT.ru.music + ': ' + HUD_TEXT.ru.on).toBe('Музыка: вкл');
-    expect(HUD_TEXT.en.music + ': ' + HUD_TEXT.en.off).toBe('Music: off');
+    expect(openMenu).toContain("${t('hud.music')}: ${audio.on ? t('hud.on') : t('hud.off')}");
+    expect(RU.hud.music + ': ' + RU.hud.on).toBe('Музыка: вкл');
+    expect(EN.hud.music + ': ' + EN.hud.off).toBe('Music: off');
   });
 });
 
 describe('menu', () => {
   it('holds the current mode on top, the debt, modes, music and save; no emoji or font glyphs', () => {
-    expect(openMenu).toContain('<h2>${MODE_UI.names[state.mode]}</h2>');
+    expect(openMenu).toContain('<h2>${t(`mode.names.${state.mode}`)}</h2>');
     expect(openMenu).toContain('data-a="debt"');
     expect(openMenu).toContain('data-a="modes"');
     expect(openMenu).toContain('data-a="savemenu"');
@@ -211,8 +214,8 @@ describe('menu', () => {
     expect(openMenu.match(/data-a="modes"/g)).toHaveLength(1);
     expect(uiTs).not.toContain('data-a="newgame"');
     expect(uiTs).not.toMatch(/\bnewgame: \(\)/);
-    expect(HUD_TEXT.ru).not.toHaveProperty('newGame');
-    expect(uiTs).toMatch(/function askResetMode[\s\S]*?MODE_UI\.resetText/);
+    expect(RU.hud).not.toHaveProperty('newGame');
+    expect(uiTs).toMatch(/function askResetMode[\s\S]*?t\('mode\.resetText'/);
   });
 
   it('save opens the save window, which keeps the version label (long press → diagnostics)', () => {
@@ -220,7 +223,7 @@ describe('menu', () => {
   });
 
   it('Russian and English texts have the same keys', () => {
-    expect(Object.keys(HUD_TEXT.en).sort()).toEqual(Object.keys(HUD_TEXT.ru).sort());
+    expect(Object.keys(EN.hud).sort()).toEqual(Object.keys(RU.hud).sort());
   });
 });
 

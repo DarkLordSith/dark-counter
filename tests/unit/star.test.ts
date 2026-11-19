@@ -1,7 +1,8 @@
 // The "rare" mark (V2.6): ★ from a 5×5 map in `rare` (= lamp), the fake ★̸ for Patch B1,
 // rare junkyard finds keep the flag, turquoise no longer means "rare".
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DIG_ODDS, JUNK_TEXT, STOCK_TEXT } from '../../src/data';
+import { DIG_ODDS } from '../../src/data';
+
 import { dig, feedback, goToJunkyard } from '../../src/economy';
 import { BASE, COLOR, CSS_TOKENS, MEANING } from '../../src/palette';
 import { gameRng, mulberry32 } from '../../src/rng';
@@ -11,6 +12,8 @@ import type { StarKind } from '../../src/star';
 import economyTs from '../../src/economy.ts?raw';
 import uiTs from '../../src/ui.ts?raw';
 import { makeItem, makeState } from './helpers';
+import { RU } from '../../src/lang/ru';
+import { EN } from '../../src/lang/en';
 
 /** The maps exactly as the task draws them: L = lamp, W = wear, F = fg. */
 const TASK_MAPS: Record<StarKind, string[]> = {
@@ -91,14 +94,14 @@ describe('rare items', () => {
   });
 
   it('log and bubble lines of a rare find are recognised in both languages', () => {
-    expect(isRareLine('Свалка: ' + JUNK_TEXT.ru.rare.replace('{name}', 'Нейрочип'))).toBe(true);
-    expect(isRareLine(JUNK_TEXT.en.rare.replace('{name}', 'Neurochip'))).toBe(true);
-    expect(isRareLine('Свалка: ' + JUNK_TEXT.ru.empty)).toBe(false);
+    expect(isRareLine('Свалка: ' + RU.junk.rare.replace('{name}', 'Нейрочип'))).toBe(true);
+    expect(isRareLine(EN.junk.rare.replace('{name}', 'Neurochip'))).toBe(true);
+    expect(isRareLine('Свалка: ' + RU.junk.empty)).toBe(false);
   });
 
   it('the shelf marks and the legend have "★ редкое"', () => {
-    expect(STOCK_TEXT.ru.legend.rare).toBe('редкое');
+    expect(RU.stock.legend.rare).toBe('редкое');
     expect(uiTs).toContain("rare: `<i class=\"d-rare\">${starSvg('rare')}</i>`");
-    expect(uiTs).toContain('${DOT.rare}${legend.rare}');
+    expect(uiTs).toContain("${DOT.rare}${t('stock.legend.rare')}");
   });
 });

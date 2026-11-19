@@ -7,7 +7,7 @@
 // still load with the same day, credits and stock and keep playing without errors, but the
 // continuation is not compared with the old version, and the downgrade (3) is only reported:
 // an old build may not know the new save fields.
-import { clickMenuItem, deterministicInit, launch, loadCodeThroughUi, passModeScreen, rng, savedCode, storySave } from './common.mjs';
+import { clickMenuItem, deterministicInit, launch, loadCodeThroughUi, passModeScreen, plainSave, rng, savedCode, storySave } from './common.mjs';
 
 const [, , OLD, NEW] = process.argv;
 const W = { call: 8, offer: 6, ask: 6, accept: 4, take: 4, show: 5, insp: 4, closeshop: 6, sleep: 4, junk: 5, dig: 6, market: 3, close: 6, rentpay: 6, rentdefer: 3, rentitems: 3, sel: 3, bench: 4, __closebench: 3, craft: 4, parts: 2, tab: 1, refuse: 2 };
@@ -56,7 +56,7 @@ const snap = async page => {
     pane: logicOnly ? '' : document.getElementById('pane').innerHTML.replace(/\s+/g, ' '),
     scene: skipScene ? '' : document.getElementById('scn').toDataURL(),
   }), LOGIC_ONLY, SKIP_SCENE);
-  s.save = storySave(s.save);
+  s.save = storySave(await plainSave(page, s.save));
   return JSON.stringify(s);
 };
 const exportCode = async page => {

@@ -1,12 +1,16 @@
 // Concept skeleton: the father's debt to Grobov, early payments, the shuttle seat, endings on day 60.
 import { gameRng } from '../../src/rng';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEBT, ENDING_TEXT, LANDLORD_SEED } from '../../src/data';
+import { DEBT, LANDLORD_SEED } from '../../src/data';
+import { text } from '../../src/i18n';
+
 import {
   buySeat, canBuySeat, closeShop, deferRent, evict, isLandlordDue, payEarly, payRent, payWithCollateral, seatPrice, sleepUntilMorning,
 } from '../../src/economy';
 import { actorReset, newGame, state } from '../../src/state';
-import { makeItem, makeState } from './helpers';
+import { makeItem, makeState, logLines, shown } from './helpers';
+import { RU } from '../../src/lang/ru';
+import { EN } from '../../src/lang/en';
 
 const landlordAtCounter = (): void => {
   state.cust = { kind: 'rent', name: 'Гробов', seed: LANDLORD_SEED, msg: '', pat: 0, max: 0, done: {} };
@@ -25,7 +29,7 @@ function payOnDueDay(): number {
 
 function sleep(): string[] {
   closeShop(state);
-  return sleepUntilMorning(state, gameRng).events;
+  return sleepUntilMorning(state, gameRng).events.map(event => text(event));
 }
 
 afterEach(() => {
@@ -94,7 +98,8 @@ describe('deferral', () => {
     makeState({ day: 9, nextDue: 9, owed: 480, deferred: true, credits: 0 });
     landlordAtCounter();
     evict(state);
-    expect(state).toMatchObject({ ending: 'evicted', over: ENDING_TEXT.ru.evicted.line, cust: null });
+    expect(state).toMatchObject({ ending: 'evicted', cust: null });
+    expect(shown(state.over)).toBe(RU.ending.evicted.line);
   });
 });
 
@@ -112,7 +117,7 @@ describe('early payment', () => {
     makeState({ day: 3, credits: 5000, debt: 300, owed: 650 });
     expect(payEarly(state, 5000)).toBe(300);
     expect(state).toMatchObject({ credits: 4700, debt: 0, owed: 0 });
-    expect(state.log[0]).toContain('выплачен');
+    expect(logLines(state)[0]).toContain('выплачен');
   });
 
   it('does nothing after the game has ended', () => {
@@ -155,8 +160,9 @@ describe('endings on day 60', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.99); // no raid
     makeState({ day: 59, debt: 0, seat: true, nextDue: 63 });
     const events = sleep();
-    expect(state).toMatchObject({ day: 60, ending: 'left', over: ENDING_TEXT.ru.left.line });
-    expect(events).toEqual([ENDING_TEXT.ru.left.line]);
+    expect(state).toMatchObject({ day: 60, ending: 'left' });
+    expect(shown(state.over)).toBe(RU.ending.left.line);
+    expect(events).toEqual([RU.ending.left.line]);
   });
 
   it('without a seat → "stayed", even with the debt paid', () => {
@@ -184,7 +190,7 @@ describe('endings on day 60', () => {
   });
 
   it('betray and takeover exist as strings but nothing reaches them yet', () => {
-    expect(Object.keys(ENDING_TEXT.ru)).toEqual(['left', 'stayed', 'evicted', 'betray', 'takeover']);
-    expect(Object.keys(ENDING_TEXT.en)).toEqual(Object.keys(ENDING_TEXT.ru));
+    expect(Object.keys(RU.ending)).toEqual(['left', 'stayed', 'evicted', 'betray', 'takeover']);
+    expect(Object.keys(EN.ending)).toEqual(Object.keys(RU.ending));
   });
 });

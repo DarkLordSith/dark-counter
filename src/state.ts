@@ -8,14 +8,15 @@
 //  saves in migrate().
 // =====================================================================
 import {
-  CUSTOMERS_PER_DAY, DEBT, DEBT_TEXT, ENDING_TEXT, ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, MODE_TEXT, PLAYABLE_MODES, RENT, SAVE_CODE_PREFIX, SAVE_CODE_PREFIX_V2, SAVE_KEYS, SAVE_LOG_LINES, START,
+  CUSTOMERS_PER_DAY, DEBT, ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, PLAYABLE_MODES, RENT, SAVE_CODE_PREFIX, SAVE_CODE_PREFIX_V2, SAVE_KEYS, SAVE_LOG_LINES, START,
 } from './data';
 import { customersToday } from './day';
 import { browserStore } from './profile';
 import type { Actor, GameState, Item, ItemKnowledge, ItemType, KeyValueStore, Mode, SavedGame, UiState } from './types';
 import { gameRng, randomInt } from './rng';
 import type { Rng } from './rng';
-import { daysRu, fill } from './util';
+import { say, tx } from './i18n';
+import type { LogEntry, Tx } from './i18n';
 
 /* ---------- state ---------- */
 
@@ -82,8 +83,9 @@ export function createGame(mode: Mode, rng: Rng): GameState {
   game.cn = customersToday(game).count;
   game.inv.push(createItem(game, 'battery', { cond: 70, stolen: false, defect: false, infected: false, known: true }, rng));
   game.inv.push(createItem(game, 'comm', { cond: 55, stolen: false, defect: false, infected: false, known: true }, rng));
-  const start = mode === 'story' ? DEBT_TEXT.ru.start : MODE_TEXT.ru.startCalm;
-  addLog(game, fill(start, { debt: DEBT.start, period: daysRu(DEBT.periodDays), shuttle: DEBT.shuttleDay }));
+  addLog(game, tx(mode === 'story' ? 'debt.start' : 'mode.startCalm', {
+    debt: DEBT.start, period: tx('plural.days', { n: DEBT.periodDays }), shuttle: DEBT.shuttleDay,
+  }));
   return game;
 }
 
@@ -137,8 +139,10 @@ export function findItem(game: GameState, uid: number | null): Item | undefined 
   return game.inv.find(item => item.uid === uid);
 }
 
-export function addLog(game: GameState, text: string): void {
-  game.log.unshift(`Д${game.day}: ${text}`);
+/** A log entry: the message with its day, kept as a key (i18n) and translated when shown. */
+export function addLog(game: GameState, message: Tx): void {
+  const entry: LogEntry = { d: game.day, ...message };
+  game.log.unshift(JSON.stringify(entry));
   game.log = game.log.slice(0, LOG_LIMIT);
 }
 
@@ -241,7 +245,7 @@ export function migrate(data: SavedGame | null, rng: Rng = gameRng): GameState |
     data.shuttleDay = Math.max(DEBT.shuttleDay, data.day + DEBT.legacyDaysLeft);
     data.ending = data.won ? 'left' : data.over ? 'evicted' : null;
     if (data.won && !data.over) {
-      data.over = ENDING_TEXT.ru.left.line;
+      data.over = say('ending.left.line');
     }
   }
   delete data.won;

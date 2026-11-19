@@ -7,6 +7,8 @@
 //  desktop, see style.css).
 // =====================================================================
 import { maybeById } from './dom';
+import { DICTS, getLang } from './i18n';
+import type { Dict, Lang } from './i18n';
 
 /* =====================================================================
    Settings (pure)
@@ -138,67 +140,14 @@ export const isDefault = (settings: FontLabSettings, profile: Profile = 'phone')
   JSON.stringify(settings) === JSON.stringify(defaultSettings(profile));
 
 /* =====================================================================
-   Texts (RU / EN), one object for the future dictionary
+   Texts: the dictionaries (lang/*.ts → fontlab), in the game's language
    ===================================================================== */
 
-export type Lang = 'ru' | 'en';
-
-export const FONTLAB_TEXT = {
-  ru: {
-    title: 'Шрифты',
-    sizes: 'Размеры',
-    groups: 'Группы',
-    pixel: 'пикс',
-    mono: 'моно',
-    upper: 'ЗАГЛАВНЫЕ',
-    upperShort: 'АА',
-    reset: 'Сбросить',
-    copy: 'Скопировать',
-    close: 'Закрыть',
-    copied: 'Скопировано.',
-    selectManually: 'Текст выделен, скопируйте вручную.',
-    measured: 'Факт',
-    ticker: 'лента',
-    pane: 'панель',
-    profile: 'Профиль',
-    profileNames: { phone: 'телефон', desktop: 'десктоп' },
-    profileHint: 'у каждого профиля свои настройки; десктоп — окно от 900px',
-    crisp: 'чётко',
-    soft: 'мягко',
-    sizeNames: { '--fs-xs': 'моно XS (метки HUD)', '--fs-s': 'моно S (лог, подписи)', '--fs-m': 'моно M (текст панелей)', '--fs-l': 'моно L (группы в моно)',
-      '--fs-px-s': 'пикс S', '--fs-px-m': 'пикс M', '--fs-px-l': 'пикс L' },
-    groupNames: { names: 'названия', prices: 'цены', verdict: 'вердикт', hud: 'числа HUD', headings: 'заголовки' },
-  },
-  en: {
-    title: 'Fonts',
-    sizes: 'Sizes',
-    groups: 'Groups',
-    pixel: 'pixel',
-    mono: 'mono',
-    upper: 'UPPER',
-    upperShort: 'AA',
-    reset: 'Reset',
-    copy: 'Copy',
-    close: 'Close',
-    copied: 'Copied.',
-    selectManually: 'Text selected, copy it manually.',
-    measured: 'Measured',
-    ticker: 'log',
-    pane: 'pane',
-    profile: 'Profile',
-    profileNames: { phone: 'phone', desktop: 'desktop' },
-    profileHint: 'each profile keeps its own settings; desktop is a window from 900px',
-    crisp: 'sharp',
-    soft: 'soft',
-    sizeNames: { '--fs-xs': 'mono XS (HUD labels)', '--fs-s': 'mono S (log, captions)', '--fs-m': 'mono M (pane text)', '--fs-l': 'mono L (groups in mono)',
-      '--fs-px-s': 'pixel S', '--fs-px-m': 'pixel M', '--fs-px-l': 'pixel L' },
-    groupNames: { names: 'item names', prices: 'prices', verdict: 'verdict', hud: 'HUD numbers', headings: 'headings' },
-  },
-} as const satisfies Record<Lang, unknown>;
+type FontLabText = Dict['fontlab'];
 
 /** The result to paste into a task: "[телефон, DPR 3] --fs-m: 15px; …; названия: mono 600; вердикт: pixel ЗАГЛАВНЫЕ". */
 export function formatSettings(settings: FontLabSettings, lang: Lang, profile: Profile, dpr: number): string {
-  const text = FONTLAB_TEXT[lang];
+  const text = DICTS[lang].fontlab;
   const sizes = SIZE_TOKENS.map(token => `${token}: ${settings.sizes[token]}px`);
   const groups = GROUPS.map(id => {
     const group = settings.groups[id];
@@ -325,12 +274,11 @@ function measure(element: Element | null): string {
    ===================================================================== */
 
 const SHEET_ID = 'fontlab';
-const detectLang = (): Lang => typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('ru') ? 'ru' : 'en';
 
 let profile: Profile = 'phone';
 let settings: FontLabSettings = defaultSettings();
 
-function sizeRow(token: SizeToken, text: typeof FONTLAB_TEXT[Lang]): string {
+function sizeRow(token: SizeToken, text: FontLabText): string {
   const size = settings.sizes[token];
   // pixel font: sharp or soft on this screen (whole device pixels per font pixel)
   // (an empty cell on mono rows keeps the −/+ columns aligned)
@@ -345,7 +293,7 @@ function choice(label: string, on: boolean, attrs: string): string {
   return `<button class="btn ${on ? 'fl-on' : ''}" ${attrs}>${label}</button>`;
 }
 
-function groupRow(id: GroupId, text: typeof FONTLAB_TEXT[Lang]): string {
+function groupRow(id: GroupId, text: FontLabText): string {
   const group = settings.groups[id];
   const weights = WEIGHTS.map(weight => choice(String(weight), group.font === 'mono' && group.weight === weight,
     `data-fl="weight" data-group="${id}" data-v="${weight}" ${group.font === 'mono' ? '' : 'disabled'}`)).join('');
@@ -361,7 +309,7 @@ function render(): void {
   if (!sheet) {
     return;
   }
-  const text = FONTLAB_TEXT[detectLang()];
+  const text = DICTS[getLang()].fontlab;
   sheet.innerHTML = `<div class="fl-head"><h2>${text.title}</h2>
       <button class="btn" data-fl="reset">${text.reset}</button>
       <button class="btn pri" data-fl="copy">${text.copy}</button>
@@ -382,8 +330,8 @@ function update(change: () => void): void {
 }
 
 function copySettings(): void {
-  const text = FONTLAB_TEXT[detectLang()];
-  const result = formatSettings(settings, detectLang(), profile, currentDpr());
+  const text = DICTS[getLang()].fontlab;
+  const result = formatSettings(settings, getLang(), profile, currentDpr());
   const message = maybeById(`${SHEET_ID}-msg`);
   const showManual = () => {
     if (message) {

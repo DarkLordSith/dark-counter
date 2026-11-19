@@ -1,8 +1,11 @@
 // Acceptance curves of haggling (formerly pSell / pBuy), the gut feeling and its verdict word.
 import { describe, expect, it } from 'vitest';
-import { HUNCH_VERDICT, HUNCH_VERDICT_TEXT } from '../../src/data';
+import { HUNCH_VERDICT } from '../../src/data';
+
 import { buyerAcceptChance, hunchVerdict, perceivedChance, sellerAcceptChance } from '../../src/economy';
 import { makePresentedBuyer, makeSeller } from './helpers';
+import { RU } from '../../src/lang/ru';
+import { EN } from '../../src/lang/en';
 
 describe('sellerAcceptChance (pSell)', () => {
   // ask 200, hidden min 100 → insult floor at 70
@@ -119,8 +122,8 @@ describe('hunchVerdict (gut-feeling word)', () => {
   });
 
   it('has a word for every verdict in Russian and English', () => {
-    expect(HUNCH_VERDICT_TEXT.ru).toEqual({ unlikely: 'вряд ли', maybe: 'может быть', likely: 'скорее да', deal: 'по рукам' });
-    expect(HUNCH_VERDICT_TEXT.en).toEqual({ unlikely: 'unlikely', maybe: 'maybe', likely: 'likely', deal: 'deal' });
+    expect(RU.verdict).toEqual({ unlikely: 'вряд ли', maybe: 'может быть', likely: 'скорее да', deal: 'по рукам' });
+    expect(EN.verdict).toEqual({ unlikely: 'unlikely', maybe: 'maybe', likely: 'likely', deal: 'deal' });
   });
 
   it('works on what the player sees (perceivedChance)', () => {

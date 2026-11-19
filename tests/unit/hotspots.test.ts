@@ -1,11 +1,14 @@
 // Scene hotspots (V2.1): zones, hitTest, the bell sprite, the first-tap flag in the profile.
 import { describe, expect, it } from 'vitest';
-import { BELL_AT, HOTSPOT_MIN_SIDE, HOTSPOTS, HOTSPOT_TEXT, PROFILE_KEY, SHOP_SIGN } from '../../src/data';
+import { BELL_AT, HOTSPOT_MIN_SIDE, HOTSPOTS, PROFILE_KEY, SHOP_SIGN } from '../../src/data';
+
 import { bellSprite, hitTest, isLive } from '../../src/hotspots';
 import { SHOP } from '../../src/palette';
 import { defaultProfile, loadProfile, recordHotspotTap, saveProfile } from '../../src/profile';
 import type { Actor, Hotspot, HotspotId, KeyValueStore } from '../../src/types';
 import { makeSeller, makeState } from './helpers';
+import { RU } from '../../src/lang/ru';
+import { EN } from '../../src/lang/en';
 
 const spot = (id: HotspotId): Hotspot => {
   const found = HOTSPOTS.find(zone => zone.id === id);
@@ -28,8 +31,8 @@ describe('hotspot zones', () => {
     const ids = HOTSPOTS.map(zone => zone.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids) {
-      expect(HOTSPOT_TEXT.ru[id]).toBeTruthy();
-      expect(HOTSPOT_TEXT.en[id]).toBeTruthy();
+      expect(RU.hotspot[id]).toBeTruthy();
+      expect(EN.hotspot[id]).toBeTruthy();
     }
   });
 
