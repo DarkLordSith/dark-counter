@@ -32,7 +32,7 @@ const DECOR = [
   '.win', '.mbox h2, .win h2',
   // section headings of the debt window ("Внести досрочно", "Место на шаттле"): grey like .mbox label
   '.debt h3',
-  // "шум" label of the junkyard noise scale: grey like the "Чуйка" row; the scale itself is risk
+  // "глубина" label of the junkyard depth scale (task 35, was the noise): grey like the "Чуйка" row
   '.noise',
   // "РЮКЗАК" label of the junkyard backpack (task 29): grey like the HUD labels (.st small)
   '.bp-head small',
@@ -77,15 +77,12 @@ describe('the interface uses meanings, not base colors', () => {
     expect(MEANING.ok).not.toBe(MEANING.action);
   });
 
-  it('shelf legend shows exactly the marks the tiles use', () => {
-    const legend = uiTs.match(/<div class="legend">.*?<\/div>/)?.[0] ?? '';
-    expect(legend).toContain('${DOT.unknown}');
-    expect(legend).toContain('${DOT.risk}');
-    expect(legend).toContain('${DOT.wear}');
-    expect(uiTs).toContain("unknown: '<i class=\"d-unknown\">?</i>'");
-    expect(rule('.d-risk')).toContain('var(--m-risk)');
-    expect(rule('.d-wear')).toContain('var(--m-wear)');
-    expect(rule('.dots i.d-unknown, .legend i.d-unknown')).toContain('var(--m-unknown)');
+  it('shelf legend shows exactly the marks the tiles use (task 35: one mark per tile)', () => {
+    expect(uiTs).toMatch(/function stockLegend[\s\S]*?TILE_MARKS[\s\S]*?MARK_HTML\[mark\]/);
+    expect(uiTs).toContain("ai: `<i class=\"tm m-risk\">${iconSvg('ai')}</i>`");
+    expect(uiTs).toContain("stolen: `<i class=\"tm m-risk\">${iconSvg('stolen')}</i>`");
+    expect(uiTs).toContain("broken: `<i class=\"tm m-wear\">${iconSvg('broken')}</i>`");
+    expect(rule('.tc-unknown')).toContain('var(--m-unknown)');
   });
 
   it('no base accent colors outside the decoration list', () => {

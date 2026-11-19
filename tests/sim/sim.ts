@@ -4,11 +4,11 @@
 //  rng, so one seed is one and the same game. No Node APIs here: run.ts
 //  is the command line, tests/unit/sim.test.ts the quick smoke test.
 // =====================================================================
-import { DEBT, ITEM_TYPES, MARKET, RECIPES, START } from '../../src/data';
+import { DEBT, ITEM_TYPES, MARKET, RECIPES, START, VALUE } from '../../src/data';
 import {
   askBuyer, buySeat, callNextCustomer, canBuySeat, canCraft, canGoToJunkyard, craft, canVisitMarket, closeShop, customerLeaves, deferRent, dig,
-  digIsLate, estimatedValue, evict, feedback, goHome, goToJunkyard, inspect, isPresentedBuyer, noiseLevel, offerToSeller, payEarly, payRent,
-  payWithCollateral, perceivedChance, planCollateral, presentItem, sleepUntilMorning, useWorkbench, visitMarket,
+  digIsLate, estimatedValue, evict, feedback, goHome, goToJunkyard, inspect, isPresentedBuyer, offerToSeller, payEarly, payRent,
+  leaveWaiting, payWithCollateral, perceivedChance, planCollateral, presentItem, sleepUntilMorning, throwAway, useWorkbench, visitMarket, waitingFinds,
 } from '../../src/economy';
 import { mulberry32 } from '../../src/rng';
 import type { Rng } from '../../src/rng';
@@ -24,9 +24,7 @@ export interface Strategy {
   buyShare: number;
   /** Asks the highest price whose gut feeling is at least this. */
   sellChance: number;
-  /** Leaves the junkyard at this noise word (0 тихо … 3 дрон рядом); 4 = digs all. */
-  leaveAtNoise: number;
-  /** Digs past midnight too. */
+  /** Digs past midnight too (the junkyard v3: no drone, the bots dig until midnight, greedy beyond). */
   digsLate: boolean;
   /**
    * Keeps this much over the next payment (money to buy stock), pays the rest off the debt early.
@@ -39,17 +37,17 @@ export interface Strategy {
 }
 
 export const STRATEGIES: Record<string, Strategy> = {
-  /** As in tasks 15–17: buys ≤ 75% of the estimate, sells at ≥ 60%, leaves the heap at "громко". */
-  careful: { name: 'careful', inspects: true, buyShare: 0.75, sellChance: 0.6, leaveAtNoise: 2, digsLate: false, reserve: 1000, crafts: false },
-  /** Takes risks: no inspection, buys up to 95%, sells at ≥ 40%, digs all five (past midnight too). */
+  /** As in tasks 15–17: buys ≤ 75% of the estimate, sells at ≥ 60%, digs until midnight. */
+  careful: { name: 'careful', inspects: true, buyShare: 0.75, sellChance: 0.6, digsLate: false, reserve: 1000, crafts: false },
   /**
    * "Like the owner" (balance 17.11): calibrated to the owner's playtest on debt 25 000 — by day 36
    * ~46% of the debt paid off at ~370 credits a day net (the bot: 46.2%, 354 a day; before the
    * buyer flow followed the stock). Buys cheap (≤ 50% of the estimate, no inspection), sells at
-   * ≥ 35%, builds whatever the recipes allow, digs the heap out before midnight. The balance is tuned on it.
+   * ≥ 35%, builds whatever the recipes allow, digs until midnight. The balance is tuned on it.
    */
-  owner: { name: 'owner', inspects: false, buyShare: 0.5, sellChance: 0.35, leaveAtNoise: 4, digsLate: false, reserve: 1000, crafts: true },
-  greedy: { name: 'greedy', inspects: false, buyShare: 0.95, sellChance: 0.4, leaveAtNoise: 4, digsLate: true, reserve: 150, crafts: false },
+  owner: { name: 'owner', inspects: false, buyShare: 0.5, sellChance: 0.35, digsLate: false, reserve: 1000, crafts: true },
+  /** Takes risks: no inspection, buys up to 95%, sells at ≥ 40%, digs past midnight too (all six digs). */
+  greedy: { name: 'greedy', inspects: false, buyShare: 0.95, sellChance: 0.4, digsLate: true, reserve: 150, crafts: false },
 };
 
 /** One played game. */
@@ -69,15 +67,25 @@ export interface GameResult {
   sold: number;
   /** Debt and credits on the evening of CHECK_DAY (the owner's playtest point), if reached. */
   checkDay: { debt: number; credits: number } | null;
+  /** Items in the stock each morning (task 35: the junkyard fills the stock). */
+  morningStock: number[];
+  /** Junkyard visits, items brought home and their estimated value (their real worth: realValue). */
+  junkVisits: number;
+  junkFinds: number;
+  junkValue: number;
 }
 
 /** The owner's playtest (16.11) stopped on day 36: the owner strategy is calibrated there. */
 export const CHECK_DAY = 36;
 
 /** What one game counts while it is played (the rules return the bought item; a sale empties a stock slot). */
-interface Tally { bought: number; sold: number }
+interface Tally { bought: number; sold: number; junkVisits: number; junkFinds: number; junkValue: number }
 
 const PRICE_STEP = 5;
+
+/** What an item is really worth (its true condition, defect and AI), as the rules value it: the junkyard metric. */
+const realValue = (item: Item): number => ITEM_TYPES[item.t].basePrice * (VALUE.conditionFloor + VALUE.conditionSpan * item.cond / 100)
+  * (item.defect ? VALUE.defectMult : 1) * (item.infected ? VALUE.infectedMult : 1);
 const CHECKS: InspectCheck[] = ['cond', 'serial', 'flaw'];
 
 /** The bot never lets the counter run forever: a visitor gets this many tries. */
@@ -195,7 +203,19 @@ function buildAll(state: GameState, rng: Rng): void {
   }
 }
 
-function playEvening(state: GameState, strategy: Strategy, rng: Rng): void {
+/** The backpack is full and a find waits: throw out the cheapest in the backpack while the waiting one is worth more. */
+function keepBestFinds(state: GameState): void {
+  for (let next = waitingFinds(state)[0]; next; next = waitingFinds(state)[0]) {
+    const cheapest = state.inv.filter(item => state.junk?.f.includes(item.uid)).sort((a, b) => realValue(a) - realValue(b))[0];
+    if (!cheapest || realValue(cheapest) >= realValue(next)) {
+      leaveWaiting(state);
+      return;
+    }
+    throwAway(state, cheapest.uid);
+  }
+}
+
+function playEvening(state: GameState, strategy: Strategy, rng: Rng, tally: Tally): void {
   useBench(state);
   if (strategy.crafts) {
     buildAll(state, rng);
@@ -206,11 +226,16 @@ function playEvening(state: GameState, strategy: Strategy, rng: Rng): void {
   if (canGoToJunkyard(state)) {
     goToJunkyard(state, rng);
     while (state.junk && state.junk.d > 0) {
-      if (noiseLevel(state.junk.n) >= strategy.leaveAtNoise || (!strategy.digsLate && digIsLate(state))) {
+      if (!strategy.digsLate && digIsLate(state)) {
         break;
       }
       dig(state, rng);
+      keepBestFinds(state);
     }
+    const finds = state.inv.filter(item => state.junk?.f.includes(item.uid));
+    tally.junkVisits++;
+    tally.junkFinds += finds.length;
+    tally.junkValue += finds.reduce((sum, item) => sum + realValue(item), 0);
     goHome(state);
   }
   useBench(state);
@@ -236,11 +261,12 @@ export function playGame(seed: number, strategy: Strategy): GameResult {
 export function playGameWithState(seed: number, strategy: Strategy): { result: GameResult; state: GameState } {
   const rng = mulberry32(seed);
   const state = createGame('story', rng);
-  const result: GameResult = { seed, ending: null, day: 1, debtClosedDay: null, weeklyCredits: [], weeklyDebt: [], bought: 0, sold: 0, checkDay: null };
+  const result: GameResult = { seed, ending: null, day: 1, debtClosedDay: null, weeklyCredits: [], weeklyDebt: [], bought: 0, sold: 0, checkDay: null, morningStock: [], junkVisits: 0, junkFinds: 0, junkValue: 0 };
   while (!state.over && state.day <= DEBT.shuttleDay) {
+    result.morningStock.push(state.inv.length);
     playShop(state, strategy, rng, result);
     if (!state.over) {
-      playEvening(state, strategy, rng);
+      playEvening(state, strategy, rng, result);
     }
     if (result.debtClosedDay === null && state.debt === 0) {
       result.debtClosedDay = state.day;
@@ -263,6 +289,7 @@ export function playGameWithState(seed: number, strategy: Strategy): { result: G
 }
 
 const mean = (values: number[]): number | null => values.length ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null;
+const perUnit = (total: number, units: number): number | null => units ? Math.round(10 * total / units) / 10 : null;
 const share = (part: number, total: number): number => Math.round(1000 * part / total) / 10;
 const median = (values: number[]): number | null => {
   if (!values.length) {
@@ -297,6 +324,11 @@ export interface SimSummary {
   /** Average credits and debt at the end of week 1, 2… (over the games still going). */
   weeklyCredits: (number | null)[];
   weeklyDebt: (number | null)[];
+  /** Average stock in the morning, items (over all mornings of all games). */
+  morningStock: number | null;
+  /** Average junkyard visit: items brought home and their estimated value, credits. */
+  findsPerVisit: number | null;
+  valuePerVisit: number | null;
 }
 
 /** Credits earned plus debt paid off, per full week played. */
@@ -314,6 +346,7 @@ export function summarize(strategy: string, results: GameResult[]): SimSummary {
   const checked = results.flatMap(r => r.checkDay ? [r.checkDay] : []);
   const bought = results.reduce((sum, r) => sum + r.bought, 0);
   const sold = results.reduce((sum, r) => sum + r.sold, 0);
+  const visits = results.reduce((sum, r) => sum + r.junkVisits, 0);
   const week = (pick: (r: GameResult) => number[], i: number): number | null =>
     mean(results.filter(r => pick(r).length > i).map(r => pick(r)[i]));
   return {
@@ -330,6 +363,9 @@ export function summarize(strategy: string, results: GameResult[]): SimSummary {
     debtClosedMedian: median(closed.map(r => r.debtClosedDay!)),
     weeklyCredits: Array.from({ length: weeks }, (_, i) => week(r => r.weeklyCredits, i)),
     weeklyDebt: Array.from({ length: weeks }, (_, i) => week(r => r.weeklyDebt, i)),
+    morningStock: perUnit(results.reduce((sum, r) => sum + r.morningStock.reduce((a, b) => a + b, 0), 0), results.reduce((sum, r) => sum + r.morningStock.length, 0)),
+    findsPerVisit: perUnit(results.reduce((sum, r) => sum + r.junkFinds, 0), visits),
+    valuePerVisit: visits ? Math.round(results.reduce((sum, r) => sum + r.junkValue, 0) / visits) : null,
   };
 }
 

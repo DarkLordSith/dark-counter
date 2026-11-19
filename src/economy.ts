@@ -10,10 +10,10 @@
 import {
   ACCEPT, HUNCH_VERDICT, BENCH_COST, COLLATERAL,
   buyerShare, CRAFT_CONDITION_BONUS, CUSTOMER, DEBT, EXPENSES, DIG_LOOT, DIG_ODDS, EVENING_HOURS, HAGGLE, HUMAN_NAMES,
-  INSPECT, ITEM_TYPES, JUNK, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
+  INSPECT, ITEM_TYPES, JUNK, JUNK_WEIGHTS, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
   RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SUPPLIER, VALUE,
 } from './data';
-import { itemRef, listLength, say, tx } from './i18n';
+import { itemRef, listLength, nameRef, say, tx } from './i18n';
 import type { ListKey, TextKey, Tx } from './i18n';
 import type { RU } from './lang/ru';
 import { COLOR, MEANING } from './palette';
@@ -22,6 +22,7 @@ import { customersToday, formatHour, openingHour, weekdayOf } from './day';
 import { addLog, createItem, findItem, fullKnowledge, randomLandlordSlot } from './state';
 import { pickRandom, randomBetween, randomInt, randomSeed } from './rng';
 import type { Rng } from './rng';
+import { isRareItem } from './star';
 import type { StarKind } from './star';
 import type {
   BuyerCustomer, Ending, GameState, InspectCheck, Item, ItemType, JunkVisit, PresentedBuyer, Recipe, SellerCustomer,
@@ -186,7 +187,7 @@ export function customerLeaves(state: GameState, reason?: Tx): void {
   if (!state.cust) {
     return;
   }
-  const name = state.cust.kind === 'rent' ? tx('landlord.name') : state.cust.name;
+  const name = state.cust.kind === 'rent' ? tx('landlord.name') : nameRef(state.cust.name);
   addLog(state, tx('log.left', { name, reason: reason ?? '' }));
   finishCustomer(state);
 }
@@ -569,7 +570,7 @@ export function buyFromSeller(state: GameState, price?: number): Item | null {
   if (item.stolen) {
     raiseHeat(state, 1);
   }
-  addLog(state, tx('log.bought', { item: itemRef(item.t), n: paid, name: customer.name }));
+  addLog(state, tx('log.bought', { item: itemRef(item.t), n: paid, name: nameRef(customer.name) }));
   floatText(`−${paid}`, COLOR.fg); // a purchase: plain spending, no meaning color
   finishCustomer(state);
   return item;
@@ -631,7 +632,7 @@ export function sellToBuyer(state: GameState, price?: number): void {
     raiseHeat(state, 2);
   }
   addLog(state, tx('log.sold', {
-    item: itemRef(item.t), n: paid, name: customer.name,
+    item: itemRef(item.t), n: paid, name: nameRef(customer.name),
     stolen: item.stolen ? tx('log.soldStolen') : '',
     ai: item.infected ? tx('log.soldAi') : '',
   }));
@@ -646,8 +647,8 @@ export function sellToBuyer(state: GameState, price?: number): void {
 /** Extra digs per visit: always 0 for now — the hook for Patch D gear and skills and for events. */
 export const digBonus = (_state: GameState): number => 0;
 
-/** Digs of a fresh visit. */
-export const digsPerVisit = (state: GameState): number => JUNK.digsBase + digBonus(state);
+/** Digs of a fresh visit: the safety cap (midnight and the backpack are the real limits). */
+export const digsPerVisit = (state: GameState): number => JUNK.maxDigs + digBonus(state);
 
 /** Evening hours the road to the junkyard costs; every dig then pays its own JUNK.digHours. */
 export const junkVisitHours = (): number => JUNK.travelHours;
@@ -668,25 +669,15 @@ function spendDigTime(state: GameState): void {
   }
 }
 
-/** Noise word index: 0 тихо, 1 слышно, 2 громко, 3 дрон рядом. */
-export type NoiseLevel = 0 | 1 | 2 | 3;
+/** Rare chance of each find of a dig at this depth (digs done before it): JUNK.rarePerDepth per level. */
+export const rareChance = (depth: number): number => DIG_ODDS.rare + JUNK.rarePerDepth * Math.max(0, depth);
 
-export function noiseLevel(noise: number): NoiseLevel {
-  const index = JUNK.noiseLevels.findIndex(limit => noise < limit);
-  return (index < 0 ? 3 : index) as NoiseLevel;
-}
+/** The backpack has no free place (the finds of this visit still in it). */
+export const isBackpackFull = (state: GameState): boolean =>
+  !!state.junk && state.junk.f.length >= JUNK.backpackSize;
 
-/** Drone chance of the next dig: (noise / scale)², never on the first dig of a visit. */
-export function droneChance(visit: JunkVisit): number {
-  if (visit.dp === 0) {
-    return 0;
-  }
-  return Math.min(1, (visit.n / JUNK.droneNoiseScale) ** 2);
-}
-
-/** Rare-find chance of a dig at this depth: deeper digs take chance from "empty". */
-export const rareChance = (depth: number): number =>
-  DIG_ODDS.rare + Math.min(DIG_ODDS.empty, JUNK.rarePerDepth * depth);
+/** Finds of the last dig waiting for a free place (the backpack was full). */
+export const waitingFinds = (state: GameState): Item[] => state.junk?.w ?? [];
 
 export function goToJunkyard(state: GameState, rng: Rng): void {
   if (!canGoToJunkyard(state)) {
@@ -707,85 +698,151 @@ export function goHome(state: GameState): void {
   state.jmsg = '';
 }
 
-/** What one dig gave; ui.ts picks the sound and the animation by `kind`. */
+/** What one dig gave; ui.ts picks the sound and the animation by `kind` (the best find of the dig). */
 export interface DigResult {
-  kind: 'empty' | 'parts' | 'broken' | 'rare' | 'drone';
+  kind: 'empty' | 'parts' | 'broken' | 'rare';
   message: Tx;
+  /** Items dug up, in the backpack or waiting (`left` of them did not fit). */
+  items: Item[];
+  parts: number;
+  left: number;
 }
 
-/** Rolls the heap's loot at this depth; applies it and returns the result. */
-function rollLoot(state: GameState, visit: JunkVisit, rng: Rng): DigResult {
-  let roll = rng();
-  roll -= DIG_ODDS.parts;
+/** How many items a dig gives: 0 (DIG_ODDS.empty), else 1–3 by DIG_ODDS.items. One rng() call. */
+function rollFindCount(rng: Rng): number {
+  let roll = rng() - DIG_ODDS.empty;
   if (roll < 0) {
-    const found = randomInt(rng, DIG_LOOT.partsMin, DIG_LOOT.partsMax);
-    state.parts += found;
-    floatText(`+${found} ⚙`, MEANING.action);
-    return { kind: 'parts', message: tx('junk.parts', { n: found }) };
+    return 0;
   }
-  roll -= DIG_ODDS.broken;
-  if (roll < 0) {
-    const type = pickRandomItemType(rng);
-    const item = createItem(state, type, {
-      cond: randomInt(rng, DIG_LOOT.brokenCondMin, DIG_LOOT.brokenCondMax),
-      defect: rng() < DIG_LOOT.brokenDefect,
-      stolen: rng() < DIG_LOOT.brokenStolen,
-    }, rng);
-    state.inv.push(item);
-    visit.f.push(item.uid);
-    floatText('+1', MEANING.wear); // a broken find
-    return { kind: 'broken', message: tx('junk.broken', { name: itemRef(type) }) };
-  }
-  roll -= rareChance(visit.dp - 1);
-  if (roll < 0) {
-    const type = pickRandom(rng, RARE_FINDS);
-    const item = createItem(state, type, { cond: randomInt(rng, DIG_LOOT.rareCondMin, DIG_LOOT.rareCondMax), stolen: false, rare: true }, rng);
-    state.inv.push(item);
-    visit.f.push(item.uid);
-    floatText('', MEANING.rare, 'rare'); // a rare find: the pixel ★, not a font glyph
-    return { kind: 'rare', message: tx('junk.rare', { name: itemRef(type) }) };
-  }
-  return { kind: 'empty', message: tx('junk.empty') };
+  roll /= 1 - DIG_ODDS.empty;
+  const index = DIG_ODDS.items.findIndex(chance => (roll -= chance) < 0);
+  return index < 0 ? DIG_ODDS.items.length : index + 1;
 }
 
-/** The guard drone: takes one find of this visit (if any is still here) or raises the wanted level; the visit ends. */
-function droneCatches(state: GameState, visit: JunkVisit, rng: Rng): DigResult {
-  visit.d = 0;
-  visit.run = true;
-  const finds = state.inv.filter(item => visit.f.includes(item.uid));
-  if (finds.length) {
-    const taken = pickRandom(rng, finds);
-    state.inv = state.inv.filter(item => item.uid !== taken.uid);
-    visit.f = visit.f.filter(uid => uid !== taken.uid);
-    floatText('−1', MEANING.risk);
-    return { kind: 'drone', message: tx('junk.droneTook', { name: itemRef(taken.t) }) };
-  }
-  state.heat = Math.min(MAX_HEAT, state.heat + JUNK.droneHeat);
-  floatText(`+${JUNK.droneHeat}`, MEANING.risk);
-  return { kind: 'drone', message: tx('junk.droneHeat', { n: JUNK.droneHeat }) };
+function pickJunkType(rng: Rng): ItemType {
+  const types = Object.keys(JUNK_WEIGHTS) as ItemType[];
+  const total = types.reduce((sum, type) => sum + JUNK_WEIGHTS[type], 0);
+  let roll = rng() * total;
+  return types.find(type => (roll -= JUNK_WEIGHTS[type]) < 0) ?? types[0];
 }
 
 /**
- * "Копать": one dig of the heap. The drone may come first (its chance is set by the
- * noise so far); otherwise the dig makes noise, goes one level deeper and rolls the loot.
+ * One find at this depth: rare (★, good condition, clean) or broken (cheap, low condition).
+ * You dug it out yourself and saw it: the condition is known, the serial and the insides are not.
+ */
+function rollFind(state: GameState, depth: number, rng: Rng): Item {
+  if (rng() < rareChance(depth)) {
+    const item = createItem(state, pickRandom(rng, RARE_FINDS), { cond: randomInt(rng, DIG_LOOT.rareCondMin, DIG_LOOT.rareCondMax), stolen: false, rare: true }, rng);
+    item.k.cond = true;
+    return item;
+  }
+  const item = createItem(state, pickJunkType(rng), {
+    cond: randomInt(rng, DIG_LOOT.brokenCondMin, DIG_LOOT.brokenCondMax),
+    defect: rng() < DIG_LOOT.brokenDefect,
+    stolen: rng() < DIG_LOOT.brokenStolen,
+  }, rng);
+  item.k.cond = true;
+  return item;
+}
+
+/** Puts a find into the backpack (and the stock) if there is a place; false when it is full. */
+function packFind(state: GameState, visit: JunkVisit, item: Item): boolean {
+  if (visit.f.length >= JUNK.backpackSize) {
+    return false;
+  }
+  state.inv.push(item);
+  visit.f.push(item.uid);
+  return true;
+}
+
+/** The message of a dig: the finds (a rare one first, with its key junk.rare for the ★), the parts, what did not fit. */
+function digMessage(items: Item[], parts: number, waiting: Item[]): Tx {
+  const rare = items.find(isRareItem);
+  const others = items.filter(item => item !== rare).map(item => itemRef(item.t));
+  let message: Tx;
+  if (rare) {
+    const found = tx('junk.rare', { name: itemRef(rare.t) });
+    message = others.length ? tx('junk.rareWith', { r: found, list: others }) : found;
+  } else if (items.length) {
+    message = tx('junk.found', { list: others });
+  } else {
+    message = tx(parts ? 'junk.parts' : 'junk.empty', { n: parts });
+  }
+  if (items.length && parts) {
+    message = tx('junk.andParts', { m: message, n: parts });
+  }
+  if (waiting.length) {
+    message = tx('junk.full', { m: message, list: waiting.map(item => itemRef(item.t)) });
+  }
+  return message;
+}
+
+/**
+ * "Копать": one dig of the heap, one level deeper. Gives 0–3 items (each may be rare, more so
+ * deeper) and 0–2 parts. The items go into the backpack while it has places; the rest wait for
+ * a place (throwAway lets them in) and are left behind by the next dig or the road home.
  */
 export function dig(state: GameState, rng: Rng): DigResult | null {
   const visit = state.junk;
   if (state.where !== 'junk' || !visit || visit.d <= 0) {
     return null;
   }
-  const caught = rng() < droneChance(visit);
-  visit.n = Math.min(100, visit.n + JUNK.noisePerDig + randomInt(rng, -JUNK.noiseSpread, JUNK.noiseSpread));
+  delete visit.w; // what waited for a place is left on the heap
+  const depth = visit.dp;
   visit.d--;
   visit.dp++;
   spendDigTime(state);
-  const result = caught ? droneCatches(state, visit, rng) : rollLoot(state, visit, rng);
-  state.jmsg = JSON.stringify(result.message);
-  addLog(state, tx('log.dig', { m: result.message }));
-  if (!caught && visit.d === 0) {
+  const items = Array.from({ length: rollFindCount(rng) }, () => rollFind(state, depth, rng));
+  const parts = randomInt(rng, DIG_LOOT.partsMin, DIG_LOOT.partsMax);
+  state.parts += parts;
+  const waiting = items.filter(item => !packFind(state, visit, item));
+  if (waiting.length) {
+    visit.w = waiting;
+  }
+  const kind: DigResult['kind'] = items.some(isRareItem) ? 'rare' : items.length ? 'broken' : parts ? 'parts' : 'empty';
+  if (parts) {
+    floatText(`+${parts} ⚙`, MEANING.action);
+  }
+  if (kind === 'rare') {
+    floatText('', MEANING.rare, 'rare'); // a rare find: the pixel ★, not a font glyph
+  } else if (items.length) {
+    floatText(`+${items.length}`, MEANING.wear); // broken finds
+  }
+  const message = digMessage(items, parts, waiting);
+  state.jmsg = JSON.stringify(message);
+  addLog(state, tx('log.dig', { m: message }));
+  if (visit.d === 0) {
     addLog(state, tx('junk.noDigs'));
   }
-  return result;
+  return { kind, message, items, parts, left: waiting.length };
+}
+
+/**
+ * "Выбросить": a find of this visit leaves the backpack and is gone (not to the stock). If a find
+ * of the last dig waits for a place, the first one takes it. Returns the find that came in, if any.
+ */
+export function throwAway(state: GameState, uid: number): Item | null {
+  const visit = state.junk;
+  if (state.where !== 'junk' || !visit || !visit.f.includes(uid)) {
+    return null;
+  }
+  visit.f = visit.f.filter(found => found !== uid);
+  state.inv = state.inv.filter(item => item.uid !== uid);
+  const next = visit.w?.shift() ?? null;
+  if (next) {
+    packFind(state, visit, next);
+  }
+  if (visit.w && !visit.w.length) {
+    delete visit.w;
+  }
+  return next;
+}
+
+/** "Оставить находку": the finds waiting for a place stay on the heap. */
+export function leaveWaiting(state: GameState): void {
+  if (state.junk) {
+    delete state.junk.w;
+  }
 }
 
 export const canVisitMarket = (state: GameState): boolean => state.hours >= MARKET.hours && !state.market && state.credits >= MARKET.price;

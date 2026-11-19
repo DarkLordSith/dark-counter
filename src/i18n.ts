@@ -180,6 +180,25 @@ export function mentions(message: Tx, key: TextKey): boolean {
     typeof value === 'object' && (Array.isArray(value) ? value.some(part => mentions(part, key)) : mentions(value as Tx, key)));
 }
 
+/* ---------- customer names (task 35) ---------- */
+
+/**
+ * A customer name as a message: a name of the lists (the save keeps the Russian one) becomes its key
+ * 'names.human.3', so it is translated when shown; any other name (old saves, Grobov's) stays as it is.
+ */
+export function nameRef(name: string): TxParam {
+  for (const group of ['human', 'robot'] as const) {
+    const index = RU.names[group].indexOf(name);
+    if (index >= 0) {
+      return tx(`names.${group}.${index}`);
+    }
+  }
+  return name;
+}
+
+/** The customer name on the screen, in the current language. */
+export const customerNameText = (name: string): string => paramText(nameRef(name), current);
+
 /* ---------- goods ---------- */
 
 /** The item's name as a message (the rules keep it in the log). */

@@ -8,7 +8,6 @@ import { appearanceFor, seededRandom } from './appearance';
 import { BELL_AT, HOTSPOTS, MAX_HEAT, SHOP_SIGN } from './data';
 import { t } from './i18n';
 import { clockOf } from './day';
-import { noiseLevel } from './economy';
 import type { DigResult } from './economy';
 import { heatMeterRects } from './heatmeter';
 import { BELL_IDLE_ALPHA, bellSprite, HINTED, hitTest, isLive, PRESS_MS } from './hotspots';
@@ -749,7 +748,7 @@ function trackMouse(): void {
 
 /* ---------- junkyard ---------- */
 
-/** The one junk heap (v2): centre, base line, width and its height by stage (it thins with each dig). */
+/** The one junk heap (v2, v3): centre, base line, width and its height by stage (it thins with each dig). */
 const HEAP = { x: 80, y: 94, w: 116, heights: [30, 24, 18, 12] };
 const DIG_FX_MS = 450;
 
@@ -835,33 +834,6 @@ function drawDigFx(visit: JunkVisit, now: number): void {
   }
 }
 
-/**
- * Guard drone: off-screen while quiet; at "громко" it patrols far away,
- * at "дрон рядом" it hangs close with its searchlight; after the catch it is over the heap.
- */
-function drawGuardDrone(visit: JunkVisit, now: number): void {
-  const level = noiseLevel(visit.n);
-  if (!visit.run && level < 2) {
-    return;
-  }
-  const seconds = now / 1000;
-  const near = visit.run || level === 3;
-  const x = Math.round(visit.run ? HEAP.x - 4 : near ? 104 + Math.sin(seconds * 1.3) * 6 : 128 + Math.sin(seconds * 0.8) * 10);
-  const y = Math.round((visit.run ? 40 : near ? 30 : 22) + Math.sin(seconds * 3) * 1.5);
-  const blink = (seconds * (near ? 4 : 2) | 0) % 2;
-  if (near) {
-    const reach = HEAP.y - 4;
-    const aim = visit.run ? x + 4 : HEAP.x + 10;
-    fillPolygon(GLOW.droneBeam(blink ? 1 : 0.7), [[x + 3, y + 4], [x + 5, y + 4], [aim + 16, reach], [aim - 16, reach]]);
-  }
-  // rotors, body, red eye
-  const scale = near ? 1 : 0;
-  fillRect(x - 2 - scale, y, 3 + scale, 1, COLOR.dim);
-  fillRect(x + 6, y, 3 + scale, 1, COLOR.dim);
-  fillRect(x, y + 1, 8, 3 + scale, COLOR.steel);
-  fillRect(x + 1, y + 2, 6, 1, COLOR.ink);
-  fillRect(x + 3, y + 2, 2, 1, blink ? COLOR.red : JUNKYARD.guardLedOff);
-}
 
 function drawJunkyard(visit: JunkVisit, now: number): void {
   const seconds = now / 1000;
@@ -896,7 +868,6 @@ function drawJunkyard(visit: JunkVisit, now: number): void {
   fillRect(148, 43, 2, 1, (seconds | 0) % 2 ? COLOR.red : JUNKYARD.guardLedOff);
   drawHeap(visit, now);
   drawDigFx(visit, now);
-  drawGuardDrone(visit, now);
   drawHeatMeter(now);
 }
 

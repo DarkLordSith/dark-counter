@@ -876,53 +876,59 @@ input:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.dots {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  display: flex;
-  gap: 2px;
-}
-
-.dots i {
-  width: 6px;
-  height: 6px;
-}
-
-.d-risk {
-  background: var(--m-risk);
-}
-
-.d-wear {
-  background: var(--m-wear);
-}
-
-/* The star mark is its own picture: no square behind it, 10×10 like the task's ×2. */
-.dots i.d-rare,
-.legend i.d-rare {
-  width: 10px;
-  height: 10px;
+/* The one item tile (task 35): the icon ×2 in a 60×36 face, the condition top left,
+   one status mark top right; the price stays under the face. Stock, backpack, seller card. */
+.tface {
+  position: relative;
+  display: block;
+  flex: none;
+  box-sizing: border-box;
+  width: 60px;
+  height: 36px;
+  padding: 2px;
   line-height: 0;
 }
 
-.d-rare .star {
-  vertical-align: top;
+.tface canvas {
+  display: block;
 }
 
-.legend i.d-rare {
-  vertical-align: -1px;
+/* The condition: Public Pixel 8px on a bg plate; "?" until it is checked. */
+.tc {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 1px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: var(--fs-px-s);
+  line-height: 8px;
 }
 
-/* Unknown is a "?" mark, not just a grey square: it must not rely on color alone. */
-.dots i.d-unknown,
-.legend i.d-unknown {
-  width: auto;
+.tc-unknown {
   color: var(--m-unknown);
-  font-family: var(--mono);
-  font-size: var(--fs-s);
-  font-style: normal;
-  font-weight: 600;
-  line-height: 6px;
+}
+
+/* One status mark, 5×5 drawn 2× (10×10): ◉ AI and ▲ stolen in risk, ✕ broken in wear, ★ in its own lamp. */
+.tm {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  line-height: 0;
+}
+
+.tm .ico,
+.tm .star {
+  width: 10px;
+  height: 10px;
+}
+
+.legend .tc,
+.legend .tm {
+  position: static;
+  display: inline-block;
+  margin-right: 3px;
+  vertical-align: -1px;
 }
 
 .legend {
@@ -932,13 +938,6 @@ input:focus-visible {
   font-size: var(--fs-s);
   color: var(--dim);
   margin: 8px 0;
-}
-
-.legend i {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 3px;
 }
 
 .bench {
@@ -1097,7 +1096,7 @@ input:focus-visible {
   margin-bottom: 8px;
 }
 
-/* Noise: a scale plus a word, like the hunch verdict. The scale leads to the drone (wanted level), so it fills with risk. */
+/* Depth (task 35, was the noise): a scale of the visit's digs plus the number, neutral fg — depth is no risk. */
 .noise {
   display: flex;
   align-items: center;
@@ -1120,12 +1119,12 @@ input:focus-visible {
 }
 
 .nbar i.on {
-  background: var(--m-risk);
+  background: var(--fg);
 }
 
-/* The backpack (task 29): under the noise scale, one row of slots, one per dig of the visit. */
+/* The backpack (task 35): РЮКЗАК N/8 and a 4×2 grid of item tiles (fits an iPhone SE without scrolling). */
 .bp {
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .bp-head {
@@ -1147,48 +1146,24 @@ input:focus-visible {
   color: var(--fg);
 }
 
-.bp-row {
-  display: flex;
-  flex-wrap: wrap;
+/* The depth scale on the right of the backpack's head row. */
+.bp-head .depth {
+  flex: 1;
+  margin: 0 0 0 8px;
+}
+
+.bp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 62px);
   gap: 4px;
 }
 
-/* An empty slot: a 1px line outline. The tile of a find: the stock icon 56×32 on bg, no price. */
+/* An empty place: a 1px line outline the size of a tile. */
 .bp-slot {
-  position: relative;
   box-sizing: border-box;
-  width: 60px;
-  height: 36px;
-  padding: 1px;
+  width: 62px;
+  height: 54px;
   border: 1px solid var(--line);
-}
-
-.bp-item {
-  background: var(--bg);
-}
-
-.bp-slot canvas {
-  display: block;
-  width: 56px;
-  height: 32px;
-  image-rendering: pixelated;
-}
-
-/* ★ rare (lamp) or ✕ broken (wear), 10×10 in the top right corner. */
-.bp-mark {
-  position: absolute;
-  top: 1px;
-  right: 1px;
-  line-height: 0;
-}
-
-.bp-mark .ico {
-  width: 10px;
-  height: 10px;
-}
-
-.bp-broken {
-  color: var(--m-wear);
 }
 
 /* A new find: the frame lights for ~300 ms (action; a rare one in lamp), then back to line. */
@@ -1212,58 +1187,35 @@ input:focus-visible {
   }
 }
 
-/* The drone took it: the slot stays, outlined in risk at ≈ 0.43, until the visit ends. */
-.bp-gone {
-  border-color: transparent;
-}
-
-.bp-gone::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border: 1px solid var(--m-risk);
-  opacity: 0.43;
-}
-
-/* …and the find itself: its frame blinks risk twice, then it flies up and is gone. */
-.bp-fly {
-  position: absolute;
-  inset: -1px;
-  padding: 1px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  animation: bp-fly 900ms linear forwards;
-}
-
-@keyframes bp-fly {
-  0%,
-  19%,
-  40%,
-  59% {
-    border-color: var(--m-risk);
-    transform: none;
-    opacity: 1;
-  }
-  20%,
-  39% {
-    border-color: var(--line);
-  }
-  100% {
-    border-color: var(--m-risk);
-    transform: translateY(-48px);
-    opacity: 0;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .bp-new,
   .bp-new-rare {
     animation: none;
   }
+}
 
-  .bp-fly {
-    display: none;
-  }
+/* The card of a find and the "Рюкзак полон" note: under the grid, two buttons in a row. */
+.bp-card {
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+}
+
+.bp-card .tags {
+  margin: 0;
+}
+
+.bp-full {
+  font-size: var(--fs-s);
+  line-height: 1.3;
+}
+
+.bp-acts {
+  margin-top: 4px;
+}
+
+.bp-home {
+  width: 100%;
 }
 
 .nword {
@@ -1273,14 +1225,6 @@ input:focus-visible {
   white-space: nowrap;
 }
 
-.nword.m-risk {
-  color: var(--m-risk);
-}
-
-.junk-stats + .noise + .hint + .btn {
-  width: 100%;
-  margin-top: 8px;
-}
 
 /* ==================== Modal ==================== */
 
@@ -1335,7 +1279,7 @@ input:focus-visible {
 
 .stile {
   gap: 2px;
-  padding: 4px 2px 2px;
+  padding: 1px 0 0;
 }
 
 /* The stock legend sits closer: the budget of 12 tiles on an iPhone SE. */
@@ -1769,6 +1713,7 @@ input:focus-visible {
 
 .st b,
 .stile .tv,
+.tc,
 .chip,
 .fx,
 .rn,

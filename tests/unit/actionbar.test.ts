@@ -153,8 +153,8 @@ describe('one main button per screen', () => {
     // Grobov's chosen option leaves the list (rentOptions), "Нет такого" leaves the buyer pane
     expect(uiTs).toMatch(/function rentOptions[\s\S]*?barAction\(state, actor, 'deal', barContext\(\)\)/);
     expect(uiTs).not.toContain('Нет такого, до свидания');
-    // junkyard v2: "Вернуться домой" is a secondary pane button only while "Копать" holds the bar
-    expect(uiTs).toMatch(/const homeButton = visit\.d > 0 \? `<button class="btn" data-a="home">/);
+    // junkyard: "Вернуться домой" is a secondary pane button only while "Копать" holds the bar
+    expect(uiTs).toMatch(/const homeButton = visit\.d > 0 \? `<button class="btn bp-home" data-a="home">/);
     expect(uiTs.match(/<button[^>]*data-a="home"/g)).toHaveLength(1);
   });
 

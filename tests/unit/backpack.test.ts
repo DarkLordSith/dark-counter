@@ -1,10 +1,10 @@
-// The junkyard backpack (task 29): one row of slots per visit, the finds from the left, the drone's trace in place.
+// The junkyard backpack (task 35, v3): a 4×2 grid of 8 places, the finds of the visit in the order dug up,
+// the one item tile, a card with "Выбросить", the "Рюкзак полон" choice.
 import { describe, expect, it } from 'vitest';
-import { backpackFinds, backpackSlots, droneTrace } from '../../src/backpack';
+import { BACKPACK_COLUMNS, backpackFinds, backpackSlots } from '../../src/backpack';
 import { JUNK } from '../../src/data';
 
-import { dig, digsPerVisit, goToJunkyard } from '../../src/economy';
-import { ICONS } from '../../src/icons';
+import { dig, goToJunkyard, throwAway } from '../../src/economy';
 import { mulberry32 } from '../../src/rng';
 import type { JunkVisit } from '../../src/types';
 import styleCss from '../../src/style.css?raw';
@@ -13,82 +13,66 @@ import { makeItem, makeState } from './helpers';
 import { RU } from '../../src/lang/ru';
 import { EN } from '../../src/lang/en';
 
-const visitOf = (f: number[], dp: number, d: number): JunkVisit => ({ d, n: 0, dp, f, s: 77 });
+const visitOf = (f: number[]): JunkVisit => ({ d: 3, n: 0, dp: 3, f, s: 77 });
 
-describe('backpack slots', () => {
-  it('as many slots as digs of the visit; the finds first, in the order dug up', () => {
-    const broken = makeItem('battery', { cond: 20 });
-    const rare = makeItem('battery', { rare: true });
-    const other = makeItem('battery');
-    const visit = visitOf([broken.uid, rare.uid], 3, 2);
-    const slots = backpackSlots(visit, [other, rare, broken], null, 5);
-    expect(slots).toHaveLength(5);
-    expect(slots.map(slot => slot.kind)).toEqual(['item', 'item', 'empty', 'empty', 'empty']);
-    expect(slots[0]).toMatchObject({ item: broken, mark: 'broken' });
-    expect(slots[1]).toMatchObject({ item: rare, mark: 'rare' });
+describe('backpack places', () => {
+  it('8 places in 2 rows of 4; the finds first, in the order dug up', () => {
+    expect(JUNK.backpackSize).toBe(8);
+    expect(BACKPACK_COLUMNS * 2).toBe(JUNK.backpackSize);
+    const broken = makeItem('battery', { uid: 1, cond: 20 });
+    const rare = makeItem('chip', { uid: 2, rare: true });
+    const other = makeItem('battery', { uid: 3 });
+    const visit = visitOf([broken.uid, rare.uid]);
+    const slots = backpackSlots(visit, [other, rare, broken]);
+    expect(slots).toHaveLength(8);
+    expect(slots.map(slot => slot.kind)).toEqual(['item', 'item', 'empty', 'empty', 'empty', 'empty', 'empty', 'empty']);
+    expect(slots[0]).toMatchObject({ item: broken });
     expect(backpackFinds(visit, [other, rare, broken])).toEqual([broken, rare]);
   });
 
-  it('a new visit starts with digsPerVisit empty slots', () => {
-    const state = makeState({ phase: 'evening', hours: 12 });
-    goToJunkyard(state, mulberry32(1));
-    expect(backpackSlots(state.junk!, state.inv, null, digsPerVisit(state))).toEqual(Array(digsPerVisit(state)).fill({ kind: 'empty' }));
-    expect(digsPerVisit(state)).toBe(JUNK.digsBase);
-  });
-
-  it('the drone: its catch leaves a trace in its own slot, the other tiles do not shift', () => {
-    const a = makeItem('battery');
-    const b = makeItem('battery');
-    const c = makeItem('battery');
-    const before = [a, b, c].map(({ uid, t }) => ({ uid, t }));
-    const visit = visitOf([a.uid, c.uid], 4, 0);
-    const trace = droneTrace(before, visit);
-    expect(trace).toEqual({ seed: 77, index: 1, type: 'battery' });
-    // the drone ended the visit after 4 digs of 5: the row keeps all 5 slots
-    const slots = backpackSlots(visit, [a, c], trace, 5);
-    expect(slots.map(slot => slot.kind)).toEqual(['item', 'gone', 'item', 'empty', 'empty']);
-    expect(slots[2]).toMatchObject({ item: c });
-    // the next visit (another heap seed) has no trace
-    expect(backpackSlots({ ...visit, s: 78 }, [a, c], trace, 5).map(slot => slot.kind)).toEqual(['item', 'item', 'empty', 'empty', 'empty']);
-  });
-
-  it('no trace when the drone took nothing (the wanted level went up)', () => {
-    expect(droneTrace([], visitOf([], 2, 0))).toBeNull();
-  });
-
-  it('a real visit: digging fills the row, the count is the finds still in the backpack', () => {
+  it('a new visit starts empty; digging fills it, a thrown-out find frees its place', () => {
     const state = makeState({ phase: 'evening', hours: 24 });
     const rng = mulberry32(5);
     goToJunkyard(state, rng);
-    while (state.junk && state.junk.d > 0) {
+    expect(backpackSlots(state.junk!, state.inv).every(slot => slot.kind === 'empty')).toBe(true);
+    while (!state.junk!.f.length) {
       dig(state, rng);
     }
-    const visit = state.junk!;
-    const slots = backpackSlots(visit, state.inv, null, digsPerVisit(state));
-    expect(slots).toHaveLength(digsPerVisit(state));
-    expect(slots.filter(slot => slot.kind === 'item')).toHaveLength(backpackFinds(visit, state.inv).length);
+    const count = backpackFinds(state.junk!, state.inv).length;
+    throwAway(state, state.junk!.f[0]);
+    expect(backpackSlots(state.junk!, state.inv).filter(slot => slot.kind === 'item')).toHaveLength(count - 1);
   });
 });
 
 describe('backpack on screen', () => {
-  it('under the noise scale, above the home hint; texts RU/EN', () => {
+  it('the depth scale, the grid, then the card / "Рюкзак полон" / home; texts RU/EN', () => {
     const pane = uiTs.match(/function junkyardPane[\s\S]*?\n}/)?.[0] ?? '';
-    expect(pane.indexOf('noiseMeter(')).toBeLessThan(pane.indexOf('backpackRow('));
-    expect(pane.indexOf('backpackRow(')).toBeLessThan(pane.indexOf('${homeHint}'));
+    expect(pane.indexOf('depthMeter(')).toBeLessThan(pane.indexOf('backpackGrid('));
+    expect(pane.indexOf('backpackGrid(')).toBeLessThan(pane.indexOf('${below}'));
+    expect(pane).toMatch(/findCard\(picked\)[\s\S]*fullNote\(waiting\)[\s\S]*homeButton/);
+    expect(uiTs).not.toContain('noiseMeter');
     expect(RU.junk.backpack).toBe('Рюкзак');
     expect(EN.junk.backpack).toBe('Backpack');
+    expect(RU.junk.throwAway).toBe('Выбросить');
+    expect(RU.junk.packFull).toBe('Рюкзак полон');
+    expect(RU.junk.openPack).toBe('Выбросить что-то');
+    expect(RU.junk.leave).toBe('Оставить находку');
   });
 
-  it('tiles 60×36, an empty slot is a line outline, ✕ is a 5×5 pixel icon', () => {
-    expect(styleCss).toMatch(/\.bp-slot \{[^}]*width: 60px;[^}]*height: 36px;[^}]*border: 1px solid var\(--line\);/);
-    expect(styleCss).toMatch(/\.bp-broken \{\s*color: var\(--m-wear\);/);
-    expect(styleCss).toMatch(/\.bp-gone::before \{[^}]*border: 1px solid var\(--m-risk\);[^}]*opacity: 0\.43;/);
-    expect(ICONS.broken).toMatchObject({ w: 5, h: 5 });
+  it('the grid is 4 columns of item tiles, an empty place is a 60×36 line outline', () => {
+    expect(styleCss).toMatch(/\.bp-grid \{[^}]*grid-template-columns: repeat\(4, 62px\);/);
+    expect(styleCss).toMatch(/\.bp-slot \{[^}]*width: 62px;[^}]*border: 1px solid var\(--line\);/);
+    expect(uiTs).toContain("itemTile(item, 'pick', backpack.pick === item.uid");
   });
 
-  it('reduced motion: no flash, no flight', () => {
+  it('a tap on a find opens its card; the card throws out, "Выбросить что-то" opens the cheapest', () => {
+    expect(uiTs).toMatch(/data-a="throw" data-v="\$\{item\.uid\}"/);
+    expect(uiTs).toMatch(/openpack: \(\) => \{[\s\S]*?estimatedValue\(a\) - estimatedValue\(b\)/);
+    expect(uiTs).toMatch(/leavefind: \(\) => leaveWaiting\(state\)/);
+  });
+
+  it('reduced motion: no flash', () => {
     const reduced = [...styleCss.matchAll(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/g)].map(m => m[1]).join('\n');
     expect(reduced).toMatch(/\.bp-new,\s*\.bp-new-rare \{\s*animation: none;/);
-    expect(reduced).toMatch(/\.bp-fly \{\s*display: none;/);
   });
 });

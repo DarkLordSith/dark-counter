@@ -30,10 +30,20 @@ export const ICONS = {
     w: 8, h: 8,
     rects: [[0, 0, 2, 1], [6, 0, 2, 1], [1, 1, 2, 1], [5, 1, 2, 1], [2, 2, 4, 1], [3, 3, 2, 2], [2, 5, 4, 1], [1, 6, 2, 1], [5, 6, 2, 1], [0, 7, 2, 1], [6, 7, 2, 1]],
   },
-  /** ✕ 5×5 — a broken find in the junkyard backpack (task 29), drawn 2× = 10×10 like the ★ next to it. */
+  /** ✕ 5×5 — broken: a known defect (the item tile's status mark, task 35), drawn 2× = 10×10 like the ★. */
   broken: {
     w: 5, h: 5,
     rects: [[0, 0, 1, 1], [4, 0, 1, 1], [1, 1, 1, 1], [3, 1, 1, 1], [2, 2, 1, 1], [1, 3, 1, 1], [3, 3, 1, 1], [0, 4, 1, 1], [4, 4, 1, 1]],
+  },
+  /** ◉ 5×5 — AI found inside (task 35, the item tile's status mark): a ring with a core. */
+  ai: {
+    w: 5, h: 5,
+    rects: [[1, 0, 3, 1], [0, 1, 1, 3], [4, 1, 1, 3], [2, 2, 1, 1], [1, 4, 3, 1]],
+  },
+  /** ▲ 5×5 — a filed serial, known stolen (task 35, the item tile's status mark). */
+  stolen: {
+    w: 5, h: 5,
+    rects: [[2, 0, 1, 2], [1, 2, 3, 2], [0, 4, 5, 1]],
   },
   /** Lock — a mode that opens later (16×16: shackle on a body with a keyhole). */
   lock: {

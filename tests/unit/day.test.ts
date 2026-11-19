@@ -158,7 +158,7 @@ describe('digs past midnight', () => {
   it('the shop opens later next morning and the queue is shorter', () => {
     quiet();
     evening();
-    for (let i = 0; i < JUNK.digsBase; i++) {
+    for (let i = 0; i < 5; i++) {
       dig(state, gameRng);
     }
     goHome(state);
