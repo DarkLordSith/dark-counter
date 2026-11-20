@@ -236,7 +236,7 @@ export interface RunStats {
   earn: number;
   /** Deals: items bought from sellers, sold to buyers, batches sold to the wholesaler. */
   deals: number;
-  /** Digs at the junkyard. */
+  /** Runs to the junkyard ("Вылазок на свалку"): +1 per visit, not per dig (since the task 38 fix; saves of PR #42 counted digs). */
   raids: number;
   /** The best rare (★) find: its type and condition; null — none yet. */
   star: { t: ItemType; c: number } | null;

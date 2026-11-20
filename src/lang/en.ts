@@ -241,7 +241,7 @@ export const EN: Dict = {
       leftDay: 'Left', // draft
       earned: 'Earned', // draft
       deals: 'Deals', // draft
-      raids: 'Digs', // draft
+      raids: 'Junkyard runs', // draft
       star: 'Best find', // draft
       board: 'On board', // draft
       ramp: 'Ramp patrol', // draft

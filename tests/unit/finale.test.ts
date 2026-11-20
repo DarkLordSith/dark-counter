@@ -150,20 +150,28 @@ describe('the run stats', () => {
     expect(game.st.dc).toBe(31);
   });
 
-  it('digs and the best ★ find', () => {
+  it('junkyard runs count visits, not digs; the best ★ find', () => {
     const game = makeState({ phase: 'evening', hours: 5 });
     goToJunkyard(game, gameRng);
+    expect(game.st.raids).toBe(1);
     vi.spyOn(Math, 'random').mockReturnValueOnce(0.5).mockReturnValue(0); // one find, rare
+    dig(game, gameRng);
     dig(game, gameRng);
     expect(game.st.raids).toBe(1);
     expect(game.st.star).not.toBeNull();
   });
 });
 
-describe('a save before the finale (day 42, debt closed)', () => {
-  const fixture = import.meta.glob<string>('../fixtures/finale/day42-debt0-dc2.txt', { query: '?raw', import: 'default', eager: true });
-  const code = Object.values(fixture)[0].trim();
+// Synthetic save and the real one of playtest 19.11: the same checks on both.
+const finaleSaves = Object.entries(
+  import.meta.glob<string>('../fixtures/finale/day42-*-dc2.txt', { query: '?raw', import: 'default', eager: true }),
+).map(([file, code]) => [file.split('/').pop()!, code.trim()] as const);
 
+it('both day-42 saves are there', () => {
+  expect(finaleSaves.map(([file]) => file).sort()).toEqual(['day42-debt0-dc2.txt', 'day42-real-dc2.txt']);
+});
+
+describe.each(finaleSaves)('a save before the finale (day 42, debt closed): %s', (_file, code) => {
   it('loads; its stats count from the load day, the debt day is unknown', async () => {
     const game = (await importSaveCode(code))!;
     expect(game).toMatchObject({ day: 42, debt: 0, seat: false, mode: 'story' });
@@ -182,9 +190,10 @@ describe('a save before the finale (day 42, debt closed)', () => {
     expect(game).toMatchObject({ ending: 'left', lv: 42 });
   });
 
-  it('migrate() keeps the stats a newer save already has', () => {
-    const game = makeState();
-    game.st.deals = 7;
-    expect(migrate(structuredClone(game) as SavedGame)?.st.deals).toBe(7);
-  });
+});
+
+it('migrate() keeps the stats a newer save already has', () => {
+  const game = makeState();
+  game.st.deals = 7;
+  expect(migrate(structuredClone(game) as SavedGame)?.st.deals).toBe(7);
 });

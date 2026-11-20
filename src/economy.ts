@@ -885,6 +885,7 @@ export function goToJunkyard(state: GameState, rng: Rng): void {
   }
   state.hours -= junkVisitHours();
   state.where = 'junk';
+  state.st.raids++; // a run to the junkyard, not every dig
   state.junk = { d: digsPerVisit(state), n: 0, dp: 0, f: [], s: randomSeed(rng) };
   state.jmsg = say('junk.arrive');
 }
@@ -995,7 +996,6 @@ export function dig(state: GameState, rng: Rng): DigResult | null {
   const items = Array.from({ length: rollFindCount(rng) }, () => rollFind(state, depth, rng));
   const parts = randomInt(rng, DIG_LOOT.partsMin, DIG_LOOT.partsMax);
   state.parts += parts;
-  state.st.raids++;
   items.filter(isRareItem).forEach(item => noteStar(state, item));
   const waiting = items.filter(item => !packFind(state, visit, item));
   if (waiting.length) {
