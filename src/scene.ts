@@ -5,7 +5,7 @@
 //  anchor point.
 // =====================================================================
 import { appearanceFor, seededRandom } from './appearance';
-import { BELL_AT, HOTSPOTS, MAX_HEAT, SHOP_SIGN } from './data';
+import { BELL_AT, HOTSPOTS, LANDLORD_SEED, MAX_HEAT, SHOP_SIGN } from './data';
 import { t } from './i18n';
 import { clockOf } from './day';
 import type { DigResult } from './economy';
@@ -15,6 +15,8 @@ import { BELL_IDLE_ALPHA, bellSprite, HINTED, hitTest, isLive, PRESS_MS } from '
 import { patienceBarRects } from './patiencebar';
 import { CHARACTER, COLOR, GLOW, ITEM_COLORS, JUNKYARD, MEANING, SHADE, SHOP } from './palette';
 import { byId } from './dom';
+import { decodeSprite, GROBOV_FACE_CROP, type Sprite, spriteRects } from './sprite';
+import grobovPng from './sprites/grobov-32.png';
 import { actor, COUNTER_X, DOOR_X, state } from './state';
 import type { Appearance, CustomerLook, Hotspot, HotspotId, ItemType, JunkVisit, LandlordLook } from './types';
 
@@ -441,13 +443,54 @@ export const FACE_SIZE = 24;
 /** Sprite y at the top of the frame: the head and the collar (sprite rows 18–41). */
 const FACE_TOP = 18;
 
+/* ---------- PNG sprites (#23, task 39) ---------- */
+/** Sprites decoded from PNG so far; a missing one is drawn by code (still loading or failed). */
+const pngSprites: { grobov?: Sprite } = {};
+
+/**
+ * PNG → offscreen canvas → getImageData → token indices (src/sprite.ts). A color outside
+ * palette A or a semi-transparent pixel is skipped with one warning per sprite; a load error
+ * leaves the sprite missing, so the code portrait stays and the game goes on.
+ */
+function loadPngSprite(name: keyof typeof pngSprites, url: string): void {
+  const image = new Image();
+  image.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return;
+    }
+    context.drawImage(image, 0, 0);
+    const { sprite, unknown, semi } = decodeSprite(canvas.width, canvas.height, context.getImageData(0, 0, canvas.width, canvas.height).data);
+    if (unknown.length || semi.length) {
+      const first = [...unknown, ...semi][0];
+      console.warn(`sprite ${name}: ${unknown.length} pixels outside palette A, ${semi.length} semi-transparent, skipped (first at ${first.x},${first.y} ${first.hex} a=${first.a})`);
+    }
+    pngSprites[name] = sprite;
+    paintFaces();
+  };
+  image.onerror = () => console.warn(`sprite ${name}: ${url} did not load, drawing it by code`);
+  image.src = url;
+}
+
+loadPngSprite('grobov', grobovPng);
+
 /** Draws every <canvas data-face="seed"> portrait currently in the DOM. */
 function paintFaces(): void {
   document.querySelectorAll<HTMLCanvasElement>('canvas[data-face]').forEach(canvas => {
     const sceneCtx = ctx;
     ctx = context2d(canvas);
-    fillRect(0, 0, FACE_SIZE, FACE_SIZE, SHOP.wall);
-    drawCustomer(FACE_SIZE / 2, -FACE_TOP, appearanceFor(Number(canvas.dataset.face)), 0);
+    const seed = Number(canvas.dataset.face);
+    if (seed === LANDLORD_SEED && pngSprites.grobov) {
+      // transparent PNG pixels show the window's panel color
+      fillRect(0, 0, FACE_SIZE, FACE_SIZE, COLOR.panel);
+      fillRects(-GROBOV_FACE_CROP.x, -GROBOV_FACE_CROP.y, spriteRects(pngSprites.grobov));
+    } else {
+      fillRect(0, 0, FACE_SIZE, FACE_SIZE, SHOP.wall);
+      drawCustomer(FACE_SIZE / 2, -FACE_TOP, appearanceFor(seed), 0);
+    }
     ctx = sceneCtx;
   });
 }
