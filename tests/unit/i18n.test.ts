@@ -421,7 +421,10 @@ describe('EN v1', () => {
     const NEWER = [
       // the wholesaler (task 36)
       'groups', 'kind', 'head', 'asIs', 'total', 'heat', 'sell', 'pick', 'refuse', 'noStock', 'wants', 'tooMuch', 'enough', 'sold', 'tech', 'gear',
-      'about', 'arrive', 'found', 'rareWith', 'andParts', 'full', 'packFull', 'waits', 'openPack', 'leave', 'throwAway', 'keep', 'slotEmpty', 'legend'];
+      'about', 'arrive', 'found', 'rareWith', 'andParts', 'full', 'packFull', 'waits', 'openPack', 'leave', 'throwAway', 'keep', 'slotEmpty', 'legend',
+      // the finale (task 38)
+      'left', 'askTitle', 'source', 'board', 'rampWarn', 'yes', 'no', 'rampLog', 'poor', 'ok', 'rich',
+      'debtDay', 'leftDay', 'earned', 'deals', 'raids', 'star', 'ramp', 'day', 'starItem'];
     const drafts = enSource.split('\n').filter(line => /\/\/ draft/.test(line) && !line.trim().startsWith('//'));
     expect(drafts.map(line => line.trim().split(':')[0]).filter(key => !NEWER.includes(key))).toEqual([]);
   });

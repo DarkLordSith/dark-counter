@@ -9,8 +9,9 @@ import {
   askBuyer, buySeat, callNextCustomer, canBuySeat, canCraft, canGoToJunkyard, craft, canVisitMarket, closeShop, customerLeaves, deferRent, dig,
   digIsLate, estimatedValue, evict, feedback, goHome, goToJunkyard, inspect, isPresentedBuyer, offerToSeller, payEarly, payRent,
   leaveWaiting, payWithCollateral, perceivedChance, planCollateral, presentItem, sleepUntilMorning, throwAway, useWorkbench, visitMarket, waitingFinds,
-  bulkPrice, bulkStock, canSellBatch, sellBatch, setDiscount, toggleCart,
+  bulkPrice, bulkStock, canSellBatch, sellBatch, setDiscount, toggleCart, canLeaveEarly, finalTier, leaveEarly,
 } from '../../src/economy';
+import type { FinalTier } from '../../src/economy';
 import { mulberry32 } from '../../src/rng';
 import type { Rng } from '../../src/rng';
 import { createGame } from '../../src/state';
@@ -51,8 +52,17 @@ export const STRATEGIES: Record<string, Strategy> = {
   greedy: { name: 'greedy', inspects: false, buyShare: 0.95, sellChance: 0.4, digsLate: true, reserve: 150, crafts: false },
 };
 
+/**
+ * Task 38, when a bot with a seat leaves: 'day60' — the last shuttle (as before), 'asap' — the
+ * early cargo flight on the evening the seat is bought.
+ */
+export type LeavePolicy = 'day60' | 'asap';
+
 /** One played game. */
 export interface GameResult {
+  /** Task 38: credits on board (after the ramp) and the patrol's toll, for the 'left' ending; else null / 0. */
+  board: number | null;
+  toll: number;
   seed: number;
   ending: Ending | null;
   /** Last day reached. */
@@ -273,7 +283,7 @@ function keepBestFinds(state: GameState): void {
   }
 }
 
-function playEvening(state: GameState, strategy: Strategy, rng: Rng, tally: Tally): void {
+function playEvening(state: GameState, strategy: Strategy, rng: Rng, tally: Tally, leave: LeavePolicy): void {
   useBench(state);
   if (strategy.crafts) {
     buildAll(state, rng);
@@ -309,19 +319,22 @@ function playEvening(state: GameState, strategy: Strategy, rng: Rng, tally: Tall
   if (canBuySeat(state)) {
     buySeat(state);
   }
+  if (leave === 'asap' && canLeaveEarly(state)) {
+    leaveEarly(state);
+  }
 }
 
 /** Plays one story game to its end (or the shuttle day). */
-export function playGame(seed: number, strategy: Strategy): GameResult {
-  return playGameWithState(seed, strategy).result;
+export function playGame(seed: number, strategy: Strategy, leave: LeavePolicy = 'day60'): GameResult {
+  return playGameWithState(seed, strategy, leave).result;
 }
 
 /** The same, with the final game state (its log tells how the game went). */
-export function playGameWithState(seed: number, strategy: Strategy): { result: GameResult; state: GameState } {
+export function playGameWithState(seed: number, strategy: Strategy, leave: LeavePolicy = 'day60'): { result: GameResult; state: GameState } {
   const rng = mulberry32(seed);
   const state = createGame('story', rng);
   const result: GameResult = {
-    seed, ending: null, day: 1, debtClosedDay: null, weeklyCredits: [], weeklyDebt: [], bought: 0, sold: 0, checkDay: null, morningStock: [],
+    seed, board: null, toll: 0, ending: null, day: 1, debtClosedDay: null, weeklyCredits: [], weeklyDebt: [], bought: 0, sold: 0, checkDay: null, morningStock: [],
     junkVisits: 0, junkFinds: 0, junkValue: 0, saleIncome: 0, bulkIncome: 0, bulkSold: 0, bulkVisits: 0, junkSoldInWeek: 0,
   };
   const tally: Tally = { ...result, dugOn: new Map() };
@@ -329,7 +342,7 @@ export function playGameWithState(seed: number, strategy: Strategy): { result: G
     result.morningStock.push(state.inv.length);
     playShop(state, strategy, rng, tally);
     if (!state.over) {
-      playEvening(state, strategy, rng, tally);
+      playEvening(state, strategy, rng, tally, leave);
     }
     if (result.debtClosedDay === null && state.debt === 0) {
       result.debtClosedDay = state.day;
@@ -351,12 +364,24 @@ export function playGameWithState(seed: number, strategy: Strategy): { result: G
   }
   result.ending = state.ending;
   result.day = state.day;
+  if (state.ending === 'left') {
+    result.board = state.credits;
+    result.toll = state.st.toll ?? 0;
+  }
   return { result, state };
 }
 
 const mean = (values: number[]): number | null => values.length ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null;
 const perUnit = (total: number, units: number): number | null => units ? Math.round(10 * total / units) / 10 : null;
 const share = (part: number, total: number): number => Math.round(1000 * part / total) / 10;
+/** The p-th percentile (nearest rank) of the values, or null. */
+const percentile = (values: number[], p: number): number | null => {
+  if (!values.length) {
+    return null;
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(p / 100 * sorted.length) - 1))];
+};
 const median = (values: number[]): number | null => {
   if (!values.length) {
     return null;
@@ -405,6 +430,13 @@ export interface SimSummary {
   bulkItems: number | null;
   /** Share of junkyard finds sold within a week of being dug up, %. */
   junkSoldInWeek: number | null;
+  /** Task 38, the games that left: credits on board p25 / median / p75, the tiers (% of them), the departure day. */
+  board: { p25: number | null; median: number | null; p75: number | null };
+  tiers: Record<FinalTier, number | null>;
+  leftDay: number | null;
+  /** The ramp check: % of the games that left paid the patrol, and the average toll of those who paid. */
+  rampShare: number | null;
+  rampToll: number | null;
 }
 
 /** Credits earned plus debt paid off, per full week played. */
@@ -424,6 +456,10 @@ export function summarize(strategy: string, results: GameResult[]): SimSummary {
   const sold = results.reduce((sum, r) => sum + r.sold, 0);
   const visits = results.reduce((sum, r) => sum + r.junkVisits, 0);
   const finds = results.reduce((sum, r) => sum + r.junkFinds, 0);
+  const left = results.filter(r => r.board !== null);
+  const boards = left.map(r => r.board!);
+  const paid = left.filter(r => r.toll > 0);
+  const tierShare = (tier: FinalTier): number | null => left.length ? share(boards.filter(b => finalTier(b) === tier).length, left.length) : null;
   const week = (pick: (r: GameResult) => number[], i: number): number | null =>
     mean(results.filter(r => pick(r).length > i).map(r => pick(r)[i]));
   return {
@@ -449,6 +485,11 @@ export function summarize(strategy: string, results: GameResult[]): SimSummary {
     bulkVisits: perUnit(results.reduce((sum, r) => sum + r.bulkVisits, 0), results.length),
     bulkItems: perUnit(results.reduce((sum, r) => sum + r.bulkSold, 0), results.length),
     junkSoldInWeek: finds ? share(results.reduce((sum, r) => sum + r.junkSoldInWeek, 0), finds) : null,
+    board: { p25: percentile(boards, 25), median: median(boards), p75: percentile(boards, 75) },
+    tiers: { poor: tierShare('poor'), ok: tierShare('ok'), rich: tierShare('rich') },
+    leftDay: mean(left.map(r => r.day)),
+    rampShare: left.length ? share(paid.length, left.length) : null,
+    rampToll: mean(paid.map(r => r.toll)),
   };
 }
 
@@ -471,7 +512,7 @@ export function withBalance<T>(balance: Balance, play: () => T): T {
 }
 
 /** Plays `seeds` games (seeds 1…N) with one strategy. */
-export function runSim(seeds: number, strategy: Strategy): SimSummary {
-  const results = Array.from({ length: seeds }, (_, i) => playGame(i + 1, strategy));
+export function runSim(seeds: number, strategy: Strategy, leave: LeavePolicy = 'day60'): SimSummary {
+  const results = Array.from({ length: seeds }, (_, i) => playGame(i + 1, strategy, leave));
   return summarize(strategy.name, results);
 }

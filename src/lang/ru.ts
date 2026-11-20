@@ -232,11 +232,40 @@ export const RU = {
   },
   /** Endings: betray and takeover cannot be reached yet (Patch C stubs). */
   ending: {
-    left: { title: 'Улетел', line: 'Последний шаттл ушёл, и вы на борту.' },
+    left: { title: 'Улетел', line: 'Последний шаттл ушёл, и вы на борту.', lineEarly: 'Грузовой рейс ушёл ночью. Вы на борту. День {day}.' },
     stayed: { title: 'Остался на станции', line: 'Последний шаттл ушёл без вас.' },
     evicted: { title: 'Выселение', line: 'Платёж нечем покрыть. Гробов опечатал лавку.' },
     betray: { title: 'Сдал Гробова', line: 'Гробова увели патрульные.' },
     takeover: { title: 'Занял его место', line: 'Теперь долги собираете вы.' },
+  },
+  /** The finale (task 38): the early flight, the ramp check, the tiers and the run stats. Drafts, the scriptwriter reads them. */
+  final: {
+    leave: 'Улететь сегодня',
+    askTitle: 'Улететь сегодня?',
+    source: 'Ночью уходит грузовой рейс. Место оплачено — можно на борт.',
+    board: 'Деньги на борту: {n} кр.',
+    rampWarn: 'Розыск {heat} — на трапе патруль, заберёт часть денег.',
+    yes: 'Улететь',
+    no: 'Остаться',
+    rampLog: 'Патруль на трапе: −{n} кр.',
+    tier: {
+      poor: { title: 'Пустые карманы', line: 'На новом месте всё с нуля.' },
+      ok: { title: 'С запасом', line: 'Хватит на первое время и на угол на новом месте.' },
+      rich: { title: 'Новая жизнь', line: 'Хватит на свою лавку — уже без долгов.' },
+    },
+    stats: {
+      debtDay: 'Долг закрыт',
+      leftDay: 'Вылет',
+      earned: 'Заработано',
+      deals: 'Сделок',
+      raids: 'Раскопок',
+      star: 'Лучшая находка',
+      board: 'Деньги на борту',
+      ramp: 'Патруль на трапе',
+    },
+    day: 'день {day}',
+    starItem: '{item} · {n}%',
+    none: '—',
   },
   /** Grobov: his name at the counter and his greetings. */
   landlord: {

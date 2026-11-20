@@ -12,7 +12,7 @@ import {
 } from './data';
 import { customersToday } from './day';
 import { browserStore } from './profile';
-import type { Actor, GameState, Item, ItemKnowledge, ItemType, KeyValueStore, Mode, SavedGame, UiState } from './types';
+import type { Actor, GameState, Item, ItemKnowledge, ItemType, KeyValueStore, Mode, RunStats, SavedGame, UiState } from './types';
 import { gameRng, randomInt } from './rng';
 import type { Rng } from './rng';
 import { say, tx } from './i18n';
@@ -78,6 +78,7 @@ export function createGame(mode: Mode, rng: Rng): GameState {
     shuttleDay: DEBT.shuttleDay,
     ending: null,
     mode,
+    st: freshStats(1),
   };
   // day 1 is the first day of the station week: a quiet start
   game.cn = customersToday(game).count;
@@ -88,6 +89,9 @@ export function createGame(mode: Mode, rng: Rng): GameState {
   }));
   return game;
 }
+
+/** Run stats counted from `day` (task 38): 1 in a new game, the load day for an older save. */
+export const freshStats = (day: number): RunStats => ({ from: day, dc: null, earn: 0, deals: 0, raids: 0, star: null });
 
 /** Starts a new game as the current one: the scene is empty, the counter tab is open. */
 export function newGame(mode: Mode = 'story'): void {
@@ -267,6 +271,9 @@ export function migrate(data: SavedGame | null, rng: Rng = gameRng): GameState |
   // today keeps 6, the station week starts from the next morning.
   data.cn ??= CUSTOMERS_PER_DAY;
   data.late ??= 0;
+  // Before the finale (task 38) nothing was counted: the stats start on the load day,
+  // the final window shows "—" for what it could not count.
+  data.st ??= freshStats(data.day);
   // V2.6: items without `rare` are ordinary (the field is optional, nothing to fill in).
   // Before modes every save was the story; an unknown or locked mode is read as story too.
   if (!(PLAYABLE_MODES as readonly unknown[]).includes(data.mode)) {

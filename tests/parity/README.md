@@ -53,6 +53,13 @@ PARITY_IGNORE='.new-thing' tests/parity/run.sh main http://localhost:4173/dark-c
 PARITY_LOGIC_ONLY=1 RUNS=4 STEPS=150 tests/parity/run.sh
 ```
 
+Если кандидат намеренно добавляет поле сейва (с дефолтом в `migrate()`), уберите его из сравнения
+в обеих версиях — остальной сейв сравнивается как обычно (задача 38, итоги забега `st` и день вылета `lv`):
+
+```bash
+PARITY_SAVE_OMIT=st,lv PARITY_IGNORE='.leave-btn' PARITY_LOGIC_ONLY=1 RUNS=4 STEPS=150 tests/parity/run.sh
+```
+
 Нечётные прогоны идут на экране 390px, чётные — на десктопном окне 1024px. Ширину
 десктопа задаёт `DESKTOP_WIDTH` (профиль шрифтов «десктоп» начинается с 900px):
 

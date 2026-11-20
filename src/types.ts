@@ -217,6 +217,31 @@ export interface GameState {
   ending: Ending | null;
   /** Game mode; also picks the localStorage slot (SAVE_KEYS). Saves before modes are 'story'. */
   mode: Mode;
+  /** Task 38: day of departure ("leave"): the early cargo flight or the shuttle day. Absent while playing and for other endings. */
+  lv?: number;
+  /** Task 38: run stats for the final window ("stats"). Saves before it get them in migrate(), counted from that day. */
+  st: RunStats;
+}
+
+/**
+ * Task 38: what the run counted for the final window. Saves made before it start counting on load
+ * (`from` > 1): the sums are not shown then ("—"), and a debt closed before `from` has no day.
+ */
+export interface RunStats {
+  /** Day the counting started: 1 in a new game, the load day for an older save. */
+  from: number;
+  /** Day the debt first reached 0 ("debt closed"), null until then or if it closed before `from`. */
+  dc: number | null;
+  /** Credits earned by sales: buyers and the wholesaler ("earned"). */
+  earn: number;
+  /** Deals: items bought from sellers, sold to buyers, batches sold to the wholesaler. */
+  deals: number;
+  /** Digs at the junkyard. */
+  raids: number;
+  /** The best rare (★) find: its type and condition; null — none yet. */
+  star: { t: ItemType; c: number } | null;
+  /** Credits the patrol took at the ramp on departure; absent — no check or no toll. */
+  toll?: number;
 }
 
 /** Game modes: story "Начало конца", calm "Без таймера", sandbox "Своя лавка" (locked stub). */
@@ -255,8 +280,10 @@ type DebtFields = 'debt' | 'seat' | 'shuttleDay' | 'ending' | 'mode';
  */
 /** Fields added by task 16 (the day: clock, week, late opening). */
 type DayFields = 'cn' | 'late';
-export type SavedGame = Omit<GameState, RentFields | DebtFields | DayFields | 'junk'>
-  & Partial<Pick<GameState, RentFields | DebtFields | DayFields>>
+/** Fields added by task 38 (the finale): the run stats. */
+type FinaleFields = 'st';
+export type SavedGame = Omit<GameState, RentFields | DebtFields | DayFields | FinaleFields | 'junk'>
+  & Partial<Pick<GameState, RentFields | DebtFields | DayFields | FinaleFields>>
   & { won?: boolean; junk: GameState['junk'] | { piles: JunkPile[] } };
 
 /* ---------- screen state (not saved) ---------- */
