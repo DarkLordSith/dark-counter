@@ -6,7 +6,11 @@
 // =====================================================================
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { FINAL } from '../../src/data';
 import { CHECK_DAY, runSim, STRATEGIES } from './sim';
+
+/** Task 38: the bots that also try the early flight. */
+const FINALE_STRATEGIES = ['owner', 'greedy'];
 import type { SimSummary } from './sim';
 
 function option(name: string, fallback: string): string {
@@ -55,6 +59,25 @@ for (const name of names) {
     'вещей оптовику за игру': show(summary.bulkItems),
   });
   console.table(summary.weeklyCredits.map((credits, i) => ({ неделя: i + 1, 'кр.': show(credits), долг: show(summary.weeklyDebt[i]) })));
+  // task 38: the finale of the games that left — the shuttle on day 60 and, for owner / greedy, the early flight right after the seat
+  const finale: Record<string, SimSummary> = { 'день 60': summary };
+  if (FINALE_STRATEGIES.includes(name)) {
+    finale['сразу после места'] = runSim(seeds, STRATEGIES[name], 'asap');
+    summaries.push({ ...finale['сразу после места'], strategy: `${name}:asap` });
+  }
+  console.log(`-- ${name}: финал (улетевшие)`);
+  console.table(Object.fromEntries(Object.entries(finale).map(([policy, s]) => [policy, {
+    'улетел, %': s.endings.left,
+    'день вылета': show(s.leftDay),
+    'на борту p25': show(s.board.p25),
+    'медиана': show(s.board.median),
+    'p75': show(s.board.p75),
+    [`бедно <${FINAL.tierOk}, %`]: show(s.tiers.poor),
+    'с запасом, %': show(s.tiers.ok),
+    [`новая жизнь ≥${FINAL.tierRich}, %`]: show(s.tiers.rich),
+    'трап, % улетевших': show(s.rampShare),
+    'трап, ср. −кр.': show(s.rampToll),
+  }])));
 }
 
 mkdirSync(dirname(jsonPath), { recursive: true });

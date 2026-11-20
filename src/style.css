@@ -656,6 +656,31 @@ input:focus-visible {
   color: var(--dim);
 }
 
+/* Task 38: the early flight under the evening options, the final window's tier and stats */
+.leave-btn {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.final-tier {
+  margin: 6px 0;
+}
+
+.final-rows {
+  margin-top: 6px;
+}
+
+/* the item's name in mono: in the 16 px pixel font "AR-визор · 82%" does not fit an SE row */
+.final-rows .final-star {
+  font-family: var(--mono);
+  font-size: var(--fs-m);
+  white-space: nowrap;
+}
+
+.final-rows .star {
+  vertical-align: -1px;
+}
+
 /* ==================== Meaning (V1.2): one color = one meaning ====================
    Colors that say something to the player come only from these classes / --m-* tokens
    (MEANING in src/palette.ts). Base colors (--cyan, --red…) are for decoration. */

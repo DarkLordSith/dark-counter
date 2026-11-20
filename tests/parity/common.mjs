@@ -220,10 +220,15 @@ export async function passModeScreen(page) {
  * Save JSON to compare: the story mode is what saves meant before modes,
  * so mode: 'story' is dropped (the reference has no such field).
  */
+// PARITY_SAVE_OMIT=st,lv: top-level save fields new on purpose (added with a default in migrate())
+// are left out of the comparison in both versions; the rest of the save must still match.
+const SAVE_OMIT = (process.env.PARITY_SAVE_OMIT || '').split(',').map(key => key.trim()).filter(Boolean);
+
 export function storySave(raw) {
   if (!raw) return raw;
   const data = JSON.parse(raw);
   if (data.mode === 'story') delete data.mode;
+  SAVE_OMIT.forEach(key => delete data[key]);
   return JSON.stringify(data);
 }
 

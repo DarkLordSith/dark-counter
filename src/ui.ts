@@ -32,6 +32,7 @@ import {
   nextRent, offerToSeller, orderParts, payEarly, payRent, payWithCollateral, perceivedChance, planCollateral, presentItem,
   expenseLines, recipeNeeds, scrapValue, seatPrice, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
   bulkPrice, bulkStock, canSetDiscount, cartItems, cartTotal, fitsCart, sellBatch, setDiscount, toggleCart,
+  canLeaveEarly, finalTier, leaveEarly, rampToll,
 } from './economy';
 import type { CollateralPlan, MorningReport } from './economy';
 import { isPlayable, loadProfile, recordEnding, recordHotspotTap, saveProfile } from './profile';
@@ -361,7 +362,10 @@ function junkyardPane(): string {
 }
 
 function eveningPane(): string {
+  // task 38: the early flight right under the hours, above the options — on an SE it is seen without scrolling
+  const leave = canLeaveEarly(state) ? `<button class="btn leave-btn" data-a="leaveask">${t('final.leave')}</button>` : '';
   return `<div class="hint" style="margin-bottom:8px">${t('evening.closed', { hours: `<b>${state.hours}</b>` })}</div>
+    ${leave}
     <div class="opts">
       ${option('junk', !canGoToJunkyard(state), t('junk.title'), t('junk.about', { hours: junkVisitHours(), dig: JUNK.digHours, size: JUNK.backpackSize }), '→')}
       ${option('market', !canVisitMarket(state), t('evening.market'), t('evening.marketAbout', { hours: MARKET.hours, parts: MARKET.parts, price: MARKET.price }), MARKET.price)}
@@ -858,15 +862,57 @@ function closeModal(): void {
   byId('modal').hidden = true;
 }
 
-/** The final window: the ending's title and line, the totals; after it only a new game. */
+/** "Улететь сегодня?" (task 38): it cannot be undone, so the source line, the money on board and the ramp warning first. */
+function confirmLeave(): void {
+  const toll = rampToll(state);
+  const warn = toll > 0 ? `<p class="m-risk">${t('final.rampWarn', { heat: state.heat })}</p>` : '';
+  openModal(t('final.askTitle'), `<p>${t('final.source')}</p><p>${t('final.board', { n: `<b class="price">${state.credits}</b>` })}</p>${warn}`,
+    `<button class="btn pri" data-a="leave-yes">${t('final.yes')}</button><button class="btn" data-a="close">${t('final.no')}</button>`);
+}
+
+/** The ending's line: the early flight names its day. */
+function endingLine(ending: NonNullable<GameState['ending']>): string {
+  return ending === 'left' && state.lv !== undefined && state.lv < state.shuttleDay
+    ? t('ending.left.lineEarly', { day: state.lv })
+    : t(`ending.${ending}.line`);
+}
+
+/**
+ * The run stats (task 38). An older save counts from `st.from`: its sums and a debt closed before it show "—".
+ * The best ★ find is known only if it was found after `from` — before that "—", not "none".
+ */
+function runStats(ending: NonNullable<GameState['ending']>): string {
+  const stats = state.st;
+  const none = t('final.none');
+  const full = stats.from <= 1;
+  const sum = (n: number): string => full ? String(n) : none;
+  const day = (n: number | null | undefined): string => n == null ? none : t('final.day', { day: n });
+  const star = stats.star
+    ? `<span class="final-star">${starSvg('rare', 2)} ${t('final.starItem', { item: itemName(stats.star.t), n: stats.star.c })}</span>`
+    : none;
+  const rows: [string, string][] = [
+    [t('final.stats.debtDay'), day(stats.dc)],
+    ...(ending === 'left' ? [[t('final.stats.leftDay'), day(state.lv)] as [string, string]] : []),
+    [t('final.stats.earned'), full ? money(stats.earn) : none],
+    [t('final.stats.deals'), sum(stats.deals)],
+    [t('final.stats.raids'), sum(stats.raids)],
+    [t('final.stats.star'), star],
+    ...(stats.toll ? [[t('final.stats.ramp'), `<b class="m-risk">−${money(stats.toll)}</b>`] as [string, string]] : []),
+    ...(ending === 'left' ? [[t('final.stats.board'), `<b>${money(state.credits)}</b>`] as [string, string]] : []),
+  ];
+  return `<div class="rows final-rows">${rows.map(([label, value]) => `<span>${label}</span><span class="price">${value}</span>`).join('')}</div>`;
+}
+
+/** The final window: the ending's title and line, the tier (left), the run stats; then a new game or the modes. */
 export function showEnding(): void {
   if (!state.over) {
     return;
   }
   const ending = state.ending ?? 'evicted';
-  const totals = t('debt.totals', { day: state.day, credits: state.credits, debt: state.debt });
-  openModal(t(`ending.${ending}.title`), `<p>${t(`ending.${ending}.line`)}</p><p class="hint">${totals}</p>`,
-    `<button class="btn pri" data-a="newgame-yes">${t('debt.newGame')}</button>`);
+  const tier = ending === 'left' ? finalTier(state.credits) : null;
+  const tierLine = tier ? `<p class="final-tier"><b>${t(`final.tier.${tier}.title`)}</b> ${t(`final.tier.${tier}.line`)}</p>` : '';
+  openModal(t(`ending.${ending}.title`), `<p>${endingLine(ending)}</p>${tierLine}${runStats(ending)}`,
+    `<button class="btn pri" data-a="newgame-yes">${t('debt.newGame')}</button><button class="btn" data-a="modes">${t('mode.menuModes')}</button>`);
 }
 
 /** "+4" / "−2" with a real minus sign. */
@@ -1292,6 +1338,17 @@ const ACTIONS: Record<string, ActionHandler> = {
     evict(state);
     showEnding();
   },
+  // the finale (task 38): the early flight asks first, then the final window
+  leaveask: () => {
+    confirmLeave();
+    return NO_RENDER;
+  },
+  'leave-yes': () => {
+    closeModal();
+    if (leaveEarly(state)) {
+      showEnding();
+    }
+  },
   // debt window: early payments (no confirmation, the rest is shown at once) and the shuttle seat
   debt: () => openDebt(),
   early: value => {
@@ -1431,6 +1488,8 @@ const ACTIONS: Record<string, ActionHandler> = {
   close: () => {
     if (!byId('modal').hidden) {
       closeModal();
+      // the game is over: closing the modes or the menu goes back to the final window
+      showEnding();
     } else {
       closeWindow('close');
     }

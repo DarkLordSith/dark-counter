@@ -9,7 +9,7 @@
 // =====================================================================
 import {
   ACCEPT, HUNCH_VERDICT, BENCH_COST, COLLATERAL,
-  buyerShare, CRAFT_CONDITION_BONUS, CUSTOMER, DEBT, EXPENSES, DIG_LOOT, DIG_ODDS, EVENING_HOURS, HAGGLE, HUMAN_NAMES,
+  buyerShare, CRAFT_CONDITION_BONUS, CUSTOMER, DEBT, EXPENSES, FINAL, DIG_LOOT, DIG_ODDS, EVENING_HOURS, HAGGLE, HUMAN_NAMES,
   INSPECT, ITEM_TYPES, itemGroup, JUNK, JUNK_WEIGHTS, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
   RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SUPPLIER, VALUE, WHOLESALE, wholesaleChance,
 } from './data';
@@ -257,6 +257,7 @@ export function sellBatch(state: GameState): Item[] {
   const stolen = items.filter(item => item.stolen).length;
   const infected = items.filter(item => item.infected).length;
   state.credits += paid;
+  countSale(state, paid);
   state.inv = state.inv.filter(item => !items.includes(item));
   raiseHeat(state, stolen + 2 * infected);
   addLog(state, tx('bulk.sold', {
@@ -368,7 +369,11 @@ function capPaymentByDebt(state: GameState): void {
 
 /** Pays `amount` off the debt; the floating number and the log line are the caller's. */
 function reduceDebt(state: GameState, amount: number): void {
+  const before = state.debt;
   state.debt = Math.max(0, state.debt - amount);
+  if (before > 0 && state.debt === 0 && state.st.dc === null) {
+    state.st.dc = state.day; // the first time only: the morning bills may put a little back on the debt
+  }
 }
 
 /** Last line of a payment: the debt is gone. */
@@ -544,6 +549,69 @@ export function endGame(state: GameState, ending: Ending): void {
 }
 
 /* =====================================================================
+   The finale (task 38): the early flight, the ramp check, the run stats
+   ===================================================================== */
+
+/** A sale is counted for the final window: credits earned and one deal. */
+function countSale(state: GameState, paid: number): void {
+  state.st.earn += paid;
+  state.st.deals++;
+}
+
+/** A rare find: the best one (by its value at that condition) is remembered for the final window. */
+function noteStar(state: GameState, item: Item): void {
+  const best = state.st.star;
+  if (!best || conditionValue(item.t, item.cond) > conditionValue(best.t, best.c)) {
+    state.st.star = { t: item.t, c: item.cond };
+  }
+}
+
+/**
+ * The early flight (story only): the debt is closed, the seat is bought, an evening at home
+ * before the last shuttle. The cargo flight leaves tonight, the game ends.
+ */
+export const canLeaveEarly = (state: GameState): boolean =>
+  hasShuttle(state) && !state.over && state.debt === 0 && state.seat
+  && state.phase === 'evening' && state.where === 'home' && state.day < state.shuttleDay;
+
+/** What the patrol at the ramp would take now: a share of the credits with the wanted level high; 0 below it or with the check off. */
+export const rampToll = (state: GameState): number =>
+  FINAL.rampCheck && state.heat >= FINAL.rampHeat ? Math.round(state.credits * FINAL.rampToll) : 0;
+
+/** The departure (early or on the shuttle day): the ramp check, the day of departure, the 'left' ending. */
+function depart(state: GameState, early: boolean): void {
+  const toll = rampToll(state);
+  if (toll > 0) {
+    state.credits -= toll;
+    state.st.toll = toll;
+    addLog(state, tx('final.rampLog', { n: toll }));
+  }
+  state.lv = state.day;
+  if (early) {
+    state.ending = 'left';
+    state.over = say('ending.left.lineEarly', { day: state.day });
+    addLog(state, tx('ending.left.lineEarly', { day: state.day }));
+  } else {
+    endGame(state, 'left');
+  }
+}
+
+/** "Улететь": leaves tonight. Returns whether the flight left. */
+export function leaveEarly(state: GameState): boolean {
+  if (!canLeaveEarly(state)) {
+    return false;
+  }
+  depart(state, true);
+  return true;
+}
+
+export type FinalTier = 'poor' | 'ok' | 'rich';
+
+/** How well the player left: by the credits on board (after the ramp). */
+export const finalTier = (credits: number): FinalTier =>
+  credits >= FINAL.tierRich ? 'rich' : credits >= FINAL.tierOk ? 'ok' : 'poor';
+
+/* =====================================================================
    Inspection of a seller's item
    ===================================================================== */
 
@@ -696,6 +764,7 @@ export function buyFromSeller(state: GameState, price?: number): Item | null {
   const paid = price ?? customer.ask;
   const item = customer.item;
   state.credits -= paid;
+  state.st.deals++;
   state.inv.push(item);
   if (item.stolen) {
     raiseHeat(state, 1);
@@ -754,6 +823,7 @@ export function sellToBuyer(state: GameState, price?: number): void {
   const paid = price ?? customer.offer;
   const item = customer.item;
   state.credits += paid;
+  countSale(state, paid);
   state.inv = state.inv.filter(i => i.uid !== item.uid);
   if (item.stolen) {
     raiseHeat(state, 1);
@@ -815,6 +885,7 @@ export function goToJunkyard(state: GameState, rng: Rng): void {
   }
   state.hours -= junkVisitHours();
   state.where = 'junk';
+  state.st.raids++; // a run to the junkyard, not every dig
   state.junk = { d: digsPerVisit(state), n: 0, dp: 0, f: [], s: randomSeed(rng) };
   state.jmsg = say('junk.arrive');
 }
@@ -925,6 +996,7 @@ export function dig(state: GameState, rng: Rng): DigResult | null {
   const items = Array.from({ length: rollFindCount(rng) }, () => rollFind(state, depth, rng));
   const parts = randomInt(rng, DIG_LOOT.partsMin, DIG_LOOT.partsMax);
   state.parts += parts;
+  items.filter(isRareItem).forEach(item => noteStar(state, item));
   const waiting = items.filter(item => !packFind(state, visit, item));
   if (waiting.length) {
     visit.w = waiting;
@@ -1123,9 +1195,16 @@ export function sleepUntilMorning(state: GameState, rng: Rng): MorningReport {
   startNewDay(state, rng);
   if (hasShuttle(state) && state.day >= state.shuttleDay) {
     // the last shuttle leaves this morning: the game ends, no raid and no landlord
-    const ending = state.seat ? 'left' : 'stayed';
-    endGame(state, ending);
-    events.push(tx(`ending.${ending}.line`));
+    if (state.seat) {
+      depart(state, false);
+      if (state.st.toll) {
+        events.push(tx('final.rampLog', { n: state.st.toll }));
+      }
+      events.push(tx('ending.left.line'));
+    } else {
+      endGame(state, 'stayed');
+      events.push(tx('ending.stayed.line'));
+    }
     return { events, expenses: null };
   }
   const daysToShuttle = state.shuttleDay - state.day;

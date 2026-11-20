@@ -216,11 +216,39 @@ export const EN: Dict = {
     newGame: 'New game',
   },
   ending: {
-    left: { title: 'Got Out', line: 'The last shuttle is leaving — and you\'re on it.' },
+    left: { title: 'Got Out', line: 'The last shuttle is leaving — and you\'re on it.', lineEarly: 'The cargo run left in the night. You\'re on board. Day {day}.' }, // draft: lineEarly
     stayed: { title: 'Stayed Behind', line: 'The last shuttle left without you.' },
     evicted: { title: 'Evicted', line: 'Nothing to pay with. Grobov sealed the shop.' },
     betray: { title: 'Turned Grobov In', line: 'The patrol took Grobov away.' },
     takeover: { title: 'Took His Place', line: 'Now you collect the debts.' },
+  },
+  final: {
+    leave: 'Leave tonight', // draft
+    askTitle: 'Leave tonight?', // draft
+    source: 'A cargo run leaves tonight. Your seat is paid — you can board.', // draft
+    board: 'Money on board: {n} cr.', // draft
+    rampWarn: 'Heat {heat}: a patrol at the ramp will take a cut.', // draft
+    yes: 'Leave', // draft
+    no: 'Stay', // draft
+    rampLog: 'Ramp patrol: −{n} cr.', // draft
+    tier: {
+      poor: { title: 'Empty Pockets', line: 'Starting from zero out there.' }, // draft
+      ok: { title: 'Some to Spare', line: 'Enough for the first weeks and a corner somewhere.' }, // draft
+      rich: { title: 'A New Life', line: 'Enough for a shop of your own — debt-free.' }, // draft
+    },
+    stats: {
+      debtDay: 'Debt paid', // draft
+      leftDay: 'Left', // draft
+      earned: 'Earned', // draft
+      deals: 'Deals', // draft
+      raids: 'Junkyard runs', // draft
+      star: 'Best find', // draft
+      board: 'On board', // draft
+      ramp: 'Ramp patrol', // draft
+    },
+    day: 'day {day}', // draft
+    starItem: '{item} · {n}%', // draft
+    none: '—',
   },
   landlord: {
     name: 'Grobov the Moneylender',

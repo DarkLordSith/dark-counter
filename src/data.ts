@@ -128,6 +128,20 @@ export const DEBT = {
   shuttleReminders: [14, 7, 1],
 } as const;
 
+/**
+ * The finale (task 38). Tiers by the credits on board, for the 'left' ending.
+ * Temporary balance 20.11 (the `owner` bot, sim): recount after B1.
+ * The ramp check: with the wanted level at rampHeat or more the patrol takes rampToll of the credits
+ * on board; rampCheck: false turns it off (a candidate, the owner decides on the review).
+ */
+export const FINAL: { tierOk: number; tierRich: number; rampCheck: boolean; rampHeat: number; rampToll: number } = {
+  tierOk: 1000,
+  tierRich: 4000,
+  rampCheck: true,
+  rampHeat: 7,
+  rampToll: 0.25,
+};
+
 // The landlord's visit: deferral and when in the day he comes.
 export const RENT = {
   deferDays: 2,
