@@ -59,6 +59,11 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
     __COMMIT_HASH__: JSON.stringify(commitHash()),
   },
+  build: {
+    // PNG sprites (src/sprites/, task 39) stay files with a hash, not base64 in the JS:
+    // they are precached by the service worker like the icons and swapped one by one.
+    assetsInlineLimit: file => (file.includes('/src/sprites/') ? false : undefined),
+  },
   plugins: [
     paletteCss(),
     VitePWA({
