@@ -10,7 +10,7 @@
 import {
   ACCEPT, HUNCH_VERDICT, BENCH_COST, COLLATERAL,
   buyerShare, CRAFT_CONDITION_BONUS, CUSTOMER, DEBT, EXPENSES, FINAL, DIG_LOOT, DIG_ODDS, EVENING_HOURS, HAGGLE, HUMAN_NAMES,
-  BULK_CATEGORIES, INSPECT, isBulkCategory, ITEM_TYPES, itemCategory, JUNK, JUNK_WEIGHTS, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
+  BULK_CATEGORIES, canBeStolen, canHaveFlaw, checksFor, hidesCondition, INSPECT, isBulkCategory, ITEM_TYPES, itemCategory, JUNK, JUNK_WEIGHTS, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
   RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SUPPLIER, VALUE, WHOLESALE, wholesaleChance,
 } from './data';
 import { itemRef, listLength, nameRef, say, tx } from './i18n';
@@ -624,10 +624,9 @@ export const finalTier = (credits: number): FinalTier =>
    Inspection of a seller's item
    ===================================================================== */
 
-function revealCondition(customer: SellerCustomer, item: Item): void {
-  item.k.cond = true;
-  customer.msg = say('lines.cond', { n: item.cond, note: tx(item.cond < INSPECT.lowCondition ? 'lines.condLow' : 'lines.condGood') });
-}
+/** The condition line of the seller (an implant's diagnostics, task 41: only an implant hides it). */
+const conditionLine = (item: Item): string =>
+  say('lines.cond', { n: item.cond, note: tx(item.cond < INSPECT.lowCondition ? 'lines.condLow' : 'lines.condGood') });
 
 function revealSerial(customer: SellerCustomer, item: Item): void {
   item.k.serial = true;
@@ -640,34 +639,43 @@ function revealSerial(customer: SellerCustomer, item: Item): void {
   }
 }
 
+/**
+ * The AI scanner of electronics or the diagnostics of an implant (task 41): the AI virus or a defect
+ * (for an implant — the rejection), the price goes down; the diagnostics also shows the condition.
+ */
 function revealFlaw(customer: SellerCustomer, item: Item): void {
   item.k.flaw = true;
+  const implant = hidesCondition(item.t);
+  item.k.cond = true;
   if (item.infected) {
     customer.ask = Math.max(customer.min, Math.round(customer.ask * INSPECT.infectedAskMult));
     customer.min = Math.round(customer.min * INSPECT.infectedMinMult);
     customer.msg = say('lines.aiFound');
   } else if (item.defect) {
     customer.ask = Math.max(customer.min, Math.round(customer.ask * INSPECT.defectAskMult));
-    customer.msg = say('lines.defectFound');
+    customer.msg = say(implant ? 'lines.rejectFound' : 'lines.defectFound');
   } else {
-    customer.msg = say('lines.insidesOk');
+    customer.msg = implant ? conditionLine(item) : say('lines.insidesOk');
   }
 }
 
-const REVEALS: Record<InspectCheck, (customer: SellerCustomer, item: Item) => void> = {
-  cond: revealCondition,
+const REVEALS: Record<Exclude<InspectCheck, 'cond'>, (customer: SellerCustomer, item: Item) => void> = {
   serial: revealSerial,
   flaw: revealFlaw,
 };
 
+/** A check value of a button (data-v); 'cond' is no check of its own since task 41 (an implant's diagnostics shows it). */
 export function isInspectCheck(value: string | undefined): value is InspectCheck {
-  return value === 'cond' || value === 'serial' || value === 'flaw';
+  return value === 'serial' || value === 'flaw';
 }
+
+/** The checks of the seller's item at the counter (task 41: by its category; none — haggle at once). */
+export const sellerChecks = (customer: SellerCustomer): readonly InspectCheck[] => checksFor(customer.item.t);
 
 /** Each check costs patience (never the last point). Returns whether the check was made (ui.ts plays the scan). */
 export function inspect(state: GameState, check: InspectCheck): boolean {
   const customer = currentSeller(state);
-  if (!customer || customer.done[check]) {
+  if (!customer || check === 'cond' || customer.done[check] || !sellerChecks(customer).includes(check)) {
     return false;
   }
   customer.done[check] = 1;
@@ -938,7 +946,8 @@ function pickJunkType(rng: Rng): ItemType {
 
 /**
  * One find at this depth: rare (★, good condition, clean) or broken (cheap, low condition).
- * You dug it out yourself and saw it: the condition is known, the serial and the insides are not.
+ * You dug it out yourself and saw it: the condition is known, the serial and the insides are not
+ * (task 41: unless the category has no check for them — then there is nothing hidden).
  */
 function rollFind(state: GameState, depth: number, rng: Rng): Item {
   if (rng() < rareChance(depth)) {
@@ -946,12 +955,18 @@ function rollFind(state: GameState, depth: number, rng: Rng): Item {
     item.k.cond = true;
     return item;
   }
-  const item = createItem(state, pickJunkType(rng), {
+  const type = pickJunkType(rng);
+  // task 41: a filed serial only where the category has the serial check (the rolls stay in order)
+  const item = createItem(state, type, {
     cond: randomInt(rng, DIG_LOOT.brokenCondMin, DIG_LOOT.brokenCondMax),
     defect: rng() < DIG_LOOT.brokenDefect,
-    stolen: rng() < DIG_LOOT.brokenStolen,
+    stolen: rng() < DIG_LOOT.brokenStolen && canBeStolen(type),
   }, rng);
   item.k.cond = true;
+  // a broken find of a category without the scanner or the diagnostics shows its defect at once: nothing hidden
+  if (!canHaveFlaw(type)) {
+    item.k.flaw = true;
+  }
   return item;
 }
 

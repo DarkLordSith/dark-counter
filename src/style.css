@@ -596,7 +596,8 @@ input:focus-visible {
 
 .facts {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* task 41: up to 2 checks a category; the implant's diagnostics (the condition and the result) takes both */
+  grid-template-columns: repeat(2, 1fr);
   gap: 4px;
 }
 
@@ -611,6 +612,10 @@ input:focus-visible {
   font-size: var(--fs-s);
   white-space: nowrap;
   overflow: hidden;
+}
+
+.fact.wide {
+  grid-column: span 2;
 }
 
 .btn.fact {

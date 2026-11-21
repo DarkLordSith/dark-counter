@@ -124,7 +124,7 @@ describe('deal on an iPhone SE (375×667)', () => {
     expect(uiTs).toMatch(/function fact\([\s\S]*?data-a="insp"/);
     expect(uiTs).not.toContain('<div class="tools">');
     expect(rule('.midico')).toContain('height: 32px');
-    expect(rule('.facts')).toContain('grid-template-columns: repeat(3, 1fr)');
+    expect(rule('.facts')).toContain('grid-template-columns: repeat(2, 1fr)'); // task 41: at most 2 checks a category
     expect(rule('.fact')).toContain('min-height: 36px');
   });
 });

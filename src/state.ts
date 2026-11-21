@@ -8,7 +8,7 @@
 //  saves in migrate().
 // =====================================================================
 import {
-  CUSTOMERS_PER_DAY, DEBT, ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, PLAYABLE_MODES, RENT, SAVE_CODE_PREFIX, SAVE_CODE_PREFIX_V2, SAVE_KEYS, SAVE_LOG_LINES, START,
+  canBeStolen, canHaveFlaw, CUSTOMERS_PER_DAY, DEBT, hidesCondition, ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, PLAYABLE_MODES, RENT, SAVE_CODE_PREFIX, SAVE_CODE_PREFIX_V2, SAVE_KEYS, SAVE_LOG_LINES, START,
 } from './data';
 import { customersToday } from './day';
 import { browserStore } from './profile';
@@ -108,6 +108,20 @@ export function fullKnowledge(): ItemKnowledge {
   return { cond: true, serial: true, flaw: true };
 }
 
+/**
+ * What is seen of a new item at once (task 41): the condition (except an implant's) and every
+ * property its category has no check for — there is nothing hidden there.
+ */
+export function initialKnowledge(type: ItemType): ItemKnowledge {
+  return { cond: !hidesCondition(type), serial: !canBeStolen(type), flaw: !canHaveFlaw(type) };
+}
+
+/** Old items (before task 41) learn what their category no longer hides; what is known stays known. */
+function settleKnowledge(item: Item): void {
+  const seen = initialKnowledge(item.t);
+  item.k = { cond: item.k.cond || seen.cond, serial: item.k.serial || seen.serial, flaw: item.k.flaw || seen.flaw };
+}
+
 export interface ItemOverrides {
   cond?: number;
   stolen?: boolean;
@@ -125,10 +139,11 @@ export function createItem(game: GameState, type: ItemType, overrides: ItemOverr
     uid: ++game.uid,
     t: type,
     cond: overrides.cond ?? randomInt(rng, ITEM_ODDS.condMin, ITEM_ODDS.condMax),
-    stolen: overrides.stolen ?? rng() < ITEM_ODDS.stolen,
-    defect: overrides.defect ?? rng() < ITEM_ODDS.defect,
-    infected: overrides.infected ?? (!!ITEM_TYPES[type].aiCapable && rng() < ITEM_ODDS.infected),
-    k: { cond: false, serial: false, flaw: false },
+    // the rolls stay in the same order; a risk the category cannot check is never rolled true (task 41)
+    stolen: overrides.stolen ?? (rng() < ITEM_ODDS.stolen && canBeStolen(type)),
+    defect: overrides.defect ?? (rng() < ITEM_ODDS.defect && canHaveFlaw(type)),
+    infected: overrides.infected ?? (!!ITEM_TYPES[type].aiCapable && rng() < ITEM_ODDS.infected && canHaveFlaw(type)),
+    k: initialKnowledge(type),
   };
   if (overrides.known) {
     item.k = fullKnowledge();
@@ -286,6 +301,13 @@ export function migrate(data: SavedGame | null, rng: Rng = gameRng): GameState |
       data.cust.grp = grp;
     }
   }
+  // Task 41: checks by category. An item whose category has no check for a property shows it (no risk
+  // without a chance to check): old items of such categories learn it; the knowledge flags are the same fields.
+  data.inv?.forEach(settleKnowledge);
+  if (data.cust && 'item' in data.cust && data.cust.item) {
+    settleKnowledge(data.cust.item);
+  }
+  data.junk?.w?.forEach(settleKnowledge);
   // Before modes every save was the story; an unknown or locked mode is read as story too.
   if (!(PLAYABLE_MODES as readonly unknown[]).includes(data.mode)) {
     data.mode = 'story';

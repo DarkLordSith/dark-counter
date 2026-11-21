@@ -16,7 +16,7 @@ import { CUSTOMER_ZONE } from './data';
 import { t } from './i18n';
 import { byId } from './dom';
 import { iconSvg } from './icons';
-import { deskWindowPlacement } from './layout';
+import { DESK_WINDOW_WIDE, deskWindowPlacement } from './layout';
 import type { Box } from './layout';
 
 export type { Box } from './layout';
@@ -39,6 +39,8 @@ export interface WindowSpec {
    * it shows the customer at the counter itself). Without it the sheet stops at the scene.
    */
   cover?: boolean;
+  /** Mac mini window only: the wide one (the stock and its bench, task 41); it still keeps clear of the customer. */
+  wide?: boolean;
   /**
    * false: a window that does not block the game (the Mac layout, V2.4: the stock, the counter, the bench):
    * no backdrop, the scene, the action bar and the HUD keep working under it; ✕ and Esc close it.
@@ -191,7 +193,7 @@ function place(view: WindowView): void {
   const win = byId('win');
   if (view === 'float' && isDesk()) {
     // V2.4: inside the scene, below the sign, above the action bar; at its right or left edge
-    const spot = deskWindowPlacement(byId('stage').getBoundingClientRect(), deskFloor());
+    const spot = deskWindowPlacement(byId('stage').getBoundingClientRect(), deskFloor(), shown?.wide ? DESK_WINDOW_WIDE : undefined);
     win.classList.remove('win-sheet');
     win.classList.add('win-float');
     win.dataset.view = view;

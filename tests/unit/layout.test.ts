@@ -1,7 +1,7 @@
 // Mac layout (V2.4): the scene on the whole browser window at a whole scale, mini windows inside it.
 import { describe, expect, it } from 'vitest';
 import { CUSTOMER_ZONE, HOTSPOTS, SHOP_SIGN } from '../../src/data';
-import { DESK_MARGIN, DESK_QUERY, DESK_WINDOW_WIDTH, deskWindowPlacement, SCENE_H, SCENE_W, stageFit } from '../../src/layout';
+import { DESK_MARGIN, DESK_QUERY, DESK_WINDOW_WIDE, DESK_WINDOW_WIDTH, deskWindowPlacement, SCENE_H, SCENE_W, stageFit } from '../../src/layout';
 import type { Box } from '../../src/layout';
 import { DESKTOP_QUERY } from '../../src/fontlab';
 import uiTs from '../../src/ui.ts?raw';
@@ -71,6 +71,23 @@ describe('the mini window stays inside the scene', () => {
     expect(spot.side).toBe('right');
     expect(intersects(spot, customer)).toBe(false);
     expect(stage.left + stage.width - (spot.left + spot.width)).toBe(DESK_MARGIN);
+  });
+
+  it.each(SIZES.filter(([w, h]) => stageFit({ width: w, height: h }).scale >= 5))('%i×%i: the wide stock window (task 41) is wider, still clear of the customer and the sign', (width, height) => {
+    const stage = stageFit({ width, height });
+    const wide = deskWindowPlacement(stage, stage.top + stage.height - OVERLAY, DESK_WINDOW_WIDE);
+    const customer = onScreen(stage, { x: CUSTOMER_ZONE.left, y: 0, w: CUSTOMER_ZONE.right - CUSTOMER_ZONE.left, h: SCENE_H });
+    expect(wide.width).toBeGreaterThanOrEqual(place(width, height).spot.width);
+    expect(wide.width).toBeLessThanOrEqual(DESK_WINDOW_WIDE);
+    expect(intersects(wide, customer)).toBe(false);
+    expect(intersects(wide, onScreen(stage, SHOP_SIGN))).toBe(false);
+    expect(wide.left + wide.width).toBeLessThanOrEqual(stage.left + stage.width);
+  });
+
+  it('1440×900: the stock window is 520 wide (the 8 chips in 2 rows, screenshot 41-stock-mac)', () => {
+    const stage = stageFit({ width: 1440, height: 900 });
+    expect(deskWindowPlacement(stage, 800, DESK_WINDOW_WIDE).width).toBe(520);
+    expect(uiTs).toMatch(/wide: ui\.tab === 'inv'/);
   });
 
   it('the bug of 17.11 (Safari ~1440): the morning window went past the right edge of the scene to the sign', () => {
