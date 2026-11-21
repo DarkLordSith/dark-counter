@@ -28,25 +28,52 @@ export const SAVE_KEYS = {
 export const PROFILE_KEY = 'dark-counter-profile';
 
 // ---------- goods catalog ----------
-// Names are in the dictionaries (lang/ru.ts → items). basePrice — price at 100% condition,
-// spawnWeight — relative chance to appear, electronic — can catch the AI virus
-// from a neighbour on the shelf, aiCapable — can arrive already infected.
+/**
+ * Item categories (task 40, «Играбельная v1» п.2): a property of the type, not of an item, so it is not
+ * in the save. Names are in the dictionaries (cat.*). The stock filters and the wholesaler use them;
+ * the checks by category come with task 41.
+ */
+export const ITEM_CATEGORIES = ['electronics', 'weapon', 'implant', 'collectible', 'chem', 'household'] as const;
+export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
+
+// Names and descriptions are in the dictionaries (lang/ru.ts → items, itemDesc). basePrice — price at
+// 100% condition, spawnWeight — relative chance to appear with a seller (and in a buyer's wish),
+// cat — the category, electronic — can catch the AI virus from a neighbour on the shelf (not a
+// category: the cyberarm has it too), aiCapable — can arrive already infected.
+// Task 40: 21 types, at least 3 a category; household is the cheapest and the most frequent.
 const CATALOG = {
-  comm: { basePrice: 120, spawnWeight: 3, electronic: true },
-  battery: { basePrice: 90, spawnWeight: 3 },
-  servo: { basePrice: 160, spawnWeight: 3 },
-  cutter: { basePrice: 300, spawnWeight: 2 },
-  visor: { basePrice: 280, spawnWeight: 2, aiCapable: true, electronic: true },
-  drone: { basePrice: 450, spawnWeight: 1, electronic: true },
-  chip: { basePrice: 520, spawnWeight: 1.5, aiCapable: true, electronic: true },
-  arm: { basePrice: 760, spawnWeight: 0.7, aiCapable: true, electronic: true },
+  comm: { basePrice: 120, spawnWeight: 3, cat: 'electronics', electronic: true },
+  battery: { basePrice: 90, spawnWeight: 3, cat: 'household' },
+  servo: { basePrice: 160, spawnWeight: 3, cat: 'electronics' },
+  cutter: { basePrice: 300, spawnWeight: 2, cat: 'weapon' },
+  visor: { basePrice: 280, spawnWeight: 2, cat: 'electronics', aiCapable: true, electronic: true },
+  drone: { basePrice: 450, spawnWeight: 1, cat: 'electronics', electronic: true },
+  chip: { basePrice: 520, spawnWeight: 1.5, cat: 'implant', aiCapable: true, electronic: true },
+  arm: { basePrice: 760, spawnWeight: 0.7, cat: 'implant', aiCapable: true, electronic: true },
+  ration: { basePrice: 30, spawnWeight: 1.5, cat: 'household' },
+  water: { basePrice: 45, spawnWeight: 1.5, cat: 'household' },
+  lamp: { basePrice: 65, spawnWeight: 1.2, cat: 'household' },
+  antirad: { basePrice: 110, spawnWeight: 1.2, cat: 'chem' },
+  medkit: { basePrice: 170, spawnWeight: 1.2, cat: 'chem' },
+  stims: { basePrice: 260, spawnWeight: 0.6, cat: 'chem' },
+  shocker: { basePrice: 190, spawnWeight: 1, cat: 'weapon' },
+  needler: { basePrice: 420, spawnWeight: 0.6, cat: 'weapon' },
+  railgun: { basePrice: 880, spawnWeight: 0.25, cat: 'weapon' },
+  eye: { basePrice: 640, spawnWeight: 0.5, cat: 'implant', aiCapable: true, electronic: true },
+  badge: { basePrice: 150, spawnWeight: 0.8, cat: 'collectible' },
+  model: { basePrice: 280, spawnWeight: 0.6, cat: 'collectible' },
+  coin: { basePrice: 520, spawnWeight: 0.3, cat: 'collectible' },
 } satisfies Record<string, ItemTypeInfo>;
 
 /** Goods catalog; its keys define the ItemType union. */
 export const ITEM_TYPES: Record<keyof typeof CATALOG, ItemTypeInfo> = CATALOG;
 
-// Rare junkyard finds (order matters: it is the random pick table).
-export const RARE_FINDS: ItemType[] = ['chip', 'arm', 'drone', 'visor'];
+/** The category of a type (task 40; was itemGroup tech/gear by the electronic flag). */
+export const itemCategory = (type: ItemType): ItemCategory => ITEM_TYPES[type].cat;
+
+// Rare junkyard finds (order matters: it is the random pick table; new ones go to the end).
+// Task 40: the rare ones of each category; household has none — a staple is never a rarity.
+export const RARE_FINDS: ItemType[] = ['chip', 'arm', 'drone', 'visor', 'railgun', 'coin', 'stims'];
 
 export const RECIPES: Recipe[] = [
   { out: 'visor', need: { comm: 1, battery: 1 }, parts: 2 },
@@ -187,15 +214,15 @@ export function buyerShare(stock: number): number {
 }
 
 /**
- * Item groups a wholesaler asks for (task 36). Until B1 there are two, by the catalog's `electronic`
- * flag; B1 swaps this one function for the item categories. The stock filters use the same groups.
+ * Categories the wholesaler asks for (task 40, PM): only the mass goods. He asks for one of them;
+ * weapons, implants and collectibles are sold one by one.
  */
-export const ITEM_GROUPS = ['tech', 'gear'] as const;
-export type ItemGroup = (typeof ITEM_GROUPS)[number];
-export const itemGroup = (type: ItemType): ItemGroup => (ITEM_TYPES[type].electronic ? 'tech' : 'gear');
+export const BULK_CATEGORIES = ['household', 'electronics', 'chem'] as const satisfies readonly ItemCategory[];
+export type BulkCategory = (typeof BULK_CATEGORIES)[number];
+export const isBulkCategory = (cat: ItemCategory): cat is BulkCategory => (BULK_CATEGORIES as readonly ItemCategory[]).includes(cat);
 
 /**
- * The wholesaler (task 36, a piece of patch B2): takes a batch of one group "as is", at a share of the
+ * The wholesaler (task 36, a piece of patch B2): takes a batch of one category "as is", at a share of the
  * estimate, within a budget. Comes on top of the day's customers (not in `cn`, not instead of a buyer),
  * at most once a day and only to a full stock (PM 19.11, variant C).
  * Временный баланс 19.11, пересчитать после B1.
@@ -210,7 +237,7 @@ export const WHOLESALE = {
   manyChance: 0.9,
   /** Price of an item: this share of its estimate (estimatedValue), no checks (the task: 75%). */
   priceShare: 0.75,
-  /** Budget = budgetItems × the average estimate of the group in stock × priceShare, ± budgetSpread. */
+  /** Budget = budgetItems × the average estimate of his category in stock × priceShare, ± budgetSpread. */
   budgetItems: 3,
   budgetSpread: 0.25,
   /** Items in one batch at most. */
@@ -228,7 +255,8 @@ export function wholesaleChance(stock: number): number {
 }
 
 export const CUSTOMER = {
-  buyerWantsStockedChance: 0.7,
+  /** Task 40: 0.7 → 0.85 — with 21 types instead of 8 a random wish is rarely in stock (the bot: owner 37% → 63% left). */
+  buyerWantsStockedChance: 0.85,
   patienceMin: 4,
   patienceMax: 6,
   feelNoise: 0.12,
@@ -335,7 +363,10 @@ export const DIG_LOOT = {
   rareCondMin: 40,
   rareCondMax: 80,
 };
-/** What the heap gives: weights of the item types for ordinary (broken) finds, cheap goods first. */
+/**
+ * What the heap gives: weights of the item types for ordinary (broken) finds, cheap goods first.
+ * Task 40: the new types share the old total (~15) so a visit is worth about as much as before.
+ */
 export const JUNK_WEIGHTS: Record<ItemType, number> = {
   battery: 5,
   comm: 4,
@@ -345,6 +376,19 @@ export const JUNK_WEIGHTS: Record<ItemType, number> = {
   drone: 0.3,
   chip: 0.3,
   arm: 0.1,
+  ration: 1.2,
+  water: 1,
+  lamp: 0.8,
+  antirad: 0.6,
+  medkit: 0.4,
+  stims: 0.1,
+  shocker: 0.4,
+  needler: 0.15,
+  railgun: 0.03,
+  eye: 0.08,
+  badge: 0.4,
+  model: 0.2,
+  coin: 0.05,
 };
 /** Neon "ЛАВКА 7Б" sign with its dark frame, in scene pixels (160×100). The speech bubble and the queue chip keep clear of it (V1.6). */
 export const SHOP_SIGN = { x: 59, y: 3, w: 42, h: 11 };

@@ -5,7 +5,7 @@
 //  DC1: codes). Short field names are kept on purpose: renaming them
 //  would break old saves. When a field changes, upgrade it in migrate().
 // =====================================================================
-import type { ITEM_TYPES, ItemGroup, MODES } from './data';
+import type { BulkCategory, ITEM_TYPES, ItemCategory, MODES } from './data';
 import type { Lang } from './i18n';
 import type { RU } from './lang/ru';
 
@@ -19,6 +19,8 @@ export interface ItemTypeInfo {
   basePrice: number;
   /** Relative chance to appear. */
   spawnWeight: number;
+  /** Category (task 40): a property of the type, not in the save. */
+  cat: ItemCategory;
   /** Can arrive already infected with the AI virus. */
   aiCapable?: boolean;
   /** Can catch the AI virus from a neighbour on the shelf. */
@@ -111,13 +113,13 @@ export interface RentCustomer extends CustomerBase {
 }
 
 /**
- * The wholesaler (task 36): buys a batch of one group at once, "as is", within a budget; no haggling.
+ * The wholesaler (task 36): buys a batch of one category at once, "as is", within a budget; no haggling.
  * The basket and the discount are in the save, so a reload keeps the batch on the counter.
  */
 export interface WholesaleCustomer extends CustomerBase {
   kind: 'bulk';
-  /** Group of goods asked for ("group"): itemGroup() of data.ts. */
-  grp: ItemGroup;
+  /** Category asked for ("group", task 40: one of BULK_CATEGORIES; saves before it had 'tech' / 'gear', migrate() maps them). */
+  grp: BulkCategory;
   /** Budget for the whole batch, credits ("budget"). */
   bud: number;
   /** Uids of the stocked items put in the basket. */
@@ -290,8 +292,8 @@ export type SavedGame = Omit<GameState, RentFields | DebtFields | DayFields | Fi
 
 export type Tab = 'deal' | 'inv' | 'craft';
 
-/** Stock filter chips (V2.3): everything, by the catalog's `electronic` flag, known stolen. */
-export type StockFilter = 'all' | 'tech' | 'gear' | 'stolen';
+/** Stock filter chips (V2.3; task 40: by category): everything, one category, known stolen. */
+export type StockFilter = 'all' | ItemCategory | 'stolen';
 
 export interface UiState {
   tab: Tab;

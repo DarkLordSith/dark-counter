@@ -121,9 +121,8 @@ describe('what a dig gives (seeded)', () => {
     const { counts, parts, condMin, condMax } = tally(1, digs / 4);
     const share = counts.map(n => n / digs);
     expect(share[0]).toBeCloseTo(DIG_ODDS.empty, 1);
-    expect(share[1]).toBeCloseTo(0.9 * 0.5, 1);
-    expect(share[2]).toBeCloseTo(0.9 * 0.35, 1);
-    expect(share[3]).toBeCloseTo(0.9 * 0.15, 1);
+    // task 40: by DIG_ODDS (empty is 20% since task 36; the old 0.9 passed only by the seed's luck)
+    DIG_ODDS.items.forEach((chance, i) => expect(share[i + 1]).toBeCloseTo((1 - DIG_ODDS.empty) * chance, 1));
     expect(parts / digs).toBeCloseTo((DIG_LOOT.partsMin + DIG_LOOT.partsMax) / 2, 1);
     expect(condMin).toBeGreaterThanOrEqual(5);
     expect(condMax).toBeLessThanOrEqual(30);

@@ -10,7 +10,7 @@
 import {
   ACCEPT, HUNCH_VERDICT, BENCH_COST, COLLATERAL,
   buyerShare, CRAFT_CONDITION_BONUS, CUSTOMER, DEBT, EXPENSES, FINAL, DIG_LOOT, DIG_ODDS, EVENING_HOURS, HAGGLE, HUMAN_NAMES,
-  INSPECT, ITEM_TYPES, itemGroup, JUNK, JUNK_WEIGHTS, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
+  BULK_CATEGORIES, INSPECT, isBulkCategory, ITEM_TYPES, itemCategory, JUNK, JUNK_WEIGHTS, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
   RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SUPPLIER, VALUE, WHOLESALE, wholesaleChance,
 } from './data';
 import { itemRef, listLength, nameRef, say, tx } from './i18n';
@@ -28,6 +28,7 @@ import type {
   BuyerCustomer, Ending, GameState, InspectCheck, Item, ItemType, JunkVisit, PresentedBuyer, Recipe, SellerCustomer,
   WholesaleCustomer,
 } from './types';
+import type { BulkCategory } from './data';
 import { clamp, roundTo10 } from './util';
 
 /**
@@ -153,6 +154,14 @@ function createCustomer(state: GameState, forceSeller: boolean, rng: Rng): void 
    The wholesaler (task 36): a batch of one group, "as is", within a budget
    ===================================================================== */
 
+/** Stocked items of the mass categories (task 40): only these bring the wholesaler and go to him. */
+export const massStock = (state: GameState): Item[] => state.inv.filter(item => isBulkCategory(itemCategory(item.t)));
+
+function bulkCategoryOf(item: Item): BulkCategory {
+  const cat = itemCategory(item.t);
+  return isBulkCategory(cat) ? cat : BULK_CATEGORIES[0];
+}
+
 /** What the wholesaler pays for an item: a share of the estimate, no checks. */
 export const bulkPrice = (item: Item): number => Math.round(estimatedValue(item) * WHOLESALE.priceShare);
 
@@ -161,9 +170,9 @@ function createWholesaler(state: GameState, rng: Rng): void {
   const appearance = appearanceFor(seed);
   const name = pickRandom(rng, appearance.kind === 'human' ? HUMAN_NAMES : ROBOT_NAMES);
   const pat = randomInt(rng, CUSTOMER.patienceMin, CUSTOMER.patienceMax);
-  // the group of a random stocked item: the bigger group comes more often
-  const grp = itemGroup(pickRandom(rng, state.inv).t);
-  const group = state.inv.filter(item => itemGroup(item.t) === grp);
+  // the category of a random stocked mass item: the bigger category comes more often
+  const grp = bulkCategoryOf(pickRandom(rng, massStock(state)));
+  const group = state.inv.filter(item => itemCategory(item.t) === grp);
   const average = group.reduce((sum, item) => sum + estimatedValue(item), 0) / group.length;
   const spread = randomBetween(rng, 1 - WHOLESALE.budgetSpread, 1 + WHOLESALE.budgetSpread);
   const bud = roundTo10(WHOLESALE.budgetItems * average * WHOLESALE.priceShare * spread);
@@ -175,9 +184,9 @@ function currentWholesaler(state: GameState): WholesaleCustomer | null {
   return state.cust?.kind === 'bulk' ? state.cust : null;
 }
 
-/** Stocked items the wholesaler takes: his group, in shelf order. */
+/** Stocked items the wholesaler takes: his category, in shelf order. */
 export const bulkStock = (state: GameState, customer: WholesaleCustomer): Item[] =>
-  state.inv.filter(item => itemGroup(item.t) === customer.grp);
+  state.inv.filter(item => itemCategory(item.t) === customer.grp);
 
 /** Items in the basket that are still in stock (one could be scrapped at the bench meanwhile). */
 export const cartItems = (state: GameState, customer: WholesaleCustomer): Item[] =>
@@ -188,10 +197,10 @@ export function cartTotal(items: readonly Item[], off: number): number {
   return Math.round(items.reduce((sum, item) => sum + bulkPrice(item), 0) * (1 - off / 100));
 }
 
-/** The item can go into the basket: his group, a place in the batch, the budget holds. */
+/** The item can go into the basket: his category, a place in the batch, the budget holds. */
 export function fitsCart(state: GameState, customer: WholesaleCustomer, item: Item): boolean {
   const items = cartItems(state, customer);
-  return itemGroup(item.t) === customer.grp && !customer.cart.includes(item.uid) && items.length < WHOLESALE.maxItems
+  return itemCategory(item.t) === customer.grp && !customer.cart.includes(item.uid) && items.length < WHOLESALE.maxItems
     && cartTotal([...items, item], customer.off) <= customer.bud;
 }
 
@@ -293,7 +302,7 @@ export function callNextCustomer(state: GameState, rng: Rng): boolean {
   // task 36: the wholesaler squeezes in between the customers once his turn comes; not a slot of the day
   if (state.bk !== undefined && state.slot >= state.bk) {
     delete state.bk;
-    if (state.inv.length >= WHOLESALE.minStock) {
+    if (massStock(state).length >= WHOLESALE.minStock) {
       createWholesaler(state, rng);
       return true;
     }
@@ -1097,7 +1106,7 @@ function spreadInfection(state: GameState, events: Tx[], rng: Rng): void {
  */
 function rollWholesaler(state: GameState, rng: Rng): void {
   delete state.bk;
-  const chance = wholesaleChance(state.inv.length);
+  const chance = wholesaleChance(massStock(state).length);
   if (chance > 0 && rng() < chance) {
     state.bk = randomInt(rng, 0, state.cn - 1);
   }

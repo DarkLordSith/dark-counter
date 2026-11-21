@@ -7,7 +7,7 @@ import type { BarContext } from './actionbar';
 import { customersToday, formatHour, openingHour } from './day';
 import { audio, playSfx, setJunkAmbience, startSoundOnGesture, toggleMusic, toggleSfx } from './audio';
 import {
-  BENCH_COST, DEBT, JUNK, HAGGLE, ITEM_TYPES, MARKET, MAX_HEAT, MODES,
+  BENCH_COST, DEBT, JUNK, HAGGLE, itemCategory, ITEM_TYPES, MARKET, MAX_HEAT, MODES,
   PLAYABLE_MODES, RECIPES, RENT, SUPPLIER, WHOLESALE,
 } from './data';
 import { customerNameText, detectLang, getLang, isLang, itemName, LANGS, setLang, t, text as textOf, tx } from './i18n';
@@ -435,7 +435,9 @@ function rentOptions(options: [action: string, title: string, html: string, desc
 
 function customerHeader(customer: SellerCustomer | BuyerCustomer): string {
   // V2.5: patience lives over the customer's head on the scene, not here
-  return `<div class="thead"><div><span class="cname">${customerName(customer)}</span><span class="kind ${customer.kind}">${t(customer.kind === 'sell' ? 'deal.sells' : 'deal.buys')}</span></div></div>`;
+  // task 40: the category of the item on the counter (or wanted) closes the line: the card keeps the whole name
+  const type = customer.kind === 'sell' ? customer.item.t : customer.want;
+  return `<div class="thead"><div class="th-who"><span class="cname">${customerName(customer)}</span><span class="kind ${customer.kind}">${t(customer.kind === 'sell' ? 'deal.sells' : 'deal.buys')}</span>${categoryTag(type)}</div></div>`;
 }
 
 /**
@@ -448,6 +450,9 @@ function fact(customer: SellerCustomer, check: InspectCheck, label: string, titl
   }
   return `<span class="fact">${label} ${result}</span>`;
 }
+
+/** The item's category (task 40): a quiet line of the bench card, the end of the deal's header line. */
+const categoryTag = (type: ItemType): string => `<span class="hint cat">${t(`cat.${itemCategory(type)}`)}</span>`;
 
 function sellerPane(customer: SellerCustomer): string {
   const item = customer.item;
@@ -599,7 +604,8 @@ function benchOfferButton(item: Item): string {
 
 function benchBody(item: Item): string {
   return `${benchCustomer()}
-    <div class="card bench-card">${iconCanvas(item.t, 'bigico', showsInfection(item))}<div class="bench-info"><div class="hint">${t('stock.estimate')} ${approx(estimatedValue(item))} ${t('unit.cr')}</div>${itemTags(item)}</div></div>
+    <div class="card bench-card">${iconCanvas(item.t, 'bigico', showsInfection(item))}<div class="bench-info">${categoryTag(item.t)}<div class="hint">${t('stock.estimate')} ${approx(estimatedValue(item))} ${t('unit.cr')}</div>${itemTags(item)}</div></div>
+    <div class="hint bench-desc">${t(`itemDesc.${item.t}`)}</div>
     ${benchOfferButton(item)}
     <div class="bgrid">${benchButton('diag', !isFullyKnown(item))}${benchButton('repair', item.cond < 100)}
     ${benchButton('fix', item.k.flaw && item.defect)}${benchButton('purge', item.k.flaw && item.infected)}
@@ -746,13 +752,30 @@ export function renderPane(): void {
       showWindow(paneSpec(html));
     }
   } else {
+    const chipsLeft = pane.querySelector('.chips')?.scrollLeft ?? 0;
     pane.innerHTML = html;
     pane.scrollTop = scrollTop;
+    keepChipInView(pane, chipsLeft);
   }
   wantPane = false;
   renderActionBar();
   paintIcons();
   updateChanceMeter();
+}
+
+/**
+ * Task 40: eight filter chips scroll sideways on a phone. A render keeps the row where it was and
+ * brings the chosen chip into view (a tap on "Химия" at the far right must not jump the row back).
+ */
+function keepChipInView(pane: HTMLElement, left: number): void {
+  const row = pane.querySelector<HTMLElement>('.chips');
+  const chip = row?.querySelector<HTMLElement>('.fchip.on');
+  if (!row || !chip) {
+    return;
+  }
+  const start = chip.offsetLeft - row.offsetLeft;
+  const end = start + chip.offsetWidth;
+  row.scrollLeft = Math.min(Math.max(left, end - row.clientWidth), start);
 }
 
 /** What the action bar rules need from the screen: the morning, the Mac layout. */

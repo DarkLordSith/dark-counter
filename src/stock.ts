@@ -4,22 +4,21 @@
 //  bench shows after its item is gone, and whether "Предложить клиенту"
 //  applies. No DOM, no globals: ui.ts passes the game and draws the result.
 // =====================================================================
-import { itemGroup } from './data';
+import { ITEM_CATEGORIES, itemCategory } from './data';
 import type { GameState, Item, StockFilter } from './types';
 
-/** Chips in the order of the row. Categories are the item groups of data.ts (itemGroup, the wholesaler's too). */
-export const STOCK_FILTERS: readonly StockFilter[] = ['all', 'tech', 'gear', 'stolen'];
+/** Chips in the order of the row (task 40): everything, the categories of data.ts, known stolen. */
+export const STOCK_FILTERS: readonly StockFilter[] = ['all', ...ITEM_CATEGORIES, 'stolen'];
 
 export function matchesFilter(item: Item, filter: StockFilter): boolean {
   switch (filter) {
-    case 'tech':
-    case 'gear':
-      return itemGroup(item.t) === filter;
+    case 'all':
+      return true;
     case 'stolen':
       // only what the player knows: an unchecked serial is not "stolen" yet
       return item.k.serial && item.stolen;
     default:
-      return true;
+      return itemCategory(item.t) === filter;
   }
 }
 
