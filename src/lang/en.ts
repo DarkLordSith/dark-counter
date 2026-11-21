@@ -39,6 +39,50 @@ export const EN: Dict = {
     drone: 'Courier drone',
     chip: 'Neurochip',
     arm: 'Cyberarm',
+    ration: 'Ration pack', // draft
+    water: 'Water can', // draft
+    lamp: 'Hand lamp', // draft
+    antirad: 'Anti-rad', // draft
+    medkit: 'Medkit', // draft
+    stims: 'Stims', // draft
+    shocker: 'Stun baton', // draft
+    needler: 'Needler', // draft
+    railgun: 'Rail rifle', // draft
+    eye: 'Cybereye', // draft
+    badge: 'Crew patch', // draft
+    model: 'Shuttle model', // draft
+    coin: 'Earth coin', // draft
+  },
+  itemDesc: {
+    comm: 'Talks across decks, while the relays still hold.', // draft
+    battery: 'Light and heat for the night the grid goes down.', // draft
+    servo: 'Drives airlocks, drones and prosthetics.', // draft
+    cutter: 'Cuts bulkheads. Not only bulkheads.', // draft
+    visor: 'The station map over your eyes, exits marked.', // draft
+    drone: 'Hauls parcels down shafts no one climbs.', // draft
+    chip: 'Faster reflexes. It picks whose.', // draft
+    arm: 'Lifts a crate of rations one-handed.', // draft
+    ration: 'Evacuation food: tastes like cardboard, lasts a day.', // draft
+    water: 'Twenty litres from the Lower Deck filters.', // draft
+    lamp: 'Hand light for the decks without power.', // draft
+    antirad: 'Pills for when the hull gives out.', // draft
+    medkit: 'Bandages, a splint, painkillers. All by the list.', // draft
+    stims: 'Two shifts without sleep. Skip the third.', // draft
+    shocker: 'Drops a drunk docker with one touch.', // draft
+    needler: 'Quiet, flat, no beep at the scanner.', // draft
+    railgun: 'Army issue, from the guards\' store. How is it here?', // draft
+    eye: 'Sees in the dark and through the fire smoke.', // draft
+    badge: 'From the first flight crew. Nobody sews these now.', // draft
+    model: 'An exact copy of that very last shuttle.', // draft
+    coin: 'Metal from Earth. Collectors don\'t pay for the metal.', // draft
+  },
+  cat: {
+    electronics: 'Electronics', // draft
+    weapon: 'Weapons', // draft
+    implant: 'Implants', // draft
+    collectible: 'Collectibles', // draft
+    chem: 'Chem & meds', // draft
+    household: 'Household', // draft
   },
   hud: {
     credits: 'cr',
@@ -393,7 +437,7 @@ export const EN: Dict = {
   window: { close: 'Close window' },
   /** The wholesaler (task 36). */
   bulk: {
-    groups: { tech: 'electronics', gear: 'hardware' }, // draft
+    groups: { electronics: 'electronics', chem: 'chem', household: 'household' }, // draft
     kind: 'bulk', // draft
     head: 'Wholesaler · {group} · budget {n}', // draft
     asIs: 'As is, no checks: {share}% of estimate, max {max} items.', // draft
@@ -408,12 +452,16 @@ export const EN: Dict = {
     enough: "That's it. Can't carry more than {n}.", // draft
     sold: 'Bulk sale: {items} for {n} cr. ({name}).{stolen}{ai}', // draft
     greet: {
-      tech: ['Buying electronics in bulk. As is, no checks.', 'Load me up with electronics. Budget: {n} cr.', 'For parts: any electronics, by the lot.'], // draft
-      gear: ["Buying hardware in bulk. Condition doesn't matter.", 'Buying hardware for scrap. Budget: {n} cr.', "Any hardware you can spare — I'll take the lot."], // draft
+      electronics: ['Buying electronics in bulk. As is, no checks.', 'Load me up with electronics. Budget: {n} cr.', 'For parts: any electronics, by the lot.'], // draft
+      chem: ['The evac aid post buys chem in bulk.', 'Medkits, pills — whatever you have. Budget: {n} cr.', "I'll take chem by the lot, no date checks."], // draft
+      household: ['Buying household in bulk: rations, water, cells.', 'For the shuttle queue, anything household. Budget: {n} cr.', "Anything to live on — I'll take the lot."], // draft
     },
   },
   stock: {
-    filters: { all: 'All', tech: 'Electronics', gear: 'Hardware', stolen: 'Stolen' },
+    filters: {
+      all: 'All', electronics: 'Electronics', weapon: 'Weapons', implant: 'Implants', collectible: 'Collectibles', chem: 'Chem', household: 'Household', // draft
+      stolen: 'Stolen',
+    },
     filtersLabel: 'Stock filter',
     empty: 'The stock is empty. Buy from customers or dig at the junkyard.',
     emptyFilter: 'Nothing fits this filter.',

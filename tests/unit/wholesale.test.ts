@@ -1,7 +1,7 @@
 // Task 36: the wholesaler — comes to a full stock, takes a batch of one group "as is" within a budget.
 import { describe, expect, it } from 'vitest';
 import { mainAction } from '../../src/actionbar';
-import { itemGroup, MAX_HEAT, WHOLESALE, wholesaleChance } from '../../src/data';
+import { BULK_CATEGORIES, ITEM_CATEGORIES, itemCategory, ITEM_TYPES, MAX_HEAT, WHOLESALE, wholesaleChance } from '../../src/data';
 import { clockOf } from '../../src/day';
 import {
   bulkPrice, bulkStock, callNextCustomer, canSellBatch, cartItems, cartTotal, customerLeaves, estimatedValue, sellBatch, setDiscount,
@@ -19,7 +19,7 @@ const idle = { phase: 'idle' } as const;
 /** A game with `stock` items on the shelf and a wholesaler of `grp` at the counter. */
 function withWholesaler(items: Item[], overrides: Partial<WholesaleCustomer> = {}): { game: GameState; customer: WholesaleCustomer } {
   const customer: WholesaleCustomer = {
-    name: 'Тест', seed: 1, pat: 5, max: 5, done: {}, msg: '', kind: 'bulk', grp: 'gear', bud: 1000, cart: [], off: 0, ...overrides,
+    name: 'Тест', seed: 1, pat: 5, max: 5, done: {}, msg: '', kind: 'bulk', grp: 'household', bud: 1000, cart: [], off: 0, ...overrides,
   };
   const game = makeState({ inv: items, cust: customer, llDone: true });
   return { game, customer };
@@ -113,7 +113,7 @@ describe('when the wholesaler comes (PM 19.11, variant C: on top of the queue, a
       if (customer?.kind !== 'bulk') {
         throw new Error('the wholesaler should come at his turn');
       }
-      const group = game.inv.filter(item => itemGroup(item.t) === customer.grp);
+      const group = game.inv.filter(item => itemCategory(item.t) === customer.grp);
       const average = group.reduce((sum, item) => sum + estimatedValue(item), 0) / group.length;
       const base = WHOLESALE.budgetItems * average * WHOLESALE.priceShare;
       expect(customer.bud).toBeGreaterThanOrEqual(Math.floor(base * 0.75 / 10) * 10);
@@ -124,12 +124,37 @@ describe('when the wholesaler comes (PM 19.11, variant C: on top of the queue, a
     }
   });
 
-  it('groups: electronics and hardware by the catalog flag, the same as the stock filters', () => {
-    const types: ItemType[] = ['comm', 'battery', 'servo', 'cutter', 'visor', 'drone', 'chip', 'arm'];
-    expect(types.filter(type => itemGroup(type) === 'tech')).toEqual(['comm', 'visor', 'drone', 'chip', 'arm']);
-    for (const type of types) {
-      expect(matchesFilter(makeItem(type), itemGroup(type))).toBe(true);
+  it('task 40: asks for one mass category only (household, electronics, chem), the same as the stock filter', () => {
+    expect(BULK_CATEGORIES).toEqual(['household', 'electronics', 'chem']);
+    for (const type of Object.keys(ITEM_TYPES) as ItemType[]) {
+      expect(matchesFilter(makeItem(type), itemCategory(type))).toBe(true);
     }
+    const rng = mulberry32(9);
+    const asked = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      const inv = [...batteries(5), makeItem('comm'), makeItem('medkit'), makeItem('railgun'), makeItem('arm'), makeItem('coin')];
+      const game = makeState({ day: 3, slot: 0, cn: 6, llDone: true, inv, bk: 0 });
+      callNextCustomer(game, rng);
+      if (game.cust?.kind !== 'bulk') {
+        throw new Error('the wholesaler should come at his turn');
+      }
+      asked.add(game.cust.grp);
+    }
+    expect([...asked].sort()).toEqual(['chem', 'electronics', 'household']);
+    expect(ITEM_CATEGORIES.filter(cat => !(BULK_CATEGORIES as readonly string[]).includes(cat))).toEqual(['weapon', 'implant', 'collectible']);
+  });
+
+  it('task 40: only the mass goods bring him — a shelf of weapons and implants does not', () => {
+    const heavy = (): Item[] => [...Array.from({ length: 6 }, () => makeItem('railgun')), ...Array.from({ length: 6 }, () => makeItem('arm'))];
+    const rng = mulberry32(4);
+    for (let i = 0; i < 200; i++) {
+      const game = makeState({ day: 3, phase: 'evening', llDone: true, inv: heavy() });
+      sleepUntilMorning(game, rng);
+      expect(game.bk).toBeUndefined();
+    }
+    const game = makeState({ llDone: true, inv: heavy(), bk: 0 });
+    callNextCustomer(game, mulberry32(1));
+    expect(game.cust?.kind).not.toBe('bulk');
   });
 });
 
@@ -261,7 +286,8 @@ describe('the screen', () => {
 describe('the balance bot with the wholesaler (short run; the criteria are for 1000 seeds, see the report)', () => {
   it('owner: the stock does not pile up, junkyard finds sell within a week', () => {
     const owner = runSim(150, STRATEGIES.owner);
-    expect(owner.morningStock!).toBeLessThanOrEqual(11);
+    // task 40: weapons, implants and collectibles do not go to the wholesaler, the shelf keeps ~2 more (1000 seeds: 11.7)
+    expect(owner.morningStock!).toBeLessThanOrEqual(13);
     expect(owner.junkSoldInWeek!).toBeGreaterThanOrEqual(70);
     expect(owner.endings.left).toBeGreaterThanOrEqual(50);
     expect(owner.bulkItems!).toBeGreaterThan(0);

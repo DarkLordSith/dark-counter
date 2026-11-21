@@ -131,9 +131,9 @@ describe('the run stats', () => {
     game.inv.push(sold);
     game.cust = makePresentedBuyer({ item: sold, offer: 120 });
     sellToBuyer(game);
-    const batch = [makeItem('cutter'), makeItem('cutter')];
+    const batch = [makeItem('ration'), makeItem('water')];
     game.inv.push(...batch);
-    game.cust = { name: 'Тест', seed: 1, pat: 5, max: 5, done: {}, msg: '', kind: 'bulk', grp: 'gear', bud: 5000, cart: [], off: 0 };
+    game.cust = { name: 'Тест', seed: 1, pat: 5, max: 5, done: {}, msg: '', kind: 'bulk', grp: 'household', bud: 5000, cart: [], off: 0 };
     batch.forEach(item => toggleCart(game, item.uid));
     const before = game.credits;
     sellBatch(game);

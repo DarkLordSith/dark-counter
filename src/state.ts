@@ -12,6 +12,7 @@ import {
 } from './data';
 import { customersToday } from './day';
 import { browserStore } from './profile';
+import type { BulkCategory } from './data';
 import type { Actor, GameState, Item, ItemKnowledge, ItemType, KeyValueStore, Mode, RunStats, SavedGame, UiState } from './types';
 import { gameRng, randomInt } from './rng';
 import type { Rng } from './rng';
@@ -275,6 +276,16 @@ export function migrate(data: SavedGame | null, rng: Rng = gameRng): GameState |
   // the final window shows "—" for what it could not count.
   data.st ??= freshStats(data.day);
   // V2.6: items without `rare` are ordinary (the field is optional, nothing to fill in).
+  // Task 40: item categories are of the type, not in the save. Only a wholesaler at the counter kept a group:
+  // 'tech' → electronics, 'gear' → household (the mass categories he buys), and his greeting with it.
+  if (data.cust?.kind === 'bulk') {
+    const legacy: Record<string, BulkCategory> = { tech: 'electronics', gear: 'household' };
+    const grp = legacy[data.cust.grp as string];
+    if (grp) {
+      data.cust.msg = data.cust.msg.replace(`bulk.greet.${data.cust.grp as string}.`, `bulk.greet.${grp}.`);
+      data.cust.grp = grp;
+    }
+  }
   // Before modes every save was the story; an unknown or locked mode is read as story too.
   if (!(PLAYABLE_MODES as readonly unknown[]).includes(data.mode)) {
     data.mode = 'story';

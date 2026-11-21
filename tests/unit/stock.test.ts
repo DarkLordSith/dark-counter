@@ -1,7 +1,7 @@
 // Stock and the workbench window (V2.3): filter chips, paging ‹ ›, the next item after one is gone,
 // "Предложить клиенту" only for a buyer who wants this item, the strings.
 import { describe, expect, it } from 'vitest';
-import { ITEM_TYPES } from '../../src/data';
+import { ITEM_CATEGORIES, ITEM_TYPES } from '../../src/data';
 
 import { benchNav, benchOffer, benchOrder, filterStock, matchesFilter, STOCK_FILTERS, successor } from '../../src/stock';
 import { useWorkbench } from '../../src/economy';
@@ -18,25 +18,26 @@ const uids = (items: { uid: number }[]): number[] => items.map(item => item.uid)
 
 function shelf() {
   return [
-    makeItem('comm'), // tech
-    makeItem('battery', { stolen: true }), // gear, stolen (known)
-    makeItem('visor', { stolen: true, k: { cond: false, serial: false, flaw: false } }), // tech, stolen but unchecked
-    makeItem('servo'), // gear
-    makeItem('chip', { stolen: true }), // tech, stolen
+    makeItem('comm'), // electronics
+    makeItem('battery', { stolen: true }), // household, stolen (known)
+    makeItem('visor', { stolen: true, k: { cond: false, serial: false, flaw: false } }), // electronics, stolen but unchecked
+    makeItem('servo'), // electronics
+    makeItem('chip', { stolen: true }), // implant, stolen
   ];
 }
 
 describe('filter chips', () => {
-  it('all, electronics, hardware (by the catalog flag), stolen', () => {
-    expect(STOCK_FILTERS).toEqual(['all', 'tech', 'gear', 'stolen']);
+  it('task 40: all, the six categories, stolen', () => {
+    expect(STOCK_FILTERS).toEqual(['all', 'electronics', 'weapon', 'implant', 'collectible', 'chem', 'household', 'stolen']);
     const inv = shelf();
     expect(uids(filterStock(inv, 'all'))).toEqual(uids(inv));
-    expect(filterStock(inv, 'tech').map(item => item.t)).toEqual(['comm', 'visor', 'chip']);
-    expect(filterStock(inv, 'gear').map(item => item.t)).toEqual(['battery', 'servo']);
+    expect(filterStock(inv, 'electronics').map(item => item.t)).toEqual(['comm', 'visor', 'servo']);
+    expect(filterStock(inv, 'household').map(item => item.t)).toEqual(['battery']);
+    expect(filterStock(inv, 'implant').map(item => item.t)).toEqual(['chip']);
     // every type is in exactly one category
     for (const type of Object.keys(ITEM_TYPES) as (keyof typeof ITEM_TYPES)[]) {
       const item = makeItem(type);
-      expect(Number(matchesFilter(item, 'tech')) + Number(matchesFilter(item, 'gear'))).toBe(1);
+      expect(ITEM_CATEGORIES.filter(cat => matchesFilter(item, cat))).toEqual([ITEM_TYPES[type].cat]);
     }
   });
 
@@ -67,10 +68,10 @@ describe('paging ‹ ›', () => {
 
   it('pages within the filter', () => {
     const inv = shelf();
-    const [comm, , visor, , chip] = inv;
-    const order = benchOrder(inv, 'tech', visor.uid);
-    expect(order).toEqual([comm.uid, visor.uid, chip.uid]);
-    expect(benchNav(order, visor.uid)).toMatchObject({ prev: comm.uid, next: chip.uid });
+    const [comm, , visor, servo] = inv;
+    const order = benchOrder(inv, 'electronics', visor.uid);
+    expect(order).toEqual([comm.uid, visor.uid, servo.uid]);
+    expect(benchNav(order, visor.uid)).toMatchObject({ prev: comm.uid, next: servo.uid });
   });
 
   it('the item on the bench keeps its place when it drops out of the filter', () => {

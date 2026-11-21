@@ -1317,6 +1317,11 @@ input:focus-visible {
   font-size: var(--fs-px-s);
 }
 
+/* Mac (task 40): a mouse does not scroll sideways, the eight chips wrap to a second row. */
+html.desk .chips {
+  flex-wrap: wrap;
+}
+
 @container pane (max-width: 360px) {
   .fchip {
     padding: 0 7px;
@@ -1408,6 +1413,39 @@ input:focus-visible {
 
 .bench-info {
   min-width: 0;
+}
+
+/* The item's category (task 40): a quiet small line of the bench card; in the deal — the end of the header line. */
+.cat {
+  display: block;
+  font-size: var(--fs-s);
+}
+
+.th-who {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.th-who .cname {
+  flex: none;
+}
+
+.th-who .cat {
+  min-width: 0;
+  margin-left: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.th-who .cat::before {
+  content: "· ";
+}
+
+.bench-desc {
+  margin: 4px 0;
+  font-size: var(--fs-s);
 }
 
 .bench-offer {

@@ -196,6 +196,8 @@ describe('(б, в) the dictionaries match', () => {
     expect(leaves(EN).filter(leaf => CYRILLIC.test(String(leaf.value))).map(leaf => leaf.path)).toEqual([]);
     expect(Object.keys(RU.items)).toEqual(Object.keys(ITEM_TYPES));
     expect(Object.keys(EN.items)).toEqual(Object.keys(ITEM_TYPES));
+    expect(Object.keys(RU.itemDesc)).toEqual(Object.keys(ITEM_TYPES));
+    expect(Object.keys(EN.itemDesc)).toEqual(Object.keys(ITEM_TYPES));
   });
 
   it('plural forms: three in both, picked by the language rule', () => {
@@ -424,7 +426,9 @@ describe('EN v1', () => {
       'about', 'arrive', 'found', 'rareWith', 'andParts', 'full', 'packFull', 'waits', 'openPack', 'leave', 'throwAway', 'keep', 'slotEmpty', 'legend',
       // the finale (task 38)
       'left', 'askTitle', 'source', 'board', 'rampWarn', 'yes', 'no', 'rampLog', 'poor', 'ok', 'rich',
-      'debtDay', 'leftDay', 'earned', 'deals', 'raids', 'star', 'ramp', 'day', 'starItem'];
+      'debtDay', 'leftDay', 'earned', 'deals', 'raids', 'star', 'ramp', 'day', 'starItem',
+      // goods and categories (task 40): the new item names, all the descriptions, the category names, the filter chips
+      ...Object.keys(EN.itemDesc), ...Object.keys(EN.cat), 'all'];
     const drafts = enSource.split('\n').filter(line => /\/\/ draft/.test(line) && !line.trim().startsWith('//'));
     expect(drafts.map(line => line.trim().split(':')[0]).filter(key => !NEWER.includes(key))).toEqual([]);
   });

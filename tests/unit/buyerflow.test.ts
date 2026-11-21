@@ -36,8 +36,8 @@ describe('buyerShare', () => {
     }
   });
 
-  it('leaves the buyers\' wish for stocked goods as it was', () => {
-    expect(CUSTOMER.buyerWantsStockedChance).toBe(0.7);
+  it('the buyers\' wish for stocked goods: 0.7, raised to 0.85 with the 21 goods of task 40', () => {
+    expect(CUSTOMER.buyerWantsStockedChance).toBe(0.85);
   });
 });
 

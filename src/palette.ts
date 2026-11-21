@@ -281,6 +281,14 @@ export const ITEM_COLORS = {
   cutterLedOff: withAlpha(BASE.risk, 0.6),
   chipBoard: withAlpha(BASE.ok, 0.5),
   chipDie: BASE.ink,
+  /** Task 40: labels, bandages, pill bottles. */
+  paper: BASE.fg,
+  /** Ration crates. */
+  crate: BASE.rust,
+  /** Crew patch cloth. */
+  cloth: BASE.rustDark,
+  /** Gold of coins and badges. */
+  gold: BASE.lamp,
 };
 
 /* =====================================================================
