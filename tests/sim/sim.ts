@@ -7,7 +7,7 @@
 import { DEBT, ITEM_TYPES, MARKET, RECIPES, START, VALUE } from '../../src/data';
 import {
   askBuyer, buySeat, callNextCustomer, canBuySeat, canCraft, canGoToJunkyard, craft, canVisitMarket, closeShop, customerLeaves, deferRent, dig,
-  digIsLate, estimatedValue, evict, feedback, goHome, goToJunkyard, inspect, isPresentedBuyer, offerToSeller, payEarly, payRent,
+  digIsLate, estimatedValue, evict, feedback, goHome, goToJunkyard, inspect, isPresentedBuyer, offerToSeller, sellerChecks, payEarly, payRent,
   leaveWaiting, payWithCollateral, perceivedChance, planCollateral, presentItem, sleepUntilMorning, throwAway, useWorkbench, visitMarket, waitingFinds,
   bulkPrice, bulkStock, canSellBatch, sellBatch, setDiscount, toggleCart, canLeaveEarly, finalTier, leaveEarly,
 } from '../../src/economy';
@@ -15,7 +15,7 @@ import type { FinalTier } from '../../src/economy';
 import { mulberry32 } from '../../src/rng';
 import type { Rng } from '../../src/rng';
 import { createGame } from '../../src/state';
-import type { BuyerCustomer, Ending, GameState, InspectCheck, Item, SellerCustomer, WholesaleCustomer } from '../../src/types';
+import type { BuyerCustomer, Ending, GameState, Item, SellerCustomer, WholesaleCustomer } from '../../src/types';
 
 /** How a bot plays. */
 export interface Strategy {
@@ -117,14 +117,14 @@ const PRICE_STEP = 5;
 /** What an item is really worth (its true condition, defect and AI), as the rules value it: the junkyard metric. */
 const realValue = (item: Item): number => ITEM_TYPES[item.t].basePrice * (VALUE.conditionFloor + VALUE.conditionSpan * item.cond / 100)
   * (item.defect ? VALUE.defectMult : 1) * (item.infected ? VALUE.infectedMult : 1);
-const CHECKS: InspectCheck[] = ['cond', 'serial', 'flaw'];
 
 /** The bot never lets the counter run forever: a visitor gets this many tries. */
 const MAX_TRIES = 12;
 
 function handleSeller(state: GameState, customer: SellerCustomer, strategy: Strategy, rng: Rng, tally: Tally): void {
   if (strategy.inspects) {
-    CHECKS.forEach(check => inspect(state, check));
+    // task 41: the checks of the item's category, as at the counter (none for chem and household)
+    sellerChecks(customer).forEach(check => inspect(state, check));
   }
   const item = customer.item;
   const estimate = estimatedValue(item);

@@ -4,7 +4,7 @@
 //  scene.ts → ITEM_SPRITES if you want an icon).
 // =====================================================================
 import { RU } from './lang/ru';
-import type { Hotspot, ItemType, ItemTypeInfo, Recipe } from './types';
+import type { Hotspot, InspectCheck, ItemType, ItemTypeInfo, Recipe } from './types';
 
 // ---------- persistence ----------
 /** Save slot of the "Начало конца" mode; old saves live here, so the key never changes. */
@@ -30,8 +30,8 @@ export const PROFILE_KEY = 'dark-counter-profile';
 // ---------- goods catalog ----------
 /**
  * Item categories (task 40, «Играбельная v1» п.2): a property of the type, not of an item, so it is not
- * in the save. Names are in the dictionaries (cat.*). The stock filters and the wholesaler use them;
- * the checks by category come with task 41.
+ * in the save. Names are in the dictionaries (cat.*). The stock filters, the wholesaler and the checks
+ * at the counter (task 41, CATEGORY_CHECKS) use them.
  */
 export const ITEM_CATEGORIES = ['electronics', 'weapon', 'implant', 'collectible', 'chem', 'household'] as const;
 export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
@@ -70,6 +70,34 @@ export const ITEM_TYPES: Record<keyof typeof CATALOG, ItemTypeInfo> = CATALOG;
 
 /** The category of a type (task 40; was itemGroup tech/gear by the electronic flag). */
 export const itemCategory = (type: ItemType): ItemCategory => ITEM_TYPES[type].cat;
+
+/**
+ * Checks at the counter by category (task 41, А2 of 19.11: "check where the risk is"), at most 2.
+ * The keys are the save's knowledge flags (item.k, customer.done): `serial` — the serial number
+ * (stolen or clean); `flaw` — the AI scanner of electronics (AI virus, defect) or the diagnostics of
+ * implants (defect, AI and the condition, which only an implant hides). No checks: haggle at once.
+ */
+export const CATEGORY_CHECKS: Record<ItemCategory, readonly InspectCheck[]> = {
+  electronics: ['flaw', 'serial'],
+  weapon: ['serial'],
+  implant: ['flaw'],
+  collectible: ['serial'],
+  chem: [],
+  household: [],
+};
+
+/** The checks of a type at the counter, in the order of the cells. */
+export const checksFor = (type: ItemType): readonly InspectCheck[] => CATEGORY_CHECKS[itemCategory(type)];
+
+/** Only an implant hides its condition until the diagnostics; everything else shows it at once. */
+export const hidesCondition = (type: ItemType): boolean => itemCategory(type) === 'implant';
+
+/**
+ * A hidden risk exists only where a check of the category can catch it (no risk without a chance
+ * to check): stolen — with the serial check, a defect and the AI virus — with the scanner or diagnostics.
+ */
+export const canBeStolen = (type: ItemType): boolean => checksFor(type).includes('serial');
+export const canHaveFlaw = (type: ItemType): boolean => checksFor(type).includes('flaw');
 
 // Rare junkyard finds (order matters: it is the random pick table; new ones go to the end).
 // Task 40: the rare ones of each category; household has none — a staple is never a rarity.
@@ -196,7 +224,12 @@ export const VALUE = {
   buyerDefectMult: 0.7,
 };
 
-export const ITEM_ODDS = { condMin: 15, condMax: 98, stolen: 0.25, defect: 0.25, infected: 0.35 };
+/**
+ * Task 41: stolen and defect 0.25 → 0.4. They are rolled only where a check of the category catches them
+ * (about half the goods at the counter), so the share of risky items stays near the old one
+ * (stolen ~21% instead of 25%, defect ~17% instead of 25%). Bot, 1000 seeds: owner 73.8%, greedy 25.8%.
+ */
+export const ITEM_ODDS = { condMin: 15, condMax: 98, stolen: 0.4, defect: 0.4, infected: 0.35 };
 
 // ---------- customers & haggling ----------
 /**

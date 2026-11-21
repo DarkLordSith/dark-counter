@@ -39,6 +39,8 @@ export function stageFit(viewport: { width: number; height: number }): Box & { s
 /** Mini window width on the Mac scene, and the narrowest one worth putting at a side of the customer. */
 export const DESK_WINDOW_WIDTH = 360;
 export const DESK_WINDOW_MIN = 260;
+/** The stock and its bench (task 41): wider, so the 8 filter chips take 1–2 rows, not 3; still clear of the customer. */
+export const DESK_WINDOW_WIDE = 520;
 export const DESK_MARGIN = 12;
 /** The wanted-level meter on the left wall (scene x 0–5): a window on the left stays right of it. */
 const WANTED_RIGHT = 6;

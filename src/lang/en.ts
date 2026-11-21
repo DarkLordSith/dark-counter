@@ -139,16 +139,19 @@ export const EN: Dict = {
     offended: 'offended',
     sells: 'selling',
     buys: 'buying',
-    cond: 'Cond.',
-    condTitle: 'Scanner: condition',
     serial: 'S/N',
     serialTitle: 'Serial: stolen or clean',
-    insides: 'Insides',
-    insidesTitle: 'Diagnostics: defect, AI',
+    scan: 'Scan', // draft
+    scanTitle: 'AI scanner: AI virus, defect', // draft
+    diag: 'Diag.', // draft
+    diagTitle: 'Diagnostics: condition, rejection, AI', // draft
+    noChecks: 'Nothing to check on this one.', // draft
     filed: 'filed', // short: "S/N filed off" did not fit the fact button on an iPhone SE (task 37)
     clean: 'clean',
     ai: 'AI',
     defect: 'defect',
+    reject: 'faulty', // draft
+    scanClean: 'clean', // draft
     ok: 'ok',
     asks: 'Asks {ask} cr. · est. {estimate}',
     for: 'For {n}',
@@ -318,6 +321,7 @@ export const EN: Dict = {
     serialClean: 'The serial is clean, see for yourself.',
     aiFound: 'What AI? I had no idea! Take it cheaper, then.',
     defectFound: 'Yeah, the contact\'s loose. I\'ll knock some off.',
+    rejectFound: 'Rejection? Happens, it\'ll settle in. I\'ll knock some off.', // draft
     insidesOk: 'Insides are fine. Told you.',
     worn: 'It\'s seen better days. ',
     offer: '{worn}I\'ll give you {n} cr.',

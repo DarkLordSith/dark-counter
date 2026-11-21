@@ -7,7 +7,7 @@ import type { BarContext } from './actionbar';
 import { customersToday, formatHour, openingHour } from './day';
 import { audio, playSfx, setJunkAmbience, startSoundOnGesture, toggleMusic, toggleSfx } from './audio';
 import {
-  BENCH_COST, DEBT, JUNK, HAGGLE, itemCategory, ITEM_TYPES, MARKET, MAX_HEAT, MODES,
+  BENCH_COST, canBeStolen, canHaveFlaw, DEBT, hidesCondition, JUNK, HAGGLE, itemCategory, ITEM_TYPES, MARKET, MAX_HEAT, MODES,
   PLAYABLE_MODES, RECIPES, RENT, SUPPLIER, WHOLESALE,
 } from './data';
 import { customerNameText, detectLang, getLang, isLang, itemName, LANGS, setLang, t, text as textOf, tx } from './i18n';
@@ -28,7 +28,7 @@ import type { WindowSpec } from './window';
 import {
   askBuyer, availableOfType, buyFromSeller, buySeat, callNextCustomer, canBuySeat, canCraft, hasShuttle, isDebtClosed, canVisitMarket, closeShop,
   collateralHeatRelief, craft, customerLeaves, deferredDebt, deferRent, dig, estimatedValue, evict, feedback,
-  canGoToJunkyard, digIsLate, goHome, goToJunkyard, hunchVerdict, junkVisitHours, leaveWaiting, throwAway, waitingFinds, inspect, isFullyKnown, isInspectCheck, isLandlordDue, isOnCounter, isPresentedBuyer,
+  canGoToJunkyard, digIsLate, goHome, goToJunkyard, hunchVerdict, junkVisitHours, leaveWaiting, throwAway, waitingFinds, inspect, isFullyKnown, isInspectCheck, sellerChecks, isLandlordDue, isOnCounter, isPresentedBuyer,
   nextRent, offerToSeller, orderParts, payEarly, payRent, payWithCollateral, perceivedChance, planCollateral, presentItem,
   expenseLines, recipeNeeds, scrapValue, seatPrice, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
   bulkPrice, bulkStock, canSetDiscount, cartItems, cartTotal, fitsCart, sellBatch, setDiscount, toggleCart,
@@ -73,29 +73,35 @@ function iconCanvas(type: ItemType, cssClass = '', infected = false): string {
   return `<canvas class="${cssClass}" width="28" height="16" data-ico="${type}" data-inf="${infected ? 1 : 0}"></canvas>`;
 }
 
+const serialTag = (item: Item): string => !item.k.serial ? `<span class="tag m-unknown">${t('tags.serialUnknown')}</span>`
+  : item.stolen ? `<span class="tag m-risk">${t('tags.stolen')}</span>` : `<span class="tag m-action">${t('tags.clean')}</span>`;
+
+function flawTags(item: Item): string[] {
+  if (!item.k.flaw) {
+    return [`<span class="tag m-unknown">${t('tags.insidesUnknown')}</span>`];
+  }
+  const tags: string[] = [];
+  if (item.defect) {
+    tags.push(`<span class="tag m-wear">${t('tags.defect')}</span>`);
+  }
+  if (item.infected) {
+    tags.push(`<span class="tag m-risk">${t('tags.ai')}</span>`);
+  }
+  return tags.length ? tags : [`<span class="tag m-action">${t('tags.insidesOk')}</span>`];
+}
+
 function itemTags(item: Item): string {
   const tags: string[] = [];
   if (isRareItem(item)) {
     tags.push(`<span class="tag m-rare">${starSvg('rare')} ${t('stock.legend.rare')}</span>`);
   }
   tags.push(item.k.cond ? `<span class="tag ${item.cond < 40 ? 'm-wear' : ''}">${item.cond}%</span>` : `<span class="tag m-unknown">${t('tags.condUnknown')}</span>`);
-  if (item.k.serial) {
-    tags.push(item.stolen ? `<span class="tag m-risk">${t('tags.stolen')}</span>` : `<span class="tag m-action">${t('tags.clean')}</span>`);
-  } else {
-    tags.push(`<span class="tag m-unknown">${t('tags.serialUnknown')}</span>`);
+  // task 41: a category without the check has nothing to tell there (unless an old save still hides or knows something)
+  if (canBeStolen(item.t) || !item.k.serial || item.stolen) {
+    tags.push(serialTag(item));
   }
-  if (item.k.flaw) {
-    if (item.defect) {
-      tags.push(`<span class="tag m-wear">${t('tags.defect')}</span>`);
-    }
-    if (item.infected) {
-      tags.push(`<span class="tag m-risk">${t('tags.ai')}</span>`);
-    }
-    if (!item.defect && !item.infected) {
-      tags.push(`<span class="tag m-action">${t('tags.insidesOk')}</span>`);
-    }
-  } else {
-    tags.push(`<span class="tag m-unknown">${t('tags.insidesUnknown')}</span>`);
+  if (canHaveFlaw(item.t) || !item.k.flaw || item.defect || item.infected) {
+    tags.push(...flawTags(item));
   }
   return `<div class="tags">${tags.join('')}</div>`;
 }
@@ -444,24 +450,49 @@ function customerHeader(customer: SellerCustomer | BuyerCustomer): string {
  * One inspection fact of the seller's item (V1.6, compact for iPhone SE): until the check is done
  * it is the inspect button itself ("Сост. ?"), after that the result in its meaning color.
  */
-function fact(customer: SellerCustomer, check: InspectCheck, label: string, title: string, result: string): string {
+function fact(customer: SellerCustomer, check: InspectCheck, label: string, title: string, result: string, wide = false): string {
   if (!customer.done[check]) {
-    return `<button class="btn fact" data-a="insp" data-v="${check}" title="${title}">${label} ${UNKNOWN}</button>`;
+    return `<button class="btn fact ${wide ? 'wide' : ''}" data-a="insp" data-v="${check}" title="${title}">${label} ${UNKNOWN}</button>`;
   }
-  return `<span class="fact">${label} ${result}</span>`;
+  return `<span class="fact ${wide ? 'wide' : ''}">${label} ${result}</span>`;
 }
 
 /** The item's category (task 40): a quiet line of the bench card, the end of the deal's header line. */
 const categoryTag = (type: ItemType): string => `<span class="hint cat">${t(`cat.${itemCategory(type)}`)}</span>`;
 
+/**
+ * The cells of the checks (task 41): as many as the category has — the serial, the AI scanner of electronics,
+ * the diagnostics of an implant (its result carries the condition, which only an implant hides). None: one quiet line.
+ */
+function sellerFacts(customer: SellerCustomer): string {
+  const item = customer.item;
+  const checks = sellerChecks(customer);
+  if (!checks.length) {
+    return `<div class="hint no-checks">${t('deal.noChecks')}</div>`;
+  }
+  const implant = hidesCondition(item.t);
+  const cell = (check: InspectCheck): string => {
+    if (check === 'serial') {
+      const serial = item.stolen ? `<span class="m-risk">${t('deal.filed')}</span>` : `<span class="m-action">${t('deal.clean')}</span>`;
+      return fact(customer, 'serial', t('deal.serial'), t('deal.serialTitle'), serial);
+    }
+    const flaw = item.infected ? `<span class="m-risk">${t('deal.ai')}</span>`
+      : item.defect ? `<span class="m-wear">${t(implant ? 'deal.reject' : 'deal.defect')}</span>`
+      : `<span class="m-action">${t(implant ? 'deal.ok' : 'deal.scanClean')}</span>`;
+    if (!implant) {
+      return fact(customer, 'flaw', t('deal.scan'), t('deal.scanTitle'), flaw);
+    }
+    const condition = `<span class="${item.cond < 40 ? 'm-wear' : ''}">${item.cond}%</span>`;
+    return fact(customer, 'flaw', t('deal.diag'), t('deal.diagTitle'), `${condition} ${flaw}`, true);
+  };
+  return `<div class="facts">${checks.map(cell).join('')}</div>`;
+}
+
 function sellerPane(customer: SellerCustomer): string {
   const item = customer.item;
-  const condition = `<span class="${item.cond < 40 ? 'm-wear' : ''}">${item.cond}%</span>`;
-  const serial = item.stolen ? `<span class="m-risk">${t('deal.filed')}</span>` : `<span class="m-action">${t('deal.clean')}</span>`;
-  const insides = item.infected ? `<span class="m-risk">${t('deal.ai')}</span>` : item.defect ? `<span class="m-wear">${t('deal.defect')}</span>` : `<span class="m-action">${t('deal.ok')}</span>`;
   const defaultOffer = Math.min(state.credits, roundTo10(customer.ask * HAGGLE.sellerDefaultOfferShare));
   return `<div class="card deal-item">${tileFace(item, 'midico')}<div class="di-body"><div class="rn">${itemName(item.t)}</div>
-      <div class="facts">${fact(customer, 'cond', t('deal.cond'), t('deal.condTitle'), condition)}${fact(customer, 'serial', t('deal.serial'), t('deal.serialTitle'), serial)}${fact(customer, 'flaw', t('deal.insides'), t('deal.insidesTitle'), insides)}</div></div></div>
+      ${sellerFacts(customer)}</div></div>
     <div class="deal"><div class="ask">${t('deal.asks', { ask: `<b class="price">${customer.ask}</b>`, estimate: approx(estimatedValue(item)) })}</div>
       ${priceRow(defaultOffer)}
       <div class="acts"><button class="btn alt" data-a="accept" ${disabledIf(customer.ask > state.credits)}>${t('deal.for', { n: customer.ask })}</button>
@@ -635,6 +666,8 @@ function benchSpec(item: Item): WindowSpec {
     cover: true,
     // Mac: the bench took the stock's place in the window, the game goes on under it
     modal: !isDesk(),
+    // as wide as the stock it replaced: the window does not jump
+    wide: true,
     body: benchBody(item),
     buttons: (isDesk() ? `<button class="btn bench-back" data-a="benchback">${t('stock.back')}</button>` : '') + benchArrows(bench.order, item.uid),
     onClose: reason => {
@@ -727,6 +760,7 @@ function paneSpec(html: string): WindowSpec {
   return {
     id: 'pane',
     title: tabLabels().find(([tab]) => tab === ui.tab)?.[1] ?? '',
+    wide: ui.tab === 'inv',
     body: `<div class="pane-body">${html}</div>`,
     modal: false,
     // closed by the player: the action bar is back to the counter (viewTab)
