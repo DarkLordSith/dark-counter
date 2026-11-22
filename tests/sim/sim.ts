@@ -49,12 +49,16 @@ export interface Strategy {
 }
 
 /** Task 43: `npm run sim -- --no-devices` switches the device purchases off (the payback comparison). */
-export const SIM_OPTIONS = { devices: true };
+export const SIM_OPTIONS: { devices: boolean; give: Device[] } = { devices: true, give: [] };
 /**
  * What a careful buyer keeps over the payment after a device. Not `reserve`: the bots pay everything over
  * payment + reserve off the debt every evening, so with it they could buy only once the debt is closed.
  */
 const DEVICE_RESERVE = 300;
+/** Task 44: no device after this day — too late to pay itself back before the shuttle (day 60). */
+const DEVICE_LAST_DAY = 40;
+/** Task 44: not in the first week — the first money goes to the stock and the first payment. */
+const DEVICE_FIRST_DAY = 8;
 /** All three devices in the order the bots buy them: the serial reader checks three categories. */
 const ALL_DEVICES: readonly Device[] = ['serial', 'scan', 'diag'];
 
@@ -67,9 +71,9 @@ export const STRATEGIES: Record<string, Strategy> = {
    * buyer flow followed the stock). Buys cheap (≤ 50% of the estimate, no inspection), sells at
    * ≥ 35%, builds whatever the recipes allow, digs until midnight. The balance is tuned on it.
    */
-  // task 43: owner buys only the serial reader, level 1 (the bot: all three at level 1 — 31.8% left, both levels — 22.6%;
-  // free checks make it buy less, the buyers pay nearly full price for hidden AI and defects — see the report of task 43)
-  owner: { name: 'owner', inspects: false, buyShare: 0.5, sellChance: 0.35, digsLate: false, reserve: 1000, crafts: true, devices: ['serial'], deviceLevel: 1, devicesCareful: true },
+  // task 43 → 44: owner buys every level while the payment + DEVICE_RESERVE stay covered (the rule of task 43);
+  // with «знание = деньги» the free checks pay (owner 81.8% vs 78.5% without devices, level 1 pays back 115%)
+  owner: { name: 'owner', inspects: false, buyShare: 0.5, sellChance: 0.35, digsLate: false, reserve: 1000, crafts: true, devices: ALL_DEVICES, deviceLevel: 2, devicesCareful: true },
   /** Takes risks: no inspection, buys up to 95%, sells at ≥ 40%, digs past midnight too (all six digs). */
   greedy: { name: 'greedy', inspects: false, buyShare: 0.95, sellChance: 0.4, digsLate: true, reserve: 150, crafts: false, devices: ALL_DEVICES, deviceLevel: 2, devicesCareful: false },
 };
@@ -165,8 +169,8 @@ function handleSeller(state: GameState, customer: SellerCustomer, strategy: Stra
   const estimate = estimatedValue(item);
   const limit = Math.floor(estimate * strategy.buyShare);
   const affordable = Math.max(0, state.credits - state.owed);
-  // a known AI infection is not worth the trouble
-  if ((item.k.flaw && item.infected) || limit <= 0) {
+  // task 44: a known risk is in the estimate (and the price drops on the reveal): the bot decides by the money
+  if (limit <= 0) {
     customerLeaves(state);
     return;
   }
@@ -265,7 +269,7 @@ function handleLandlord(state: GameState): void {
 
 /** Task 43: the morning purchases of the check devices by the strategy's rule; the days go to the tally. */
 function buyDevices(state: GameState, strategy: Strategy, tally: Tally): void {
-  if (!SIM_OPTIONS.devices || state.debt <= 0) {
+  if (!SIM_OPTIONS.devices || state.debt <= 0 || state.day < DEVICE_FIRST_DAY || state.day > DEVICE_LAST_DAY) {
     return;
   }
   for (let level = 0; level < strategy.deviceLevel; level++) {
@@ -386,6 +390,8 @@ export function playGame(seed: number, strategy: Strategy, leave: LeavePolicy = 
 export function playGameWithState(seed: number, strategy: Strategy, leave: LeavePolicy = 'day60'): { result: GameResult; state: GameState } {
   const rng = mulberry32(seed);
   const state = createGame('story', rng);
+  // task 44: `--give serial,scan` — these devices at level 1 from day 1, for free (what the knowledge alone is worth)
+  SIM_OPTIONS.give.forEach(device => { state.dev[device] = DEVICES.freeLevel; });
   const result: GameResult = {
     seed, board: null, toll: 0, ending: null, day: 1, debtClosedDay: null, weeklyCredits: [], weeklyDebt: [], bought: 0, sold: 0, checkDay: null, morningStock: [],
     junkVisits: 0, junkFinds: 0, junkValue: 0, saleIncome: 0, bulkIncome: 0, bulkSold: 0, bulkVisits: 0, junkSoldInWeek: 0,

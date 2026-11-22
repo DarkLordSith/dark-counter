@@ -1,6 +1,6 @@
 // Task 41 («Играбельная v1», п.3, А2 of 19.11): checks at the counter by category, "check where the risk is".
 import { describe, expect, it } from 'vitest';
-import { CATEGORY_CHECKS, checksFor, ITEM_CATEGORIES, itemCategory, ITEM_TYPES } from '../../src/data';
+import { CATEGORY_CHECKS, checksFor, INSPECT, ITEM_CATEGORIES, itemCategory, ITEM_TYPES } from '../../src/data';
 import { callNextCustomer, dig, goToJunkyard, goHome, inspect, sellerChecks } from '../../src/economy';
 import { mulberry32 } from '../../src/rng';
 import { createItem, importSaveCode, migrate } from '../../src/state';
@@ -149,7 +149,7 @@ describe('inspection at the counter', () => {
     expect(inspect(game, 'flaw')).toBe(true);
     expect(item.k).toMatchObject({ cond: true, flaw: true });
     expect(shown(game.cust.msg)).toBe('Отторжение? Бывает, приживётся. Скину.');
-    expect(game.cust.kind === 'sell' && game.cust.ask).toBe(300);
+    expect(game.cust.kind === 'sell' && game.cust.ask).toBe(400 * INSPECT.defectAskMult);
 
     const clean = sellerWith('chip', () => 0.99); // no defect, no AI: the condition line
     inspect(clean, 'flaw');
