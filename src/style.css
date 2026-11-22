@@ -1766,6 +1766,11 @@ html.desk .chips {
   font-size: var(--fs-s);
 }
 
+.mbox .fame-cap {
+  margin: 0;
+  font-size: var(--fs-s);
+}
+
 .fame-item {
   display: flex;
   align-items: center;

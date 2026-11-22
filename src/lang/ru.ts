@@ -492,9 +492,9 @@ export const RU = {
     lowers: 'Что роняет',
     down: [
       'Клиент ушёл, кончилось терпение: −1',
-      'Каждое утро сама спадает: −1/5 сверх 20',
-      'Не больше за день: −5',
+      'Без новых сделок понемногу спадает к 20',
     ],
+    capNote: 'За день теряется не больше 5.',
   },
   /** The wholesaler (task 36): a batch of one category (task 40: a mass one), "as is", within a budget. */
   bulk: {
