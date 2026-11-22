@@ -266,7 +266,8 @@ describe('strings', () => {
 
   it('the morning window says how many customers are expected and why', () => {
     expect(uiTs).toContain('${expectedCustomers()}<ul>');
-    expect(uiTs).toContain('<li class="m-wear">${t(`day.reasons.${reason.key}`, { time })} (${signed(reason.n)})</li>');
+    // PM 22.11: pluses in action (a use), minuses in wear
+    expect(uiTs).toContain('<li class="${reason.n > 0 ? \'m-action\' : \'m-wear\'}">${t(`day.reasons.${reason.key}`, { time })} (${signed(reason.n)})</li>');
     expect(RU.day.expected).toBe('Ожидается клиентов: {n}');
   });
 });

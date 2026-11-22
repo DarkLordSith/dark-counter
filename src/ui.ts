@@ -996,15 +996,16 @@ function openFame(): void {
   const lines = (key: 'fame.up' | 'fame.down'): string => `<ul class="fame-list">${list(key).map(line => `<li>${line}</li>`).join('')}</ul>`;
   openModal(t('fame.title'), `<p class="fame-line">${fameStarsHtml(state.fame)} <span class="price">${t('fame.points', { n: state.fame })}</span></p>
     <p class="hint">${t('fame.gives')}</p>
-    <h3>${t('fame.raises')}</h3>${lines('fame.up')}<h3>${t('fame.lowers')}</h3>${lines('fame.down')}`, closeButton());
+    <h3>${t('fame.raises')}</h3>${lines('fame.up')}<h3>${t('fame.lowers')}</h3>${lines('fame.down')}<p class="hint fame-cap">${t('fame.capNote')}</p>`, closeButton());
 }
 
-/** Morning window (task 16): "Ожидается клиентов: N" and the reasons it differs from a usual day, in `wear`. */
+/** Morning window (task 16): "Ожидается клиентов: N" and the reasons it differs from a usual day: pluses `action`, minuses `wear`. */
 function expectedCustomers(): string {
   const today = customersToday(state);
   const time = formatHour(openingHour(state));
   const reasons = today.reasons
-    .map(reason => `<li class="m-wear">${t(`day.reasons.${reason.key}`, { time })} (${signed(reason.n)})</li>`)
+    // PM 22.11: a plus is a use (action), a minus — as before (wear)
+    .map(reason => `<li class="${reason.n > 0 ? 'm-action' : 'm-wear'}">${t(`day.reasons.${reason.key}`, { time })} (${signed(reason.n)})</li>`)
     .join('');
   return `<p class="expect">${t('day.expected', { n: `<b class="rn">${today.count}</b>` })}</p>${reasons ? `<ul class="reasons">${reasons}</ul>` : ''}`;
 }

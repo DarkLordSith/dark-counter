@@ -459,9 +459,9 @@ export const EN: Dict = {
     lowers: 'What lowers it', // draft
     down: [
       'A customer walked out, patience gone: −1', // draft
-      'Slides back every morning: −1/5 above 20', // draft
-      'At most in a day: −5', // draft
+      'Without new deals it slowly slides back to 20', // draft
     ],
+    capNote: 'No more than 5 is lost in a day.', // draft
   },
   /** The wholesaler (task 36). */
   bulk: {
