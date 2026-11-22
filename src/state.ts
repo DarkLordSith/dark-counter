@@ -8,12 +8,12 @@
 //  saves in migrate().
 // =====================================================================
 import {
-  canBeStolen, canHaveFlaw, CUSTOMERS_PER_DAY, DEBT, hidesCondition, ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, PLAYABLE_MODES, RENT, SAVE_CODE_PREFIX, SAVE_CODE_PREFIX_V2, SAVE_KEYS, SAVE_LOG_LINES, START,
+  canBeStolen, canHaveFlaw, CUSTOMERS_PER_DAY, DEBT, FAME, hidesCondition, ITEM_TYPES, ITEM_ODDS, LEGACY_RENT_PERIOD, LOG_LIMIT, PLAYABLE_MODES, RENT, SAVE_CODE_PREFIX, SAVE_CODE_PREFIX_V2, SAVE_KEYS, SAVE_LOG_LINES, START,
 } from './data';
 import { customersToday } from './day';
 import { browserStore } from './profile';
 import type { BulkCategory } from './data';
-import type { Actor, GameState, Item, ItemKnowledge, ItemType, KeyValueStore, Mode, RunStats, SavedGame, UiState } from './types';
+import type { Actor, FameDay, GameState, Item, ItemKnowledge, ItemType, KeyValueStore, Mode, RunStats, SavedGame, UiState } from './types';
 import { gameRng, randomInt } from './rng';
 import type { Rng } from './rng';
 import { say, tx } from './i18n';
@@ -80,6 +80,9 @@ export function createGame(mode: Mode, rng: Rng): GameState {
     ending: null,
     mode,
     st: freshStats(1),
+    fame: FAME.start,
+    cr: 0,
+    fd: freshFameDay(FAME.start),
   };
   // day 1 is the first day of the station week: a quiet start
   game.cn = customersToday(game).count;
@@ -90,6 +93,9 @@ export function createGame(mode: Mode, rng: Rng): GameState {
   }));
   return game;
 }
+
+/** Task 42: a new day's fame tally, starting from the fame of the morning. */
+export const freshFameDay = (fame: number): FameDay => ({ s: fame, g: 0, w: 0, l: 0 });
 
 /** Run stats counted from `day` (task 38): 1 in a new game, the load day for an older save. */
 export const freshStats = (day: number): RunStats => ({ from: day, dc: null, earn: 0, deals: 0, raids: 0, star: null });
@@ -308,6 +314,10 @@ export function migrate(data: SavedGame | null, rng: Rng = gameRng): GameState |
     settleKnowledge(data.cust.item);
   }
   data.junk?.w?.forEach(settleKnowledge);
+  // Task 42: the fame starts at 20 for an older save too, with no chance in today's count and a fresh tally.
+  data.fame ??= FAME.start;
+  data.cr ??= 0;
+  data.fd ??= freshFameDay(data.fame);
   // Before modes every save was the story; an unknown or locked mode is read as story too.
   if (!(PLAYABLE_MODES as readonly unknown[]).includes(data.mode)) {
     data.mode = 'story';

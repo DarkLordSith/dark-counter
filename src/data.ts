@@ -133,6 +133,47 @@ export const CUSTOMER_FLOW = {
   /** …and this many customers fewer. */
   heatLoss: 1,
 };
+/**
+ * The shop's fame (task 42, «Играбельная v1» п.4): 0…100 in the save (`fame`), 1–5 stars by 20 points.
+ * Good deals raise it, customers walking out lower it (at most `dayLossCap` a day), above `decayFrom` it
+ * slides back by a share of the excess every morning (so it settles where the player's trade keeps it: the bot's
+ * owner ~36, ★2–3, never ★5 by week 3). It only ever adds: customers on top of the week (`flowByStars`, not while
+ * wanted — honest buyers stay away then),
+ * and buyers who want the dear categories more often (×1 at ★1 … ×`premiumMax` at ★5). Numbers — the bot.
+ */
+export const FAME = {
+  start: 20,
+  max: 100,
+  starPoints: 20,
+  /** A sale to a buyer without an insult in the haggle. */
+  goodSale: 2,
+  /** A sale of a rare (★) item. */
+  rareSale: 3,
+  /** A sale after an insult: the buyer still got what they asked for. */
+  askedSale: 1,
+  /** A customer walked out with no deal: their patience ran out. */
+  walkout: 1,
+  /** Fame lost in a day never exceeds this. */
+  dayLossCap: 5,
+  /** Every morning the fame above this slides back by `decayShare` of the excess (at least 1): it has to be kept up. */
+  decayFrom: 20,
+  decayShare: 0.2,
+  /** Extra customers a day by stars ★1…★5: never fewer than the week. */
+  flowByStars: [0, 0, 1, 2, 3],
+  /** Buyers' wish for the dear categories at ★5 (×1 at ★1, linear between). */
+  premiumMax: 2,
+};
+/** The dear categories famous shops are asked for (they pile up on the shelf otherwise). */
+export const PREMIUM_CATEGORIES: readonly ItemCategory[] = ['weapon', 'implant', 'collectible'];
+/** Fame stars 1…5: 0–19 ★1, 20–39 ★2 … 80–100 ★5. */
+export const fameStars = (fame: number): number => Math.min(5, 1 + Math.floor(fame / FAME.starPoints));
+/** Extra customers today for the fame (0…3). */
+export const fameFlow = (fame: number): number => FAME.flowByStars[fameStars(fame) - 1];
+/** How much more often buyers want the dear categories (1 at ★1 … premiumMax at ★5). */
+export const premiumWish = (fame: number): number => 1 + (FAME.premiumMax - 1) * (fameStars(fame) - 1) / 4;
+/** Customers a day vary by chance: −1…+1, rolled in the morning (`cr`). */
+export const CHANCE_FLOW = 1;
+
 /** Game clock, hours of the day: the shift, the evening, the late opening. */
 export const CLOCK = {
   shiftStart: 8,

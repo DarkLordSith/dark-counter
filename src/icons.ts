@@ -45,6 +45,11 @@ export const ICONS = {
     w: 5, h: 5,
     rects: [[2, 0, 1, 2], [1, 2, 3, 2], [0, 4, 5, 1]],
   },
+  /** ★ 5×5 — a star of the shop's fame (task 42): filled ones in fg, the rest m-inactive; not the gold ★ "rare". */
+  fame: {
+    w: 5, h: 5,
+    rects: [[2, 0, 1, 1], [0, 1, 5, 1], [1, 2, 3, 1], [1, 3, 1, 1], [3, 3, 1, 1], [0, 4, 1, 1], [4, 4, 1, 1]],
+  },
   /** Lock — a mode that opens later (16×16: shackle on a body with a keyhole). */
   lock: {
     w: 16, h: 16,

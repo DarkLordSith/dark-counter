@@ -8,11 +8,11 @@
 //  The clock is derived, not saved: the day's opening (08:00 + 2 h per
 //  dig past midnight), the customers served, the evening hours spent.
 // =====================================================================
-import { CLOCK, CUSTOMER_FLOW, CUSTOMERS_BY_WEEKDAY, CUSTOMERS_PER_DAY, DEBT, EVENING_HOURS, JUNK, WEEKDAY_REASONS } from './data';
+import { CLOCK, CUSTOMER_FLOW, CUSTOMERS_BY_WEEKDAY, CUSTOMERS_PER_DAY, DEBT, EVENING_HOURS, fameFlow, JUNK, WEEKDAY_REASONS } from './data';
 import type { GameState } from './types';
 
 /** Fields the day functions read. */
-type DayView = Pick<GameState, 'day' | 'debt' | 'nextDue' | 'heat' | 'late' | 'cn' | 'slot' | 'phase' | 'hours'>;
+type DayView = Pick<GameState, 'day' | 'debt' | 'nextDue' | 'heat' | 'late' | 'cn' | 'slot' | 'phase' | 'hours' | 'fame' | 'cr'>;
 
 /**
  * Day of the station week, 1…7: the week is the cycle of Grobov's payment, day 7 is the day he comes.
@@ -29,7 +29,7 @@ export function weekdayOf(game: Pick<GameState, 'day' | 'debt' | 'nextDue'>): nu
 }
 
 /** A reason for more or fewer customers today: a DAY_TEXT.reasons key and how many (+4, −1…). */
-export type CustomerReasonKey = 'quiet' | 'payday' | 'saving' | 'heat' | 'late';
+export type CustomerReasonKey = 'quiet' | 'payday' | 'saving' | 'chance' | 'fame' | 'heat' | 'late';
 export interface CustomerReason {
   key: CustomerReasonKey;
   n: number;
@@ -42,7 +42,10 @@ export interface CustomersToday {
   reasons: CustomerReason[];
 }
 
-/** Customers of the day by the weekday, the wanted level and last night's digs past midnight. */
+/**
+ * Customers of the day by the weekday, the morning's chance (−1…+1, task 42), the fame (only adds: 0…+3),
+ * the wanted level and last night's digs past midnight.
+ */
 export function customersToday(game: DayView): CustomersToday {
   const index = weekdayOf(game) - 1;
   const reasons: CustomerReason[] = [];
@@ -50,6 +53,14 @@ export function customersToday(game: DayView): CustomersToday {
   const weekDelta = CUSTOMERS_BY_WEEKDAY[index] - CUSTOMERS_PER_DAY;
   if (weekKey && weekDelta) {
     reasons.push({ key: weekKey, n: weekDelta });
+  }
+  if (game.cr) {
+    reasons.push({ key: 'chance', n: game.cr });
+  }
+  // the fame draws honest buyers: with the wanted level high they stay away, so it adds nothing then
+  const fame = game.heat >= CUSTOMER_FLOW.heatShy ? 0 : fameFlow(game.fame);
+  if (fame) {
+    reasons.push({ key: 'fame', n: fame });
   }
   if (game.heat >= CUSTOMER_FLOW.heatShy) {
     reasons.push({ key: 'heat', n: -CUSTOMER_FLOW.heatLoss });

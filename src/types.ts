@@ -75,6 +75,8 @@ interface CustomerBase {
   max: number;
   /** Inspections already made: { cond: 1, … }. */
   done: Partial<Record<InspectCheck, number>>;
+  /** Task 42: the player insulted this customer in the haggle ("insulted"): the sale raises the fame less. Absent = no. */
+  ins?: 1;
 }
 
 /** Brings an item to sell to the player. */
@@ -223,6 +225,24 @@ export interface GameState {
   lv?: number;
   /** Task 38: run stats for the final window ("stats"). Saves before it get them in migrate(), counted from that day. */
   st: RunStats;
+  /** Task 42: the shop's fame 0…100 (FAME in data.ts). 20 in new games and in saves before it. */
+  fame: number;
+  /** Task 42: today's chance in the customer count ("customers random"), −1…+1, rolled in the morning; 0 in older saves. */
+  cr: number;
+  /** Task 42: today's fame tally for the next morning's window ("fame day"). */
+  fd: FameDay;
+}
+
+/** What moved the fame today: shown the next morning, then reset. */
+export interface FameDay {
+  /** Fame at the start of the day ("start"). */
+  s: number;
+  /** Good deals: sales to buyers without an insult. */
+  g: number;
+  /** Customers who walked out, their patience gone ("walked"). */
+  w: number;
+  /** Fame lost today, capped by FAME.dayLossCap ("lost"). */
+  l: number;
 }
 
 /**
@@ -284,8 +304,10 @@ type DebtFields = 'debt' | 'seat' | 'shuttleDay' | 'ending' | 'mode';
 type DayFields = 'cn' | 'late';
 /** Fields added by task 38 (the finale): the run stats. */
 type FinaleFields = 'st';
-export type SavedGame = Omit<GameState, RentFields | DebtFields | DayFields | FinaleFields | 'junk'>
-  & Partial<Pick<GameState, RentFields | DebtFields | DayFields | FinaleFields>>
+/** Fields added by task 42 (the shop's fame). */
+type FameFields = 'fame' | 'cr' | 'fd';
+export type SavedGame = Omit<GameState, RentFields | DebtFields | DayFields | FinaleFields | FameFields | 'junk'>
+  & Partial<Pick<GameState, RentFields | DebtFields | DayFields | FinaleFields | FameFields>>
   & { won?: boolean; junk: GameState['junk'] | { piles: JunkPile[] } };
 
 /* ---------- screen state (not saved) ---------- */

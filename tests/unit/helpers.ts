@@ -1,6 +1,6 @@
 // Builders for test data. Defaults describe a plain mid-game state.
 import { text } from '../../src/i18n';
-import { freshStats, setState } from '../../src/state';
+import { freshFameDay, freshStats, setState } from '../../src/state';
 import type { GameState, Item, ItemType, PresentedBuyer, SellerCustomer } from '../../src/types';
 
 let nextUid = 1000;
@@ -49,8 +49,11 @@ export function makeState(overrides: Partial<GameState> = {}): GameState {
     shuttleDay: 60,
     ending: null,
     mode: 'story',
+    fame: 20,
+    cr: 0,
     ...overrides,
     st: overrides.st ?? freshStats(1),
+    fd: overrides.fd ?? freshFameDay(overrides.fame ?? 20),
   };
   setState(state);
   return state;

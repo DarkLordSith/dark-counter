@@ -164,12 +164,13 @@ describe('digs past midnight', () => {
     goHome(state);
     const { events } = sleepUntilMorning(state, gameRng);
     expect(state.day).toBe(4);
-    expect(state.cn).toBe(CUSTOMERS_PER_DAY - 1);
+    expect(state.cr).toBe(1); // task 42: the morning's chance, Math.random 0.99 → +1
+    expect(state.cn).toBe(CUSTOMERS_PER_DAY - 1 + state.cr);
     // in the log (the ticker), not in the morning list: the window shows it as a reason
     expect(logLines(state)).toContain('Д4: Проспал после свалки: лавка открылась позже, клиентов на 1 меньше.');
     expect(logLines(state)).toContain('Д4: Лавка открылась в 10:00.');
     expect(events.join(' ')).not.toContain('Проспал');
-    expect(chipLines(state)).toEqual(['10:00', 'ОЧЕРЕДЬ: 5']);
+    expect(chipLines(state)).toEqual(['10:00', `ОЧЕРЕДЬ: ${state.cn}`]);
     // the late opening lasts the day; closing the shop starts a new evening count
     closeShop(state);
     expect(state.late).toBe(0);
@@ -212,11 +213,11 @@ describe('a day with fewer customers', () => {
     quiet();
     makeState({ phase: 'evening', day: 3, nextDue: 7, heat: CUSTOMER_FLOW.heatShy });
     sleepUntilMorning(state, gameRng);
-    // heat cooled to 6 overnight: no "wanted" reason on day 4
-    expect(state.cn).toBe(6);
+    // heat cooled to 6 overnight: no "wanted" reason on day 4 (task 42: + the morning's chance, +1 here)
+    expect(state.cn).toBe(6 + state.cr);
     makeState({ phase: 'evening', day: 4, nextDue: 7, heat: CUSTOMER_FLOW.heatShy + 1 });
     sleepUntilMorning(state, gameRng);
-    expect(state.cn).toBe(10 - 1); // day 5 is payday, still wanted
+    expect(state.cn).toBe(10 - 1 + state.cr); // day 5 is payday, still wanted
   });
 
   it('a new game starts on day 1 of the week: a quiet day of 5', () => {
