@@ -57,8 +57,11 @@ for (const name of names) {
     'доля оптовика в доходе, %': show(summary.bulkShare),
     'оптовиков за игру': show(summary.bulkVisits),
     'вещей оптовику за игру': show(summary.bulkItems),
+    'клиентов в день, ср.': show(summary.customersAvg),
+    'клиентов в день, мин.': show(summary.customersMin),
+    'известность к дню 30 ниже старта, % игр': show(summary.fameBelowStart),
   });
-  console.table(summary.weeklyCredits.map((credits, i) => ({ неделя: i + 1, 'кр.': show(credits), долг: show(summary.weeklyDebt[i]) })));
+  console.table(summary.weeklyCredits.map((credits, i) => ({ неделя: i + 1, 'кр.': show(credits), долг: show(summary.weeklyDebt[i]), известность: show(summary.weeklyFame[i]) })));
   // task 38: the finale of the games that left — the shuttle on day 60 and, for owner / greedy, the early flight right after the seat
   const finale: Record<string, SimSummary> = { 'день 60': summary };
   if (FINALE_STRATEGIES.includes(name)) {

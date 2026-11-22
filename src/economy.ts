@@ -10,7 +10,7 @@
 import {
   ACCEPT, HUNCH_VERDICT, BENCH_COST, COLLATERAL,
   buyerShare, CRAFT_CONDITION_BONUS, CUSTOMER, DEBT, EXPENSES, FINAL, DIG_LOOT, DIG_ODDS, EVENING_HOURS, HAGGLE, HUMAN_NAMES,
-  BULK_CATEGORIES, canBeStolen, canHaveFlaw, checksFor, hidesCondition, INSPECT, isBulkCategory, ITEM_TYPES, itemCategory, JUNK, JUNK_WEIGHTS, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
+  BULK_CATEGORIES, canBeStolen, CHANCE_FLOW, FAME, PREMIUM_CATEGORIES, premiumWish, canHaveFlaw, checksFor, hidesCondition, INSPECT, isBulkCategory, ITEM_TYPES, itemCategory, JUNK, JUNK_WEIGHTS, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
   RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SUPPLIER, VALUE, WHOLESALE, wholesaleChance,
 } from './data';
 import { itemRef, listLength, nameRef, say, tx } from './i18n';
@@ -19,7 +19,7 @@ import type { RU } from './lang/ru';
 import { COLOR, MEANING } from './palette';
 import { appearanceFor } from './appearance';
 import { customersToday, formatHour, openingHour, weekdayOf } from './day';
-import { addLog, createItem, findItem, fullKnowledge, randomLandlordSlot } from './state';
+import { addLog, createItem, findItem, freshFameDay, fullKnowledge, randomLandlordSlot } from './state';
 import { pickRandom, randomBetween, randomInt, randomSeed } from './rng';
 import type { Rng } from './rng';
 import { isRareItem } from './star';
@@ -94,17 +94,67 @@ function raiseHeat(state: GameState, amount: number): void {
   state.heat = Math.min(MAX_HEAT, state.heat + amount);
 }
 
-function pickRandomItemType(rng: Rng): ItemType {
+/** A random type by its spawn weight; `boost` multiplies the weight of the dear categories (a famous shop, task 42). */
+function pickRandomItemType(rng: Rng, boost = 1): ItemType {
   const types = Object.keys(ITEM_TYPES) as ItemType[];
-  const totalWeight = types.reduce((sum, type) => sum + ITEM_TYPES[type].spawnWeight, 0);
+  const weight = (type: ItemType): number => ITEM_TYPES[type].spawnWeight * (PREMIUM_CATEGORIES.includes(itemCategory(type)) ? boost : 1);
+  const totalWeight = types.reduce((sum, type) => sum + weight(type), 0);
   let roll = rng() * totalWeight;
   for (const type of types) {
-    roll -= ITEM_TYPES[type].spawnWeight;
+    roll -= weight(type);
     if (roll <= 0) {
       return type;
     }
   }
   return types[0];
+}
+
+/** A stocked item a buyer asks for: the dear categories `boost` times as likely (with boost 1 — pickRandom, one roll). */
+function pickWantedStock(rng: Rng, stock: readonly Item[], boost: number): Item {
+  const weight = (item: Item): number => PREMIUM_CATEGORIES.includes(itemCategory(item.t)) ? boost : 1;
+  const total = stock.reduce((sum, item) => sum + weight(item), 0);
+  let roll = rng() * total;
+  return stock.find(item => (roll -= weight(item)) < 0) ?? stock[stock.length - 1];
+}
+
+/* =====================================================================
+   The shop's fame (task 42): good deals raise it, walk-outs lower it; it only ever adds
+   ===================================================================== */
+
+function raiseFame(state: GameState, amount: number): void {
+  state.fame = Math.min(FAME.max, state.fame + amount);
+}
+
+/** Never below 0, never more than FAME.dayLossCap in a day. */
+function lowerFame(state: GameState, amount: number): void {
+  const loss = Math.min(amount, Math.max(0, FAME.dayLossCap - state.fd.l), state.fame);
+  state.fame -= loss;
+  state.fd.l += loss;
+}
+
+/** A customer leaves with no deal, their patience gone: −fame, counted for the morning window. */
+function walkedOut(state: GameState): void {
+  state.fd.w++;
+  lowerFame(state, FAME.walkout);
+  customerLeaves(state, tx('log.noDeal'));
+}
+
+/** Yesterday's fame for the morning window: where it was and is now, the good deals and the walk-outs. */
+export interface FameReport {
+  from: number;
+  to: number;
+  good: number;
+  walked: number;
+}
+
+/** The morning: the fame slides back above FAME.decayFrom, yesterday's tally becomes the report, a new one starts. */
+function fameMorning(state: GameState): FameReport {
+  if (state.fame > FAME.decayFrom) {
+    state.fame -= Math.max(1, Math.round((state.fame - FAME.decayFrom) * FAME.decayShare));
+  }
+  const report = { from: state.fd.s, to: state.fame, good: state.fd.g, walked: state.fd.w };
+  state.fd = freshFameDay(state.fame);
+  return report;
 }
 
 /* =====================================================================
@@ -137,7 +187,9 @@ function createCustomer(state: GameState, forceSeller: boolean, rng: Rng): void 
   const noise = randomBetween(rng, -CUSTOMER.feelNoise, CUSTOMER.feelNoise);
   const base = { name, seed, pat, done: {}, noise, max: pat };
   if (isBuyer) {
-    const want = rng() < CUSTOMER.buyerWantsStockedChance ? pickRandom(rng, state.inv).t : pickRandomItemType(rng);
+    // task 42: a famous shop is asked for the dear categories more often
+    const boost = premiumWish(state.fame);
+    const want = rng() < CUSTOMER.buyerWantsStockedChance ? pickWantedStock(rng, state.inv, boost).t : pickRandomItemType(rng, boost);
     const mult = randomBetween(rng, CUSTOMER.buyerMarkupMin, CUSTOMER.buyerMarkupMax);
     const msg = say(lineKey(rng, 'lines.buyer'), { t: itemRef(want) });
     state.cust = { ...base, kind: 'buy', want, mult, item: null, msg };
@@ -767,7 +819,7 @@ export function offerToSeller(state: GameState, price: number, rng: Rng): Item |
     customer.msg = say('lines.counter', { line: tx(lineKey(rng, 'lines.sellerCounter')), n: customer.ask });
   }
   if (customer.pat <= 0) {
-    customerLeaves(state, tx('log.noDeal'));
+    walkedOut(state);
   }
   return null;
 }
@@ -820,6 +872,7 @@ export function askBuyer(state: GameState, price: number, rng: Rng): void {
   }
   if (price > customer.max2 * HAGGLE.buyerInsultShare) {
     losePatience(state, HAGGLE.insultPatienceLoss);
+    customer.ins = 1;
     customer.msg = say(lineKey(rng, 'lines.buyerInsulted'));
   } else {
     losePatience(state, HAGGLE.counterPatienceLoss);
@@ -827,7 +880,7 @@ export function askBuyer(state: GameState, price: number, rng: Rng): void {
     customer.msg = say('lines.counter', { line: tx(lineKey(rng, 'lines.buyerCounter')), n: customer.offer });
   }
   if (customer.pat <= 0) {
-    customerLeaves(state, tx('log.noDeal'));
+    walkedOut(state);
   }
 }
 
@@ -841,6 +894,11 @@ export function sellToBuyer(state: GameState, price?: number): void {
   const item = customer.item;
   state.credits += paid;
   countSale(state, paid);
+  // task 42: the buyer got what they asked for — more without an insult, most for a rare find
+  if (!customer.ins) {
+    state.fd.g++;
+  }
+  raiseFame(state, isRareItem(item) ? FAME.rareSale : customer.ins ? FAME.askedSale : FAME.goodSale);
   state.inv = state.inv.filter(i => i.uid !== item.uid);
   if (item.stolen) {
     raiseHeat(state, 1);
@@ -1209,6 +1267,8 @@ export interface MorningReport {
   /** Night events as messages (the screen translates them). */
   events: Tx[];
   expenses: ExpensesPaid | null;
+  /** Task 42: yesterday's fame; null on the shuttle morning (the game is over). */
+  fame: FameReport | null;
 }
 
 /** Ends the day; returns the night events and the morning bills for the morning report. */
@@ -1229,7 +1289,7 @@ export function sleepUntilMorning(state: GameState, rng: Rng): MorningReport {
       endGame(state, 'stayed');
       events.push(tx('ending.stayed.line'));
     }
-    return { events, expenses: null };
+    return { events, expenses: null, fame: null };
   }
   const daysToShuttle = state.shuttleDay - state.day;
   if (hasShuttle(state) && (DEBT.shuttleReminders as readonly number[]).includes(daysToShuttle)) {
@@ -1242,7 +1302,9 @@ export function sleepUntilMorning(state: GameState, rng: Rng): MorningReport {
   coolDownAndMaybeRaid(state, events, rng);
   // the bills come after the raid's fine: what is left pays them
   const expenses = payExpenses(state);
-  // the morning's heat (after the night and a raid) and last night's digs decide today's customers
+  // the morning's heat (after the night and a raid), last night's digs, the fame and a chance decide today's customers
+  const fame = fameMorning(state);
+  state.cr = randomInt(rng, -CHANCE_FLOW, CHANCE_FLOW);
   state.cn = customersToday(state).count;
   rollWholesaler(state, rng);
   // the late opening goes to the log only: the morning window already lists it as a reason
@@ -1261,7 +1323,7 @@ export function sleepUntilMorning(state: GameState, rng: Rng): MorningReport {
       addLog(state, lines.shortfall);
     }
   }
-  return { events, expenses };
+  return { events, expenses, fame };
 }
 
 /* =====================================================================

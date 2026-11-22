@@ -1740,6 +1740,38 @@ html.desk .chips {
   margin-top: -6px;
 }
 
+/* Task 42: the shop's fame — five pixel stars (the earned ones fg, the rest m-inactive), the morning line, the ☰ window. */
+.fame-stars {
+  display: inline-flex;
+  gap: 2px;
+  vertical-align: middle;
+}
+
+.fame-on {
+  color: var(--fg);
+}
+
+.mbox .fame-line,
+.win .fame-line {
+  margin: 0;
+}
+
+.win .fame-why {
+  margin: 2px 0 8px;
+}
+
+.fame-list {
+  margin: 4px 0;
+  padding-left: 18px;
+  font-size: var(--fs-s);
+}
+
+.fame-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .mbtns {
   display: flex;
   gap: 8px;

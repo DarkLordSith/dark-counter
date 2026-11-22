@@ -93,7 +93,7 @@ describe('the wanted level is on the scene, not in the HUD', () => {
   it('the HUD has no wanted meter, eye or music button', () => {
     expect(renderHud).not.toMatch(/heat|meterCells|eye|music/);
     expect(styleCss).not.toMatch(/\.heat\b/);
-    expect(Object.keys(ICONS)).toEqual(['menu', 'close', 'broken', 'ai', 'stolen', 'lock']);
+    expect(Object.keys(ICONS)).toEqual(['menu', 'close', 'broken', 'ai', 'stolen', 'fame', 'lock']);
   });
 
   it('10 cells 4×4 with 1 px gaps on the left wall, clear of the window at x = 7', () => {

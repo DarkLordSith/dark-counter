@@ -7,10 +7,10 @@ import type { BarContext } from './actionbar';
 import { customersToday, formatHour, openingHour } from './day';
 import { audio, playSfx, setJunkAmbience, startSoundOnGesture, toggleMusic, toggleSfx } from './audio';
 import {
-  BENCH_COST, canBeStolen, canHaveFlaw, DEBT, hidesCondition, JUNK, HAGGLE, itemCategory, ITEM_TYPES, MARKET, MAX_HEAT, MODES,
+  BENCH_COST, canBeStolen, canHaveFlaw, DEBT, fameStars, hidesCondition, JUNK, HAGGLE, itemCategory, ITEM_TYPES, MARKET, MAX_HEAT, MODES,
   PLAYABLE_MODES, RECIPES, RENT, SUPPLIER, WHOLESALE,
 } from './data';
-import { customerNameText, detectLang, getLang, isLang, itemName, LANGS, setLang, t, text as textOf, tx } from './i18n';
+import { customerNameText, detectLang, getLang, isLang, itemName, LANGS, list, setLang, t, text as textOf, tx } from './i18n';
 import type { Lang, Tx } from './i18n';
 import type { RU } from './lang/ru';
 import { byId, maybeById } from './dom';
@@ -34,7 +34,7 @@ import {
   bulkPrice, bulkStock, canSetDiscount, cartItems, cartTotal, fitsCart, sellBatch, setDiscount, toggleCart,
   canLeaveEarly, finalTier, leaveEarly, rampToll,
 } from './economy';
-import type { CollateralPlan, MorningReport } from './economy';
+import type { CollateralPlan, FameReport, MorningReport } from './economy';
 import { isPlayable, loadProfile, recordEnding, recordHotspotTap, saveProfile } from './profile';
 import { hitTest } from './hotspots';
 import { isOnHeap, onSceneClick, paintIcons, playDigFx, pressHotspot, scenePoint, setHotspotHints } from './scene';
@@ -894,6 +894,7 @@ function langRow(): string {
 function openMenu(): void {
   byId('mbox').innerHTML = `<h2>${t(`mode.names.${state.mode}`)}</h2>
     <button class="btn menu-item" data-a="debt">${t('debt.menuDebt', { debt: state.debt })}</button>
+    <button class="btn menu-item fame-item" data-a="fame">${t('fame.menu')} ${fameStarsHtml(state.fame)}</button>
     <button class="btn menu-item" data-a="modes">${t('mode.menuModes')}</button>
     <button class="btn menu-item" data-a="music" aria-pressed="${audio.on}">${t('hud.music')}: ${audio.on ? t('hud.on') : t('hud.off')}</button>
     <button class="btn menu-item" data-a="sounds" aria-pressed="${audio.sfx}">${t('hud.sounds')}: ${audio.sfx ? t('hud.on') : t('hud.off')}</button>
@@ -975,6 +976,29 @@ export function showEnding(): void {
 /** "+4" / "−2" with a real minus sign. */
 const signed = (n: number): string => (n > 0 ? '+' : '−') + Math.abs(n);
 
+/** The fame as 5 pixel stars (task 42): the earned ones in fg, the rest m-inactive; the number for screen readers. */
+function fameStarsHtml(fame: number): string {
+  const stars = fameStars(fame);
+  const cells = [1, 2, 3, 4, 5].map(i => `<span class="${i <= stars ? 'fame-on' : 'm-inactive'}">${iconSvg('fame')}</span>`).join('');
+  return `<span class="fame-stars" role="img" aria-label="${stars}/5">${cells}</span>`;
+}
+
+/** Morning window (task 42): "Известность ★★★☆☆ ↑" and the one reason of yesterday that moved it. */
+function fameMorningLine(report: FameReport): string {
+  const arrow = report.to > report.from ? '<span class="m-action">↑</span>' : report.to < report.from ? '<span class="m-wear">↓</span>' : '';
+  const why = report.walked && report.to <= report.from ? `<span class="m-wear">${t('fame.walked', { n: report.walked })}</span>`
+    : report.good ? t('fame.good', { n: report.good }) : t('fame.calm');
+  return `<p class="fame-line">${t('fame.line', { stars: fameStarsHtml(report.to), arrow })}</p><p class="hint fame-why">${why}</p>`;
+}
+
+/** ☰ → «Лавка» (task 42): the stars, the points, what raises and what lowers the fame. */
+function openFame(): void {
+  const lines = (key: 'fame.up' | 'fame.down'): string => `<ul class="fame-list">${list(key).map(line => `<li>${line}</li>`).join('')}</ul>`;
+  openModal(t('fame.title'), `<p class="fame-line">${fameStarsHtml(state.fame)} <span class="price">${t('fame.points', { n: state.fame })}</span></p>
+    <p class="hint">${t('fame.gives')}</p>
+    <h3>${t('fame.raises')}</h3>${lines('fame.up')}<h3>${t('fame.lowers')}</h3>${lines('fame.down')}`, closeButton());
+}
+
 /** Morning window (task 16): "Ожидается клиентов: N" and the reasons it differs from a usual day, in `wear`. */
 function expectedCustomers(): string {
   const today = customersToday(state);
@@ -1000,7 +1024,7 @@ function showMorningReport(report: MorningReport): void {
       lines.push(`<li>${textOf(bills.shortfall)}</li>`); // the seat is bought: nothing onto the debt
     }
   }
-  const body = `${expectedCustomers()}<ul>${lines.join('')}</ul>`;
+  const body = `${report.fame ? fameMorningLine(report.fame) : ''}${expectedCustomers()}<ul>${lines.join('')}</ul>`;
   // task 29: one button for the morning, "Открыть лавку" in the action bar (it closes the window and
   // calls the first customer); the window has only ✕, a tap past it only hides it
   ui.morning = true;
@@ -1408,6 +1432,7 @@ const ACTIONS: Record<string, ActionHandler> = {
   },
   // debt window: early payments (no confirmation, the rest is shown at once) and the shuttle seat
   debt: () => openDebt(),
+  fame: () => openFame(),
   early: value => {
     payEarly(state, value === 'all' ? state.credits : Number(value));
     openDebt();

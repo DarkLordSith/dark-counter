@@ -4,7 +4,7 @@
 //  rng, so one seed is one and the same game. No Node APIs here: run.ts
 //  is the command line, tests/unit/sim.test.ts the quick smoke test.
 // =====================================================================
-import { DEBT, ITEM_TYPES, MARKET, RECIPES, START, VALUE } from '../../src/data';
+import { DEBT, FAME, ITEM_TYPES, MARKET, RECIPES, START, VALUE } from '../../src/data';
 import {
   askBuyer, buySeat, callNextCustomer, canBuySeat, canCraft, canGoToJunkyard, craft, canVisitMarket, closeShop, customerLeaves, deferRent, dig,
   digIsLate, estimatedValue, evict, feedback, goHome, goToJunkyard, inspect, isPresentedBuyer, offerToSeller, sellerChecks, payEarly, payRent,
@@ -91,7 +91,14 @@ export interface GameResult {
   bulkVisits: number;
   /** Junkyard finds sold (to anyone) within a week of being dug up. */
   junkSoldInWeek: number;
+  /** Task 42: the fame at the end of each week, on the morning of FAME_CHECK_DAY (null if not reached), customers of each day. */
+  weeklyFame: number[];
+  fameCheck: number | null;
+  dayCustomers: number[];
 }
+
+/** Task 42: the anti-spiral check — is the fame below the start on this morning? */
+export const FAME_CHECK_DAY = 30;
 
 /** The owner's playtest (16.11) stopped on day 36: the owner strategy is calibrated there. */
 export const CHECK_DAY = 36;
@@ -336,10 +343,15 @@ export function playGameWithState(seed: number, strategy: Strategy, leave: Leave
   const result: GameResult = {
     seed, board: null, toll: 0, ending: null, day: 1, debtClosedDay: null, weeklyCredits: [], weeklyDebt: [], bought: 0, sold: 0, checkDay: null, morningStock: [],
     junkVisits: 0, junkFinds: 0, junkValue: 0, saleIncome: 0, bulkIncome: 0, bulkSold: 0, bulkVisits: 0, junkSoldInWeek: 0,
+    weeklyFame: [], fameCheck: null, dayCustomers: [],
   };
   const tally: Tally = { ...result, dugOn: new Map() };
   while (!state.over && state.day <= DEBT.shuttleDay) {
     result.morningStock.push(state.inv.length);
+    result.dayCustomers.push(state.cn);
+    if (state.day === FAME_CHECK_DAY) {
+      result.fameCheck = state.fame;
+    }
     playShop(state, strategy, rng, tally);
     if (!state.over) {
       playEvening(state, strategy, rng, tally, leave);
@@ -353,6 +365,7 @@ export function playGameWithState(seed: number, strategy: Strategy, leave: Leave
     if (state.day % DEBT.periodDays === 0) {
       result.weeklyCredits.push(state.credits);
       result.weeklyDebt.push(state.debt);
+      result.weeklyFame.push(state.fame);
     }
     if (!state.over) {
       sleepUntilMorning(state, rng);
@@ -437,6 +450,11 @@ export interface SimSummary {
   /** The ramp check: % of the games that left paid the patrol, and the average toll of those who paid. */
   rampShare: number | null;
   rampToll: number | null;
+  /** Task 42: average fame at the end of week 1, 2…; % of the games on day FAME_CHECK_DAY below the start fame; customers a day (avg / min). */
+  weeklyFame: (number | null)[];
+  fameBelowStart: number | null;
+  customersAvg: number | null;
+  customersMin: number | null;
 }
 
 /** Credits earned plus debt paid off, per full week played. */
@@ -460,6 +478,7 @@ export function summarize(strategy: string, results: GameResult[]): SimSummary {
   const boards = left.map(r => r.board!);
   const paid = left.filter(r => r.toll > 0);
   const tierShare = (tier: FinalTier): number | null => left.length ? share(boards.filter(b => finalTier(b) === tier).length, left.length) : null;
+  const fameChecked = results.flatMap(r => r.fameCheck === null ? [] : [r.fameCheck]);
   const week = (pick: (r: GameResult) => number[], i: number): number | null =>
     mean(results.filter(r => pick(r).length > i).map(r => pick(r)[i]));
   return {
@@ -490,6 +509,10 @@ export function summarize(strategy: string, results: GameResult[]): SimSummary {
     leftDay: mean(left.map(r => r.day)),
     rampShare: left.length ? share(paid.length, left.length) : null,
     rampToll: mean(paid.map(r => r.toll)),
+    weeklyFame: Array.from({ length: weeks }, (_, i) => week(r => r.weeklyFame, i)),
+    fameBelowStart: fameChecked.length ? share(fameChecked.filter(fame => fame < FAME.start).length, fameChecked.length) : null,
+    customersAvg: perUnit(results.reduce((sum, r) => sum + r.dayCustomers.reduce((a, b) => a + b, 0), 0), results.reduce((sum, r) => sum + r.dayCustomers.length, 0)),
+    customersMin: results.length ? Math.min(...results.flatMap(r => r.dayCustomers)) : null,
   };
 }
 

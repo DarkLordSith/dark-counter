@@ -418,6 +418,8 @@ export const EN: Dict = {
       quiet: 'Start of the week, the deck is quiet',
       payday: 'Payday on the deck',
       saving: 'Everyone\'s saving up for debt payments',
+      chance: 'Just that kind of day', // draft
+      fame: 'The shop\'s fame', // draft
       heat: 'Heat is high — honest buyers stay away',
       late: 'You opened at {time} after the junkyard',
     },
@@ -439,6 +441,28 @@ export const EN: Dict = {
     wanted: 'Heat {n}/{max} — rises with stolen goods',
   },
   window: { close: 'Close window' },
+  fame: {
+    title: 'Shop', // draft
+    menu: 'Shop: fame', // draft
+    line: 'Fame {stars} {arrow}', // draft
+    points: '{n} of 100', // draft
+    good: 'Good deals yesterday: {n}', // draft
+    walked: 'Walked out yesterday: {n}', // draft
+    calm: 'Nothing changed yesterday', // draft
+    gives: 'The higher it is, the more customers (while the heat is low), and the more often they ask for weapons, implants and collectibles.', // draft
+    raises: 'What raises it', // draft
+    up: [
+      'A sale without an insult in the haggle: +2', // draft
+      'A sale of a rare item: +3', // draft
+      'The buyer got what they asked for: +1', // draft
+    ],
+    lowers: 'What lowers it', // draft
+    down: [
+      'A customer walked out, patience gone: −1', // draft
+      'Slides back every morning: −1/5 above 20', // draft
+      'At most in a day: −5', // draft
+    ],
+  },
   /** The wholesaler (task 36). */
   bulk: {
     groups: { electronics: 'electronics', chem: 'chem', household: 'household' }, // draft
