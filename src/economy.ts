@@ -76,11 +76,15 @@ const trueValue = (item: Item): number =>
 export function estimatedValue(item: Item): number {
   const condition = item.k.cond ? item.cond : VALUE.unknownConditionGuess;
   let value = conditionValue(item.t, condition);
+  // task 44: what it fetches, not what the seller dumps it for (a known risk must not cost more than an unknown one)
   if (item.k.flaw && item.defect) {
-    value *= VALUE.defectMult;
+    value *= VALUE.knownDefectMult;
   }
   if (item.k.flaw && item.infected) {
-    value *= VALUE.infectedMult;
+    value *= VALUE.knownInfectedMult;
+  }
+  if (item.k.serial && item.stolen) {
+    value *= VALUE.knownStolenMult;
   }
   return Math.round(value);
 }
@@ -215,7 +219,10 @@ function bulkCategoryOf(item: Item): BulkCategory {
 }
 
 /** What the wholesaler pays for an item: a share of the estimate, no checks. */
-export const bulkPrice = (item: Item): number => Math.round(estimatedValue(item) * WHOLESALE.priceShare);
+/** Task 44: the wholesaler buys "as is" — by the condition the player sees, blind to the risks, known or not. */
+const asIsValue = (item: Item): number => conditionValue(item.t, item.k.cond ? item.cond : VALUE.unknownConditionGuess);
+
+export const bulkPrice = (item: Item): number => Math.round(asIsValue(item) * WHOLESALE.priceShare);
 
 function createWholesaler(state: GameState, rng: Rng): void {
   const seed = randomSeed(rng);
@@ -225,7 +232,7 @@ function createWholesaler(state: GameState, rng: Rng): void {
   // the category of a random stocked mass item: the bigger category comes more often
   const grp = bulkCategoryOf(pickRandom(rng, massStock(state)));
   const group = state.inv.filter(item => itemCategory(item.t) === grp);
-  const average = group.reduce((sum, item) => sum + estimatedValue(item), 0) / group.length;
+  const average = group.reduce((sum, item) => sum + asIsValue(item), 0) / group.length;
   const spread = randomBetween(rng, 1 - WHOLESALE.budgetSpread, 1 + WHOLESALE.budgetSpread);
   const bud = roundTo10(WHOLESALE.budgetItems * average * WHOLESALE.priceShare * spread);
   const msg = say(lineKey(rng, `bulk.greet.${grp}`), { n: bud });
@@ -705,6 +712,7 @@ function revealFlaw(customer: SellerCustomer, item: Item): void {
     customer.msg = say('lines.aiFound');
   } else if (item.defect) {
     customer.ask = Math.max(customer.min, Math.round(customer.ask * INSPECT.defectAskMult));
+    customer.min = Math.round(customer.min * INSPECT.defectMinMult);
     customer.msg = say(implant ? 'lines.rejectFound' : 'lines.defectFound');
   } else {
     customer.msg = implant ? conditionLine(item) : say('lines.insidesOk');

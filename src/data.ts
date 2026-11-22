@@ -97,7 +97,7 @@ export const checksFor = (type: ItemType): readonly InspectCheck[] => CATEGORY_C
 export const DEVICE_NAMES = ['scan', 'serial', 'diag'] as const;
 export type Device = (typeof DEVICE_NAMES)[number];
 export const DEVICES = {
-  prices: [400, 900],
+  prices: [300, 900],
   maxLevel: 2,
   freeLevel: 1,
   sharpLevel: 2,
@@ -279,9 +279,19 @@ export const VALUE = {
   conditionFloor: 0.3, // a 0% item is still worth 30% of base
   conditionSpan: 0.7,
   unknownConditionGuess: 60,
+  /** The seller's own worth of a defective / AI-infected item (their lowest price, the collateral): they dump it. */
   defectMult: 0.5,
   infectedMult: 0.15,
+  /** What a buyer pays for a defect (they see it); the AI virus they do not see — full price. */
   buyerDefectMult: 0.7,
+  /**
+   * Task 44, «знание = деньги»: the player's estimate is what the item fetches as far as the player knows —
+   * a known defect as the buyer pays for it, a known AI with the bench's purge and the heat of selling it priced in.
+   */
+  knownDefectMult: 0.7,
+  knownInfectedMult: 0.8,
+  /** A known stolen item: the raid that takes it and the heat of selling it priced in. */
+  knownStolenMult: 0.7,
 };
 
 /**
@@ -391,11 +401,12 @@ export const ACCEPT = { atLimit: 0.5, slope: 0.47, cap: 0.97, feelStep: 20, feel
 
 // Inspection results: how the seller's prices move after a reveal.
 export const INSPECT = {
-  stolenAskMult: 0.7,
-  stolenMinMult: 0.85,
+  stolenAskMult: 0.6,
+  stolenMinMult: 0.6,
   infectedAskMult: 0.5,
-  infectedMinMult: 0.6,
-  defectAskMult: 0.75,
+  infectedMinMult: 0.5,
+  defectAskMult: 0.5,
+  defectMinMult: 0.6,
   lowCondition: 40,
 };
 

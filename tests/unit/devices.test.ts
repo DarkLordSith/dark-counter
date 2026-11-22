@@ -62,22 +62,24 @@ describe('level 2: the gut feeling is sharper after the check', () => {
 });
 
 describe('buying', () => {
-  it('400 then 900, by day in the shop; the log says what was bought', () => {
+  it('level 1 then 2 (task 44: 300 / 900), by day in the shop; the log says what was bought', () => {
+    const [first, second] = DEVICES.prices;
+    expect(DEVICES.prices).toEqual([300, 900]);
     const game = makeState({ credits: 2000 });
-    expect(devicePrice(game, 'scan')).toBe(DEVICES.prices[0]);
+    expect(devicePrice(game, 'scan')).toBe(first);
     expect(buyDevice(game, 'scan')).toBe(true);
-    expect(game).toMatchObject({ credits: 1600, dev: { scan: 1 } });
-    expect(logLines(game)[0]).toBe('Д3: Куплено: Сканер, ур. 1, за 400 кр.');
+    expect(game).toMatchObject({ credits: 2000 - first, dev: { scan: 1 } });
+    expect(logLines(game)[0]).toBe(`Д3: Куплено: Сканер, ур. 1, за ${first} кр.`);
     expect(buyDevice(game, 'scan')).toBe(true);
-    expect(game).toMatchObject({ credits: 700, dev: { scan: 2 } });
+    expect(game).toMatchObject({ credits: 2000 - first - second, dev: { scan: 2 } });
     expect(devicePrice(game, 'scan')).toBeNull();
     expect(buyDevice(game, 'scan')).toBe(false);
   });
 
   it('not in the evening, not without the money; the payment is not a bar (the confirmation warns)', () => {
     expect(canBuyDevice(makeState({ credits: 2000, phase: 'evening' }), 'serial')).toBe(false);
-    expect(canBuyDevice(makeState({ credits: 399 }), 'serial')).toBe(false);
-    expect(canBuyDevice(makeState({ credits: 450, owed: 550 }), 'serial')).toBe(true);
+    expect(canBuyDevice(makeState({ credits: DEVICES.prices[0] - 1 }), 'serial')).toBe(false);
+    expect(canBuyDevice(makeState({ credits: DEVICES.prices[0] + 50, owed: 550 }), 'serial')).toBe(true);
   });
 
   it('the screen: the «Устройства» section of the craft tab, the confirmation shows what is left for the payment', () => {

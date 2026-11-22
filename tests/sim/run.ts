@@ -2,11 +2,13 @@
 //  run.ts — `npm run sim -- --seeds 1000 --strategy careful`
 //  Plays N story games per strategy, prints a table, writes JSON.
 //  Options: --seeds N (default 1000), --strategy careful|owner|greedy|all
-//  (default all), --json path (default tests/sim/out/sim.json), --no-devices (task 43: no device purchases).
+//  (default all), --json path (default tests/sim/out/sim.json), --no-devices (task 43: no device purchases),
+//  --give serial,scan,diag (task 44: these devices at level 1 for free from day 1).
 // =====================================================================
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { FINAL } from '../../src/data';
+import { DEVICE_NAMES, FINAL } from '../../src/data';
+import type { Device } from '../../src/data';
 import { CHECK_DAY, runSim, SIM_OPTIONS, STRATEGIES } from './sim';
 
 /** Task 38: the bots that also try the early flight. */
@@ -24,6 +26,8 @@ const jsonPath = option('json', 'tests/sim/out/sim.json');
 const names = wanted === 'all' ? Object.keys(STRATEGIES) : [wanted];
 // task 43: --no-devices — the bots buy no check devices (the payback comparison)
 SIM_OPTIONS.devices = !process.argv.includes('--no-devices');
+// task 44: --give serial,scan,diag — these devices at level 1 for free from day 1 (the diagnosis of the knowledge)
+SIM_OPTIONS.give = option('give', '').split(',').filter((name): name is Device => (DEVICE_NAMES as readonly string[]).includes(name));
 const unknown = names.filter(name => !Object.hasOwn(STRATEGIES, name));
 if (unknown.length || !Number.isInteger(seeds) || seeds < 1) {
   console.error(`usage: npm run sim -- --seeds 1000 --strategy ${Object.keys(STRATEGIES).join('|')}|all`);
