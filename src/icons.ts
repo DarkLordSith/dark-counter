@@ -50,6 +50,15 @@ export const ICONS = {
     w: 5, h: 5,
     rects: [[2, 0, 1, 1], [0, 1, 5, 1], [1, 2, 3, 1], [1, 3, 1, 1], [3, 3, 1, 1], [0, 4, 1, 1], [4, 4, 1, 1]],
   },
+  /** ● / ○ 4×4 — a level pip of a check device (task 43): a filled square, an empty frame. */
+  pip: {
+    w: 4, h: 4,
+    rects: [[0, 0, 4, 4]],
+  },
+  pipEmpty: {
+    w: 4, h: 4,
+    rects: [[0, 0, 4, 1], [0, 3, 4, 1], [0, 1, 1, 2], [3, 1, 1, 2]],
+  },
   /** Lock — a mode that opens later (16×16: shackle on a body with a keyhole). */
   lock: {
     w: 16, h: 16,

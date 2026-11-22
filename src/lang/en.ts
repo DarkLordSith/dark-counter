@@ -441,6 +441,22 @@ export const EN: Dict = {
     wanted: 'Heat {n}/{max} — rises with stolen goods',
   },
   window: { close: 'Close window' },
+  devices: {
+    title: 'Devices', // draft
+    names: { scan: 'Scanner', serial: 'S/N reader', diag: 'Diagnostics' }, // draft
+    checks: { scan: 'electronics', serial: 'electronics, weapons, collectibles', diag: 'implants' }, // draft
+    next1: 'Lv 1: a check costs no patience', // draft
+    next2: 'Lv 2: a sharper hunch after the check', // draft
+    max: 'Top level', // draft
+    buy: 'Buy · {n}', // draft
+    onlyShop: 'Buy by day, in the shop.', // draft
+    confirmTitle: '{device}, lv {level}', // draft
+    confirmText: 'Price {n} cr. Grobov\'s payment (day {day}) needs {owed} cr. After the purchase you\'ll have {left} cr.', // draft
+    confirmNoDebt: 'Price {n} cr. After the purchase you\'ll have {left} cr.', // draft
+    short: 'Not enough for the payment.', // draft
+    confirmYes: 'Buy', // draft
+    log: 'Bought: {device}, lv {level}, for {n} cr.', // draft
+  },
   fame: {
     title: 'Shop', // draft
     menu: 'Shop: fame', // draft

@@ -2,12 +2,12 @@
 //  run.ts — `npm run sim -- --seeds 1000 --strategy careful`
 //  Plays N story games per strategy, prints a table, writes JSON.
 //  Options: --seeds N (default 1000), --strategy careful|owner|greedy|all
-//  (default all), --json path (default tests/sim/out/sim.json).
+//  (default all), --json path (default tests/sim/out/sim.json), --no-devices (task 43: no device purchases).
 // =====================================================================
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { FINAL } from '../../src/data';
-import { CHECK_DAY, runSim, STRATEGIES } from './sim';
+import { CHECK_DAY, runSim, SIM_OPTIONS, STRATEGIES } from './sim';
 
 /** Task 38: the bots that also try the early flight. */
 const FINALE_STRATEGIES = ['owner', 'greedy'];
@@ -22,6 +22,8 @@ const seeds = Number(option('seeds', '1000'));
 const wanted = option('strategy', 'all');
 const jsonPath = option('json', 'tests/sim/out/sim.json');
 const names = wanted === 'all' ? Object.keys(STRATEGIES) : [wanted];
+// task 43: --no-devices — the bots buy no check devices (the payback comparison)
+SIM_OPTIONS.devices = !process.argv.includes('--no-devices');
 const unknown = names.filter(name => !Object.hasOwn(STRATEGIES, name));
 if (unknown.length || !Number.isInteger(seeds) || seeds < 1) {
   console.error(`usage: npm run sim -- --seeds 1000 --strategy ${Object.keys(STRATEGIES).join('|')}|all`);
@@ -60,6 +62,9 @@ for (const name of names) {
     'клиентов в день, ср.': show(summary.customersAvg),
     'клиентов в день, мин.': show(summary.customersMin),
     'известность к дню 30 ниже старта, % игр': show(summary.fameBelowStart),
+    'на устройства, кр. за игру': show(summary.devSpend),
+    'покупки устройств, день 1-й…6-й': summary.devDays.map(show).join(' / '),
+    'итог: кр. − долг': show(summary.netEnd),
   });
   console.table(summary.weeklyCredits.map((credits, i) => ({ неделя: i + 1, 'кр.': show(credits), долг: show(summary.weeklyDebt[i]), известность: show(summary.weeklyFame[i]) })));
   // task 38: the finale of the games that left — the shuttle on day 60 and, for owner / greedy, the early flight right after the seat

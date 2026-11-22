@@ -89,6 +89,21 @@ export const CATEGORY_CHECKS: Record<ItemCategory, readonly InspectCheck[]> = {
 /** The checks of a type at the counter, in the order of the cells. */
 export const checksFor = (type: ItemType): readonly InspectCheck[] => CATEGORY_CHECKS[itemCategory(type)];
 
+/**
+ * Check devices (task 43, «Играбельная v1» п.5): the scanner of electronics, the serial reader, the implant
+ * diagnostics. Level 1 — its check costs the customer no patience; level 2 — after its check the gut
+ * feeling of that customer is sharper (the noise × `sharpNoise`, once a customer). Prices of level 1 and 2.
+ */
+export const DEVICE_NAMES = ['scan', 'serial', 'diag'] as const;
+export type Device = (typeof DEVICE_NAMES)[number];
+export const DEVICES = {
+  prices: [400, 900],
+  maxLevel: 2,
+  freeLevel: 1,
+  sharpLevel: 2,
+  sharpNoise: 0.5,
+};
+
 /** Only an implant hides its condition until the diagnostics; everything else shows it at once. */
 export const hidesCondition = (type: ItemType): boolean => itemCategory(type) === 'implant';
 
@@ -98,6 +113,10 @@ export const hidesCondition = (type: ItemType): boolean => itemCategory(type) ==
  */
 export const canBeStolen = (type: ItemType): boolean => checksFor(type).includes('serial');
 export const canHaveFlaw = (type: ItemType): boolean => checksFor(type).includes('flaw');
+
+/** The device a check of this type is made with: the serial reader, or the scanner (electronics) / the diagnostics (implant). */
+export const deviceFor = (type: ItemType, check: InspectCheck): Device =>
+  check === 'serial' ? 'serial' : hidesCondition(type) ? 'diag' : 'scan';
 
 // Rare junkyard finds (order matters: it is the random pick table; new ones go to the end).
 // Task 40: the rare ones of each category; household has none — a staple is never a rarity.

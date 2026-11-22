@@ -1047,6 +1047,18 @@ input:focus-visible {
   padding: 6px;
 }
 
+/* Task 43: the check devices under the recipes: name with level pips, what it checks, the next level. */
+.devices-title {
+  margin: 14px 0 6px;
+}
+
+.dev-pips {
+  display: inline-flex;
+  gap: 3px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
 .recipe canvas {
   width: 56px;
   height: 32px;

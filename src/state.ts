@@ -83,6 +83,7 @@ export function createGame(mode: Mode, rng: Rng): GameState {
     fame: FAME.start,
     cr: 0,
     fd: freshFameDay(FAME.start),
+    dev: noDevices(),
   };
   // day 1 is the first day of the station week: a quiet start
   game.cn = customersToday(game).count;
@@ -93,6 +94,9 @@ export function createGame(mode: Mode, rng: Rng): GameState {
   }));
   return game;
 }
+
+/** Task 43: no check devices yet. */
+export const noDevices = (): GameState['dev'] => ({ scan: 0, serial: 0, diag: 0 });
 
 /** Task 42: a new day's fame tally, starting from the fame of the morning. */
 export const freshFameDay = (fame: number): FameDay => ({ s: fame, g: 0, w: 0, l: 0 });
@@ -318,6 +322,8 @@ export function migrate(data: SavedGame | null, rng: Rng = gameRng): GameState |
   data.fame ??= FAME.start;
   data.cr ??= 0;
   data.fd ??= freshFameDay(data.fame);
+  // Task 43: no check devices in an older save.
+  data.dev ??= noDevices();
   // Before modes every save was the story; an unknown or locked mode is read as story too.
   if (!(PLAYABLE_MODES as readonly unknown[]).includes(data.mode)) {
     data.mode = 'story';

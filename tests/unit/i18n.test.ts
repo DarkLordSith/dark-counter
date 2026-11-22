@@ -432,7 +432,9 @@ describe('EN v1', () => {
       // checks by category (task 41)
       'scan', 'scanTitle', 'diag', 'diagTitle', 'noChecks', 'reject', 'scanClean', 'rejectFound',
       // the shop's fame (task 42): the reasons of the day, the fame window (list lines are quoted strings)
-      'chance', 'fame', ...Object.keys(EN.fame), ...[...EN.fame.up, ...EN.fame.down].map(line => line.includes(':') ? `'${line.split(':')[0]}` : `'${line}', // draft`)];
+      'chance', 'fame', ...Object.keys(EN.fame),
+      // the check devices (task 43)
+      ...Object.keys(EN.devices), ...[...EN.fame.up, ...EN.fame.down].map(line => line.includes(':') ? `'${line.split(':')[0]}` : `'${line}', // draft`)];
     const drafts = enSource.split('\n').filter(line => /\/\/ draft/.test(line) && !line.trim().startsWith('//'));
     expect(drafts.map(line => line.trim().split(':')[0]).filter(key => !NEWER.includes(key))).toEqual([]);
   });
