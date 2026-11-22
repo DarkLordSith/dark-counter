@@ -4,9 +4,10 @@
 //  rng, so one seed is one and the same game. No Node APIs here: run.ts
 //  is the command line, tests/unit/sim.test.ts the quick smoke test.
 // =====================================================================
-import { DEBT, FAME, ITEM_TYPES, MARKET, RECIPES, START, VALUE } from '../../src/data';
+import { DEBT, deviceFor, DEVICES, FAME, ITEM_TYPES, MARKET, RECIPES, START, VALUE } from '../../src/data';
+import type { Device } from '../../src/data';
 import {
-  askBuyer, buySeat, callNextCustomer, canBuySeat, canCraft, canGoToJunkyard, craft, canVisitMarket, closeShop, customerLeaves, deferRent, dig,
+  askBuyer, buyDevice, buySeat, callNextCustomer, devicePrice, canBuySeat, canCraft, canGoToJunkyard, craft, canVisitMarket, closeShop, customerLeaves, deferRent, dig,
   digIsLate, estimatedValue, evict, feedback, goHome, goToJunkyard, inspect, isPresentedBuyer, offerToSeller, sellerChecks, payEarly, payRent,
   leaveWaiting, payWithCollateral, perceivedChance, planCollateral, presentItem, sleepUntilMorning, throwAway, useWorkbench, visitMarket, waitingFinds,
   bulkPrice, bulkStock, canSellBatch, sellBatch, setDiscount, toggleCart, canLeaveEarly, finalTier, leaveEarly,
@@ -36,20 +37,41 @@ export interface Strategy {
   reserve: number;
   /** Builds whatever the recipes allow in the evening, the dearest build first. */
   crafts: boolean;
+  /**
+   * Task 43, the check devices it buys in the morning, in this order, up to `deviceLevel`, level 1 of all
+   * before level 2, only while the debt is open (after it the money goes to the seat). A bot that does not
+   * inspect still makes the free checks of its level-1 devices. `devicesCareful`: only when the payment and
+   * DEVICE_RESERVE stay covered after the purchase; else as soon as the money is there.
+   */
+  devices: readonly Device[];
+  deviceLevel: number;
+  devicesCareful: boolean;
 }
+
+/** Task 43: `npm run sim -- --no-devices` switches the device purchases off (the payback comparison). */
+export const SIM_OPTIONS = { devices: true };
+/**
+ * What a careful buyer keeps over the payment after a device. Not `reserve`: the bots pay everything over
+ * payment + reserve off the debt every evening, so with it they could buy only once the debt is closed.
+ */
+const DEVICE_RESERVE = 300;
+/** All three devices in the order the bots buy them: the serial reader checks three categories. */
+const ALL_DEVICES: readonly Device[] = ['serial', 'scan', 'diag'];
 
 export const STRATEGIES: Record<string, Strategy> = {
   /** As in tasks 15–17: buys ≤ 75% of the estimate, sells at ≥ 60%, digs until midnight. */
-  careful: { name: 'careful', inspects: true, buyShare: 0.75, sellChance: 0.6, digsLate: false, reserve: 1000, crafts: false },
+  careful: { name: 'careful', inspects: true, buyShare: 0.75, sellChance: 0.6, digsLate: false, reserve: 1000, crafts: false, devices: ALL_DEVICES, deviceLevel: 1, devicesCareful: true },
   /**
    * "Like the owner" (balance 17.11): calibrated to the owner's playtest on debt 25 000 — by day 36
    * ~46% of the debt paid off at ~370 credits a day net (the bot: 46.2%, 354 a day; before the
    * buyer flow followed the stock). Buys cheap (≤ 50% of the estimate, no inspection), sells at
    * ≥ 35%, builds whatever the recipes allow, digs until midnight. The balance is tuned on it.
    */
-  owner: { name: 'owner', inspects: false, buyShare: 0.5, sellChance: 0.35, digsLate: false, reserve: 1000, crafts: true },
+  // task 43: owner buys only the serial reader, level 1 (the bot: all three at level 1 — 31.8% left, both levels — 22.6%;
+  // free checks make it buy less, the buyers pay nearly full price for hidden AI and defects — see the report of task 43)
+  owner: { name: 'owner', inspects: false, buyShare: 0.5, sellChance: 0.35, digsLate: false, reserve: 1000, crafts: true, devices: ['serial'], deviceLevel: 1, devicesCareful: true },
   /** Takes risks: no inspection, buys up to 95%, sells at ≥ 40%, digs past midnight too (all six digs). */
-  greedy: { name: 'greedy', inspects: false, buyShare: 0.95, sellChance: 0.4, digsLate: true, reserve: 150, crafts: false },
+  greedy: { name: 'greedy', inspects: false, buyShare: 0.95, sellChance: 0.4, digsLate: true, reserve: 150, crafts: false, devices: ALL_DEVICES, deviceLevel: 2, devicesCareful: false },
 };
 
 /**
@@ -95,6 +117,10 @@ export interface GameResult {
   weeklyFame: number[];
   fameCheck: number | null;
   dayCustomers: number[];
+  /** Task 43: credits spent on the check devices, the days of the purchases, credits − debt at the end ("net worth"). */
+  devSpend: number;
+  devDays: number[];
+  netEnd: number;
 }
 
 /** Task 42: the anti-spiral check — is the fame below the start on this morning? */
@@ -107,6 +133,7 @@ export const CHECK_DAY = 36;
 interface Tally {
   bought: number; sold: number; junkVisits: number; junkFinds: number; junkValue: number;
   saleIncome: number; bulkIncome: number; bulkSold: number; bulkVisits: number; junkSoldInWeek: number;
+  devSpend: number; devDays: number[];
   /** Day each junkyard find was dug up, by uid (the "sold within a week" metric). */
   dugOn: Map<number, number>;
 }
@@ -129,10 +156,11 @@ const realValue = (item: Item): number => ITEM_TYPES[item.t].basePrice * (VALUE.
 const MAX_TRIES = 12;
 
 function handleSeller(state: GameState, customer: SellerCustomer, strategy: Strategy, rng: Rng, tally: Tally): void {
-  if (strategy.inspects) {
-    // task 41: the checks of the item's category, as at the counter (none for chem and household)
-    sellerChecks(customer).forEach(check => inspect(state, check));
-  }
+  // task 41: the checks of the item's category, as at the counter (none for chem and household);
+  // task 43: a bot that does not inspect still makes the checks its level-1 devices make for free
+  sellerChecks(customer)
+    .filter(check => strategy.inspects || state.dev[deviceFor(customer.item.t, check)] >= DEVICES.freeLevel)
+    .forEach(check => inspect(state, check));
   const item = customer.item;
   const estimate = estimatedValue(item);
   const limit = Math.floor(estimate * strategy.buyShare);
@@ -235,7 +263,25 @@ function handleLandlord(state: GameState): void {
   }
 }
 
+/** Task 43: the morning purchases of the check devices by the strategy's rule; the days go to the tally. */
+function buyDevices(state: GameState, strategy: Strategy, tally: Tally): void {
+  if (!SIM_OPTIONS.devices || state.debt <= 0) {
+    return;
+  }
+  for (let level = 0; level < strategy.deviceLevel; level++) {
+    for (const device of strategy.devices) {
+      const price = devicePrice(state, device);
+      const keep = strategy.devicesCareful ? state.owed + DEVICE_RESERVE : 0;
+      if (state.dev[device] === level && price !== null && state.credits - price >= keep && buyDevice(state, device)) {
+        tally.devSpend += price;
+        tally.devDays.push(state.day);
+      }
+    }
+  }
+}
+
 function playShop(state: GameState, strategy: Strategy, rng: Rng, tally: Tally): void {
+  buyDevices(state, strategy, tally);
   while (!state.over && callNextCustomer(state, rng)) {
     const customer = state.cust;
     if (customer?.kind === 'sell') {
@@ -343,9 +389,9 @@ export function playGameWithState(seed: number, strategy: Strategy, leave: Leave
   const result: GameResult = {
     seed, board: null, toll: 0, ending: null, day: 1, debtClosedDay: null, weeklyCredits: [], weeklyDebt: [], bought: 0, sold: 0, checkDay: null, morningStock: [],
     junkVisits: 0, junkFinds: 0, junkValue: 0, saleIncome: 0, bulkIncome: 0, bulkSold: 0, bulkVisits: 0, junkSoldInWeek: 0,
-    weeklyFame: [], fameCheck: null, dayCustomers: [],
+    weeklyFame: [], fameCheck: null, dayCustomers: [], devSpend: 0, devDays: [], netEnd: 0,
   };
-  const tally: Tally = { ...result, dugOn: new Map() };
+  const tally: Tally = { ...result, devDays: [], dugOn: new Map() };
   while (!state.over && state.day <= DEBT.shuttleDay) {
     result.morningStock.push(state.inv.length);
     result.dayCustomers.push(state.cn);
@@ -372,9 +418,11 @@ export function playGameWithState(seed: number, strategy: Strategy, leave: Leave
     }
     feedback.floats.length = 0; // nobody shows the floating numbers here
   }
-  for (const key of ['bought', 'sold', 'junkVisits', 'junkFinds', 'junkValue', 'saleIncome', 'bulkIncome', 'bulkSold', 'bulkVisits', 'junkSoldInWeek'] as const) {
+  for (const key of ['bought', 'sold', 'junkVisits', 'junkFinds', 'junkValue', 'saleIncome', 'bulkIncome', 'bulkSold', 'bulkVisits', 'junkSoldInWeek', 'devSpend'] as const) {
     result[key] = tally[key];
   }
+  result.devDays = tally.devDays;
+  result.netEnd = state.credits - state.debt;
   result.ending = state.ending;
   result.day = state.day;
   if (state.ending === 'left') {
@@ -455,6 +503,10 @@ export interface SimSummary {
   fameBelowStart: number | null;
   customersAvg: number | null;
   customersMin: number | null;
+  /** Task 43: average spent on the devices a game; the average day of the 1st…6th purchase; credits − debt at the end. */
+  devSpend: number | null;
+  devDays: (number | null)[];
+  netEnd: number | null;
 }
 
 /** Credits earned plus debt paid off, per full week played. */
@@ -513,6 +565,9 @@ export function summarize(strategy: string, results: GameResult[]): SimSummary {
     fameBelowStart: fameChecked.length ? share(fameChecked.filter(fame => fame < FAME.start).length, fameChecked.length) : null,
     customersAvg: perUnit(results.reduce((sum, r) => sum + r.dayCustomers.reduce((a, b) => a + b, 0), 0), results.reduce((sum, r) => sum + r.dayCustomers.length, 0)),
     customersMin: results.length ? Math.min(...results.flatMap(r => r.dayCustomers)) : null,
+    devSpend: mean(results.map(r => r.devSpend)),
+    devDays: Array.from({ length: 6 }, (_, i) => mean(results.filter(r => r.devDays.length > i).map(r => r.devDays[i]))),
+    netEnd: mean(results.map(r => r.netEnd)),
   };
 }
 

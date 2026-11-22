@@ -5,7 +5,7 @@
 //  DC1: codes). Short field names are kept on purpose: renaming them
 //  would break old saves. When a field changes, upgrade it in migrate().
 // =====================================================================
-import type { BulkCategory, ITEM_TYPES, ItemCategory, MODES } from './data';
+import type { BulkCategory, Device, ITEM_TYPES, ItemCategory, MODES } from './data';
 import type { Lang } from './i18n';
 import type { RU } from './lang/ru';
 
@@ -231,6 +231,8 @@ export interface GameState {
   cr: number;
   /** Task 42: today's fame tally for the next morning's window ("fame day"). */
   fd: FameDay;
+  /** Task 43: levels of the check devices 0…2 ("devices"); all 0 in saves before it. */
+  dev: Record<Device, number>;
 }
 
 /** What moved the fame today: shown the next morning, then reset. */
@@ -306,8 +308,10 @@ type DayFields = 'cn' | 'late';
 type FinaleFields = 'st';
 /** Fields added by task 42 (the shop's fame). */
 type FameFields = 'fame' | 'cr' | 'fd';
-export type SavedGame = Omit<GameState, RentFields | DebtFields | DayFields | FinaleFields | FameFields | 'junk'>
-  & Partial<Pick<GameState, RentFields | DebtFields | DayFields | FinaleFields | FameFields>>
+/** Fields added by task 43 (the check devices). */
+type DeviceFields = 'dev';
+export type SavedGame = Omit<GameState, RentFields | DebtFields | DayFields | FinaleFields | FameFields | DeviceFields | 'junk'>
+  & Partial<Pick<GameState, RentFields | DebtFields | DayFields | FinaleFields | FameFields | DeviceFields>>
   & { won?: boolean; junk: GameState['junk'] | { piles: JunkPile[] } };
 
 /* ---------- screen state (not saved) ---------- */

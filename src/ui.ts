@@ -7,7 +7,7 @@ import type { BarContext } from './actionbar';
 import { customersToday, formatHour, openingHour } from './day';
 import { audio, playSfx, setJunkAmbience, startSoundOnGesture, toggleMusic, toggleSfx } from './audio';
 import {
-  BENCH_COST, canBeStolen, canHaveFlaw, DEBT, fameStars, hidesCondition, JUNK, HAGGLE, itemCategory, ITEM_TYPES, MARKET, MAX_HEAT, MODES,
+  BENCH_COST, canBeStolen, canHaveFlaw, DEBT, DEVICE_NAMES, DEVICES, fameStars, hidesCondition, JUNK, HAGGLE, itemCategory, ITEM_TYPES, MARKET, MAX_HEAT, MODES,
   PLAYABLE_MODES, RECIPES, RENT, SUPPLIER, WHOLESALE,
 } from './data';
 import { customerNameText, detectLang, getLang, isLang, itemName, LANGS, list, setLang, t, text as textOf, tx } from './i18n';
@@ -33,6 +33,7 @@ import {
   expenseLines, recipeNeeds, scrapValue, seatPrice, sellToBuyer, showsInfection, sleepUntilMorning, useWorkbench, visitMarket,
   bulkPrice, bulkStock, canSetDiscount, cartItems, cartTotal, fitsCart, sellBatch, setDiscount, toggleCart,
   canLeaveEarly, finalTier, leaveEarly, rampToll,
+  buyDevice, canBuyDevice, devicePrice,
 } from './economy';
 import type { CollateralPlan, FameReport, MorningReport } from './economy';
 import { isPlayable, loadProfile, recordEnding, recordHotspotTap, saveProfile } from './profile';
@@ -41,6 +42,7 @@ import { isOnHeap, onSceneClick, paintIcons, playDigFx, pressHotspot, scenePoint
 import {
   actor, actorAtCounter, actorEnter, actorReset, addLog, exportSaveCode, findItem, importSaveCode, newGame, persistence, readSlot, saveGame, setState, state, ui,
 } from './state';
+import type { Device } from './data';
 import type { BuyerCustomer, Customer, GameState, InspectCheck, Item, ItemType, JunkVisit, Mode, Profile, Recipe, RentCustomer, SellerCustomer, StockFilter, Tab, WholesaleCustomer } from './types';
 import { roundTo10 } from './util';
 import { VERSION_LABEL } from './version';
@@ -725,10 +727,47 @@ function recipeRow(recipe: Recipe, index: number): string {
     <button class="btn" data-a="craft" data-v="${index}" ${canCraft(state, recipe) ? '' : 'disabled'}>${t('craft.build')}</button></div>`;
 }
 
+/** Level pips of a device: ●●○ as pixel squares, the level for screen readers. */
+function devicePips(level: number): string {
+  const pips = Array.from({ length: DEVICES.maxLevel }, (_, i) => `<span class="${i < level ? 'm-ok' : 'm-inactive'}">${iconSvg(i < level ? 'pip' : 'pipEmpty')}</span>`).join('');
+  return `<span class="dev-pips" role="img" aria-label="${level}/${DEVICES.maxLevel}">${pips}</span>`;
+}
+
+/** One device (task 43): the name and level, what it checks, what the next level gives, "Купить · price". */
+function deviceRow(device: Device): string {
+  const level = state.dev[device];
+  const price = devicePrice(state, device);
+  const next = price === null ? `<span class="m-ok">${t('devices.max')}</span>` : t(level === 0 ? 'devices.next1' : 'devices.next2');
+  const buy = price === null ? '' : `<button class="btn" data-a="device" data-v="${device}" ${disabledIf(!canBuyDevice(state, device))}>${t('devices.buy', { n: price })}</button>`;
+  return `<div class="recipe device"><div class="rb"><div class="rn">${t(`devices.names.${device}`)} ${devicePips(level)}</div>
+    <div class="need">${t(`devices.checks.${device}`)}</div><div class="hint">${next}</div></div>${buy}</div>`;
+}
+
 function craftPane(): string {
   return `<div class="recipes">${RECIPES.map(recipeRow).join('')}</div>
     <div class="hint note" style="margin:8px 0">${t('craft.note')}</div>
-    <button class="btn" data-a="parts" ${state.credits >= SUPPLIER.price ? '' : 'disabled'} style="width:100%">${t('craft.order', { n: SUPPLIER.parts, price: SUPPLIER.price })}</button>`;
+    <button class="btn" data-a="parts" ${state.credits >= SUPPLIER.price ? '' : 'disabled'} style="width:100%">${t('craft.order', { n: SUPPLIER.parts, price: SUPPLIER.price })}</button>
+    <h3 class="devices-title">${t('devices.title')}</h3>
+    <div class="recipes devices">${DEVICE_NAMES.map(deviceRow).join('')}</div>
+    ${state.phase === 'shop' ? '' : `<div class="hint note">${t('devices.onlyShop')}</div>`}`;
+}
+
+/**
+ * "Купить" asks first (task 43): the price, and what is left for Grobov's next payment — the conflict
+ * "a device or the payment" is felt, not forbidden.
+ */
+function confirmDevice(device: Device): void {
+  const price = devicePrice(state, device);
+  if (price === null || !canBuyDevice(state, device)) {
+    return;
+  }
+  const left = state.credits - price;
+  const text = state.debt > 0
+    ? t('devices.confirmText', { n: price, day: state.nextDue, owed: state.owed, left })
+    : t('devices.confirmNoDebt', { n: price, left });
+  const short = state.debt > 0 && left < state.owed ? `<p class="m-risk">${t('devices.short')}</p>` : '';
+  openModal(t('devices.confirmTitle', { device: t(`devices.names.${device}`), level: state.dev[device] + 1 }), `<p>${text}</p>${short}`,
+    `<button class="btn pri" data-a="device-yes" data-v="${device}">${t('devices.confirmYes')}</button><button class="btn" data-a="close">${t('hud.close')}</button>`);
 }
 
 /* =====================================================================
@@ -1360,6 +1399,7 @@ const NO_RENDER: unique symbol = Symbol('no-render');
 type ActionHandler = (value: string | undefined) => void | typeof NO_RENDER;
 
 const isTab = (value: string | undefined): value is Tab => value === 'deal' || value === 'inv' || value === 'craft';
+const isDevice = (value: string | undefined): value is Device => (DEVICE_NAMES as readonly (string | undefined)[]).includes(value);
 
 const offerValue = (): number => {
   const input = maybeById<HTMLInputElement>('offer');
@@ -1445,6 +1485,18 @@ const ACTIONS: Record<string, ActionHandler> = {
   'seat-yes': () => {
     buySeat(state);
     openDebt();
+  },
+  // task 43: the check devices (the «Сборка» tab)
+  device: value => {
+    if (isDevice(value)) {
+      confirmDevice(value);
+    }
+  },
+  'device-yes': value => {
+    if (isDevice(value)) {
+      buyDevice(state, value);
+    }
+    closeModal();
   },
   // tabs, inventory, crafting
   tab: value => {

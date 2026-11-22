@@ -473,6 +473,23 @@ export const RU = {
   },
   /** The window component (V2.2): words of its frame. */
   window: { close: 'Закрыть окно' },
+  /** Task 43: the check devices — the «Сборка» tab section, the purchase confirmation, the log. */
+  devices: {
+    title: 'Устройства',
+    names: { scan: 'Сканер', serial: 'Серийник', diag: 'Диагност' },
+    checks: { scan: 'электроника', serial: 'электроника, оружие, коллекционка', diag: 'импланты' },
+    next1: 'Ур. 1: проверка не тратит терпение',
+    next2: 'Ур. 2: Чуйка точнее после проверки',
+    max: 'Максимальный уровень',
+    buy: 'Купить · {n}',
+    onlyShop: 'Купить можно днём в лавке.',
+    confirmTitle: '{device}, ур. {level}',
+    confirmText: 'Цена {n} кр. До платежа Гробову (день {day}) нужно {owed} кр. После покупки останется {left} кр.',
+    confirmNoDebt: 'Цена {n} кр. После покупки останется {left} кр.',
+    short: 'Этого не хватит на платёж.',
+    confirmYes: 'Купить',
+    log: 'Куплено: {device}, ур. {level}, за {n} кр.',
+  },
   /** Task 42: the shop's fame — the morning window line and the ☰ «Лавка» window. */
   fame: {
     title: 'Лавка',

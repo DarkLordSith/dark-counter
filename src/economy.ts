@@ -10,7 +10,7 @@
 import {
   ACCEPT, HUNCH_VERDICT, BENCH_COST, COLLATERAL,
   buyerShare, CRAFT_CONDITION_BONUS, CUSTOMER, DEBT, EXPENSES, FINAL, DIG_LOOT, DIG_ODDS, EVENING_HOURS, HAGGLE, HUMAN_NAMES,
-  BULK_CATEGORIES, canBeStolen, CHANCE_FLOW, FAME, PREMIUM_CATEGORIES, premiumWish, canHaveFlaw, checksFor, hidesCondition, INSPECT, isBulkCategory, ITEM_TYPES, itemCategory, JUNK, JUNK_WEIGHTS, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
+  BULK_CATEGORIES, canBeStolen, CHANCE_FLOW, deviceFor, DEVICES, FAME, PREMIUM_CATEGORIES, premiumWish, canHaveFlaw, checksFor, hidesCondition, INSPECT, isBulkCategory, ITEM_TYPES, itemCategory, JUNK, JUNK_WEIGHTS, LANDLORD_NAME, LANDLORD_SEED, MARKET, MAX_HEAT, NIGHT, RARE_FINDS,
   RECIPES, RENT, REPAIR_AMOUNT, ROBOT_NAMES, SUPPLIER, VALUE, WHOLESALE, wholesaleChance,
 } from './data';
 import { itemRef, listLength, nameRef, say, tx } from './i18n';
@@ -28,7 +28,7 @@ import type {
   BuyerCustomer, Ending, GameState, InspectCheck, Item, ItemType, JunkVisit, PresentedBuyer, Recipe, SellerCustomer,
   WholesaleCustomer,
 } from './types';
-import type { BulkCategory } from './data';
+import type { BulkCategory, Device } from './data';
 import { clamp, roundTo10 } from './util';
 
 /**
@@ -730,11 +730,44 @@ export function inspect(state: GameState, check: InspectCheck): boolean {
   if (!customer || check === 'cond' || customer.done[check] || !sellerChecks(customer).includes(check)) {
     return false;
   }
+  // task 43: a level-2 device sharpens the gut feeling once a customer (before this check is marked done)
+  const device = deviceFor(customer.item.t, check);
+  const sharpened = (Object.keys(customer.done) as InspectCheck[]).some(done => state.dev[deviceFor(customer.item.t, done)] >= DEVICES.sharpLevel);
+  if (!sharpened && state.dev[device] >= DEVICES.sharpLevel) {
+    customer.noise *= DEVICES.sharpNoise;
+  }
   customer.done[check] = 1;
-  if (customer.pat > 1) {
+  // a level-1 device checks without trying the customer's patience
+  if (customer.pat > 1 && state.dev[device] < DEVICES.freeLevel) {
     losePatience(state, 1);
   }
   REVEALS[check](customer, customer.item);
+  return true;
+}
+
+/* =====================================================================
+   Check devices (task 43): bought by day in the shop, level 1 then 2
+   ===================================================================== */
+
+/** The price of the next level of a device, null at the top level. */
+export const devicePrice = (state: GameState, device: Device): number | null =>
+  state.dev[device] < DEVICES.maxLevel ? DEVICES.prices[state.dev[device]] : null;
+
+/** By day in the shop, with the money for it, below the top level. */
+export function canBuyDevice(state: GameState, device: Device): boolean {
+  const price = devicePrice(state, device);
+  return price !== null && !state.over && state.phase === 'shop' && state.credits >= price;
+}
+
+/** Buys the next level of a device; returns whether it was bought. */
+export function buyDevice(state: GameState, device: Device): boolean {
+  const price = devicePrice(state, device);
+  if (price === null || !canBuyDevice(state, device)) {
+    return false;
+  }
+  state.credits -= price;
+  state.dev[device]++;
+  addLog(state, tx('devices.log', { device: tx(`devices.names.${device}`), level: state.dev[device], n: price }));
   return true;
 }
 
